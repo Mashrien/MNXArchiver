@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Service
+MimeType=application/x-mnx;
+X-KDE-ServiceTypes=KonqPopupMenu/Plugin
+X-KDE-RequiredNumberOfUrls=1
+Actions=extractHere;extractTo;
+X-KDE-Submenu=MNX Archive Manager
+
+[Desktop Action extractHere]
+Name=Extract MNX archive here
+Icon=org.mash.MNXFile
+Exec=mnx-gui --extract-here -- %f
+
+[Desktop Action extractTo]
+Name=Extract MNX archive to folder
+Icon=org.mash.MNXFile
+Exec=mnx-gui --extract-to -- %f

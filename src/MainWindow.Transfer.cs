@@ -1,0 +1,120 @@
+using System.Diagnostics;
+using Gtk;
+using Mash.IO.Format.MNX.Archive.Codecs;
+using Mash.IO.Format.MNX.Archive;
+using Mash.IO.Format.MNX;
+using ArchiveFile = Mash.IO.Format.MNX.MNX;
+
+namespace Mash.UI.MNXFile.GUI;
+
+public sealed partial class MainWindow {
+    private T RunTransfer<T>(
+        string description,
+        Func<T> action,
+        TransferTracker? tracker = null,
+        ArchiveFile? targetArchive = null,
+        string? displayPath = null,
+        bool creatingEncrypted = false,
+        TransferCancellation? cancellation = null,
+        bool extracting = false
+        ) {
+        if (_operationActive) {
+            throw new InvalidOperationException("An archive operation is already running.");
+            }
+
+        _operationActive = true;
+        StopPreviewRead();
+        _transferProgress = null;
+        UpdateActions();
+        ProgressBar? progress = Widget<ProgressBar>("operation_progress");
+        progress.Show();
+        progress.ShowText = true;
+        progress.Text = description;
+        _status.Text = description;
+        void OnProgress(object? sender, OperationProgressArgs args) {
+            tracker?.Update(args);
+            Volatile.Write(ref _transferProgress, args);
+            }
+
+        ArchiveFile? archive = targetArchive ?? _archive!;
+        string compression = (archive.IsOpen ? archive.Compression : archive.Options.Compression).ToString();
+        int level = archive.IsOpen ? archive.CompressionLevel : archive.Options.CompressionLevel;
+        if (compression == "Brotli") {
+            compression += $", Level {level}";
+            }
+
+        using ArchiveProgressDialog dialog = new ArchiveProgressDialog(
+            _window,
+            displayPath ?? archive.ArchivePath ?? "MNX archive",
+            compression,
+            archive.IsOpen ? archive.IsEncrypted : creatingEncrypted,
+            tracker,
+            extracting,
+            cancellation is not null
+            );
+        _activeProgressDialog = dialog;
+        CancellationToken previousCancellation = archive.Options.CancellationToken;
+        if (cancellation is not null) {
+            archive.Options.CancellationToken = cancellation.Token;
+            dialog.CancelRequested += () => {
+                if (extracting) {
+                    dialog.ShowExtractionCancellationChoice(cancellation);
+                    }
+                else {
+                    dialog.ShowCancellationChoice(cancellation, targetArchive is null);
+                    }
+                };
+            }
+
+        bool previousSensitivity = _window.Sensitive;
+        _window.Sensitive = false;
+        _window.Hide();
+        archive.ProgressReport += OnProgress;
+        try {
+            Task<T>? task = Task.Run(action);
+            Stopwatch refresh = Stopwatch.StartNew();
+            while (!task.IsCompleted) {
+                for (int i = 0; i < 32 && Application.EventsPending(); i++) {
+                    Application.RunIteration(false);
+                    }
+
+                // Keep pumping input for cancellation, but render progress on a fixed cadence.
+                // The worker only publishes state and never waits for a widget update.
+                if (refresh.ElapsedMilliseconds >= 100) {
+                    OperationProgressArgs? current = Volatile.Read(ref _transferProgress);
+                    dialog.Update(current);
+                    if (current is not null) {
+                        progress.Fraction = current.BytesMax > 0 ? Math.Clamp((double)current.BytesComplete / current.BytesMax, 0, 1) : 0;
+                        progress.Text = $"{current.BytesComplete:N0} / {current.BytesMax:N0} bytes";
+                        _status.Text = description + ": " + current.FileName;
+                        }
+                    else {
+                        progress.Pulse();
+                        }
+
+                    refresh.Restart();
+                    }
+
+                Thread.Sleep(10);
+                }
+
+            T result = task.GetAwaiter().GetResult();
+            dialog.Update(Volatile.Read(ref _transferProgress));
+            return result;
+            }
+        finally {
+            _activeProgressDialog = null;
+            archive.ProgressReport -= OnProgress;
+            archive.Options.CancellationToken = previousCancellation;
+            dialog.Window.Hide();
+            _window.Sensitive = previousSensitivity;
+            _window.ShowAll();
+            progress.Hide();
+            _operationActive = false;
+            UpdateActions();
+            if (_quitRequested) {
+                RequestQuit();
+                }
+            }
+        }
+    }

@@ -1,0 +1,36 @@
+<Project>
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Mash.UI.MNXFile.GUI</RootNamespace>
+    <AssemblyName>mnx-gui</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+    <!-- App-only switch: propagating PublishAot=true breaks netstandard helper projects. -->
+    <PublishAot Condition="'$(MNXNativeAot)' == 'true' and '$(MNXFrontendLibrary)' != 'true'">true</PublishAot>
+    <MNXPortableRoot Condition="'$(MNXPortableRoot)' == ''">$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)', '..', '..', 'mnx_clutter', 'build', 'mnx-gui-port'))</MNXPortableRoot>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MNXPortableRoot)/gui/**/*.cs" Exclude="$(MNXPortableRoot)/gui/**/obj/**;$(MNXPortableRoot)/gui/**/bin/**" />
+    <Compile Include="overrides/**/*.cs" />
+    <Compile Include="../src/ArchiveBrowser.cs;../src/FileTransfer.cs;../src/ExtractionPlan.cs;../src/TransferCancellation.cs;../src/TransferTracker.cs;../src/Settings/AppSettings.cs;../src/Settings/MWinColors.cs;../src/Settings/DefaultKeyStore.cs;../src/Previews/PreviewData.cs" />
+    <ProjectReference Include="MWin/MWindow.csproj" />
+    <ProjectReference Include="Backends/MNXFile.Backends.csproj" />
+    <ProjectReference Include="$(MNXPortableRoot)/vendor/Majorsilence.Forms/src/Majorsilence.Forms.Gtk4/Majorsilence.Forms.Gtk4.csproj" />
+    <ProjectReference Include="$(MNXPortableRoot)/vendor/Majorsilence.Forms/src/Majorsilence.Forms.Headless/Majorsilence.Forms.Headless.csproj" />
+    <PackageReference Include="Mash.MNXFile.Client" Version="1.2.0-alpha.3" />
+    <!-- Keep raw XML; compiling .resx images creates Windows resource type descriptors. -->
+    <EmbeddedResource Include="$(MNXPortableRoot)/gui/**/*.resx.raw" LogicalName="Mash.UI.MNXFile.GUI.%(Filename)" />
+    <EmbeddedResource Include="../src/Icons/Rendered/32/*.png" LogicalName="Mash.UI.MNXFile.GUI.Icons.32.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../src/Icons/Rendered/16/*.png" LogicalName="Mash.UI.MNXFile.GUI.Icons.16.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../src/archive.ico" LogicalName="Mash.UI.MNXFile.GUI.archive.ico" />
+    <!-- The designer property converters and resource lookup inspect these types at runtime. -->
+    <TrimmerRootAssembly Include="$(AssemblyName)" />
+    <TrimmerRootAssembly Include="MWindow" />
+    <TrimmerRootAssembly Include="Majorsilence.Forms" />
+    <TrimmerRootAssembly Include="Majorsilence.Forms.Drawing.Common" />
+  </ItemGroup>
+</Project>

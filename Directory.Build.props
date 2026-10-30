@@ -1,0 +1,28 @@
+<Project>
+  <PropertyGroup>
+    <RepositoryUrl>https://github.com/Mashrien/MNXArchiver</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/Mashrien/MNXArchiver</PackageProjectUrl>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+    <MNXVersionPrefix>1.4.1</MNXVersionPrefix>
+    <MNXCounterFile>$(MSBuildThisFileDirectory)BuildNumber.txt</MNXCounterFile>
+    <MNXBuildNumberReserved Condition="'$(MNXBuildNumber)' != ''">true</MNXBuildNumberReserved>
+    <MNXBuildNumber Condition="'$(MNXBuildNumber)' == ''">$([System.IO.File]::ReadAllText('$(MNXCounterFile)').Trim())</MNXBuildNumber>
+    <Version>$(MNXVersionPrefix).$(MNXBuildNumber)</Version>
+    <InformationalVersion>$(Version)</InformationalVersion>
+    <AssemblyVersion>$(MNXVersionPrefix).$(MNXBuildNumber)</AssemblyVersion>
+    <FileVersion>$(AssemblyVersion)</FileVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <!-- Every frontend uses the selected client feed, including GTK3 and IDE restores.
+         Do not inject a missing default directory when a custom feed is supplied. -->
+    <MNXDefaultPackageFeed>$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)', '..', 'MNX_Builds', 'mnxfile', 'packages'))</MNXDefaultPackageFeed>
+    <RestoreAdditionalProjectSources Condition="'$(MNXPackageFeed)' != ''">$(RestoreAdditionalProjectSources);$(MNXPackageFeed)</RestoreAdditionalProjectSources>
+    <RestoreAdditionalProjectSources Condition="'$(MNXPackageFeed)' == '' and Exists('$(MNXDefaultPackageFeed)')">$(RestoreAdditionalProjectSources);$(MNXDefaultPackageFeed)</RestoreAdditionalProjectSources>
+    <!-- All projects and IDEs share these output locations outside the source tree. -->
+    <MNXBuildRoot Condition="'$(MNXBuildRoot)' == ''">$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', 'mnx_clutter', 'build', 'mnx-gui'))</MNXBuildRoot>
+    <MNXReleaseRoot Condition="'$(MNXReleaseRoot)' == ''">$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', 'MNX_Builds', 'mnx-gui'))</MNXReleaseRoot>
+    <PublishDir Condition="'$(PublishDir)' == ''">$(MNXReleaseRoot)/$(MSBuildProjectName)/</PublishDir>
+    <BaseOutputPath>$(MNXBuildRoot)/bin/$(MSBuildProjectName)/</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MNXBuildRoot)/obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

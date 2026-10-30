@@ -1,0 +1,1469 @@
+diff --git a/src/Majorsilence.Forms.Gtk4/Gtk4SkiaSurface.cs b/src/Majorsilence.Forms.Gtk4/Gtk4SkiaSurface.cs
+index b6c350e..f643afc 100644
+--- a/src/Majorsilence.Forms.Gtk4/Gtk4SkiaSurface.cs
++++ b/src/Majorsilence.Forms.Gtk4/Gtk4SkiaSurface.cs
+@@ -20,6 +20,7 @@ namespace Majorsilence.Forms.Gtk4
+     internal sealed class Gtk4SkiaSurface
+     {
+         private readonly Func<MF.WindowBase?> _owner;
++        internal Action<SKPixmap, int>? UpdateInputRegion { get; set; }
+ 
+         /// <summary>The GTK widget to parent into a window or a presenter.</summary>
+         public global::Gtk.DrawingArea Widget { get; }
+@@ -96,7 +97,7 @@ private void Render (global::Gtk.DrawingArea area, Cairo.Context cr, int width,
+             cr.Restore ();
+         }
+ 
+-        private static unsafe void RenderInto (MF.WindowBase owner, Cairo.ImageSurface surface, int physW, int physH, double scale)
++        private unsafe void RenderInto (MF.WindowBase owner, Cairo.ImageSurface surface, int physW, int physH, double scale)
+         {
+             var data = surface.GetData ();
+             fixed (byte* ptr = data) {
+@@ -109,6 +110,9 @@ private static unsafe void RenderInto (MF.WindowBase owner, Cairo.ImageSurface s
+                 skSurface.Canvas.Clear (SKColors.Transparent);
+                 owner.RenderFrame (skSurface.Canvas, physW, physH, scale);
+                 skSurface.Canvas.Flush ();
++                MF.FrameTransparency.Apply(owner, skSurface);
++                using SKPixmap pixels = skSurface.PeekPixels();
++                UpdateInputRegion?.Invoke(pixels, (int)scale);
+             }
+         }
+ 
+@@ -140,14 +144,15 @@ private void WireInput ()
+             Widget.AddController (click);
+ 
+             var motion = global::Gtk.EventControllerMotion.New ();
+-            motion.OnMotion += (m, e) => {
+-                var controller = (global::Gtk.EventController) m;
+-                LastEventTime = controller.GetCurrentEventTime ();
+-                LastPointer = (e.X, e.Y);
+-                var state = controller.GetCurrentEventState ();
+-                var (x, y) = Device (e.X, e.Y);
+-                _owner ()?.HandlePointerMoved (Gtk4KeyInterop.ButtonsFromState (state), x, y, Gtk4KeyInterop.ModifierKeys (state));
+-            };
++            void MovePointer(global::Gtk.EventController controller, double pointerX, double pointerY) {
++                LastEventTime = controller.GetCurrentEventTime();
++                LastPointer = (pointerX, pointerY);
++                Gdk.ModifierType state = controller.GetCurrentEventState();
++                (int x, int y) = Device(pointerX, pointerY);
++                _owner()?.HandlePointerMoved(Gtk4KeyInterop.ButtonsFromState(state), x, y, Gtk4KeyInterop.ModifierKeys(state));
++                }
++            motion.OnEnter += (controller, arguments) => MovePointer(controller, arguments.X, arguments.Y);
++            motion.OnMotion += (controller, arguments) => MovePointer(controller, arguments.X, arguments.Y);
+             motion.OnLeave += (_, _) => {
+                 var (x, y) = Device (LastPointer.X, LastPointer.Y);
+                 _owner ()?.HandlePointerExited (MF.MouseButtons.None, x, y, MF.Keys.None);
+diff --git a/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.cs b/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.cs
+index beb4260..ddf0905 100644
+--- a/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.cs
++++ b/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.cs
+@@ -15,7 +15,7 @@ namespace Majorsilence.Forms.Gtk4
+     ///
+     /// Popups (menus, combo dropdowns) are borderless, non-resizable top-level windows.
+     /// </summary>
+-    internal sealed class Gtk4WindowHost : IWindowBackend, INativeControlHostBackend, IDisposable
++    internal sealed partial class Gtk4WindowHost : IWindowBackend, INativeControlHostBackend, IDisposable
+     {
+         private readonly MF.WindowBase _owner;
+         private readonly bool _isPopup;
+@@ -30,6 +30,7 @@ internal sealed class Gtk4WindowHost : IWindowBackend, INativeControlHostBackend
+         private bool _canResize = true;
+         private bool _closedDelivered;
+         private bool _minimized;
++        private bool _activationReported;
+         private double _opacity = 1.0;
+ 
+         public Gtk4WindowHost (MF.WindowBase owner, bool isPopup)
+@@ -47,6 +48,8 @@ public Gtk4WindowHost (MF.WindowBase owner, bool isPopup)
+             _overlay = global::Gtk.Overlay.New ();
+             _overlay.SetChild (_surface.Widget);
+             _window.SetChild (_overlay);
++            InitializeTransparency();
++            InitializeFileDrag();
+ 
+             WireLifecycle ();
+         }
+@@ -56,6 +59,11 @@ public Gtk4WindowHost (MF.WindowBase owner, bool isPopup)
+ 
+         private void WireLifecycle ()
+         {
++            _window.OnNotify += (_, arguments) => {
++                if (arguments.Pspec.GetName() == "is-active") {
++                    ReportActivation(_window.GetIsActive());
++                    }
++                };
+             _window.OnCloseRequest += (_, _) => {
+                 if (_owner.OnBackendClosing ())   // true == cancel the close
+                     return true;
+@@ -73,7 +81,7 @@ private void WireLifecycle ()
+         // is a best-effort stored value and the PointTo* conversions assume it. Size/ClientSize track
+         // the drawing area's allocation once the window is realized.
+ 
+-        public Point Location { get => _location; set => _location = value; }
++        public Point Location { get => _location; set { _location = value; UpdateRelativePopupPosition(); } }
+ 
+         public Size Size {
+             get => _window.GetRealized () && _surface.Widget.GetWidth () > 0
+@@ -95,10 +103,16 @@ public Size Size {
+ 
+         public void Show ()
+         {
++            if (ShowRelativePopup()) {
++                return;
++                }
++            if (_owner is Form form && form.Owner?.Backend is Gtk4WindowHost ownerHost) {
++                _window.SetTransientFor(ownerHost._window);
++                }
+             _window.SetVisible (true);
+             if (ShowActivated && !_isPopup)
+                 _window.Present ();
+-            _owner.OnBackendActivated ();
++            ReportActivation(true);
+         }
+ 
+         public void ShowDialog (IWindowBackend? owner)
+@@ -109,13 +123,30 @@ public void ShowDialog (IWindowBackend? owner)
+             }
+             _window.SetVisible (true);
+             _window.Present ();
+-            _owner.OnBackendActivated ();
++            ReportActivation(true);
+         }
+ 
+-        public void Hide () => _window.SetVisible (false);
++        private void ReportActivation(bool active) {
++            if (_activationReported == active || _owner.IsDisposed) {
++                return;
++                }
++            _activationReported = active;
++            if (active) {
++                _owner.OnBackendActivated();
++                }
++            else {
++                _owner.OnBackendDeactivated();
++                }
++            }
++
++        public void Hide () {
++            HideRelativePopup();
++            _window.SetVisible(false);
++            }
+ 
+         public void Close ()
+         {
++            HideRelativePopup();
+             if (_window.GetRealized () || _window.GetVisible ()) {
+                 _window.Close ();   // routes through OnCloseRequest, which delivers OnBackendClosed
+                 return;
+@@ -135,7 +166,7 @@ public void Activate ()
+         {
+             _window.SetVisible (true);
+             _window.Present ();
+-            _owner.OnBackendActivated ();
++            ReportActivation(true);
+         }
+ 
+         public bool ShowActivated { get; set; } = true;
+@@ -264,19 +295,11 @@ void INativeControlHostBackend.UpdateNativeControl (MF.NativeControlHost host, R
+         void INativeControlHostBackend.DetachNativeControl (MF.NativeControlHost host)
+             => Gtk4NativeOverlay.Detach (_overlay, _overlays, host);
+ 
+-        // ── File/folder pickers ──────────────────────────────────────────────────
+-        // Gtk.FileDialog is async and needs a live loop turn; deferred — WebView-less compat controls
+-        // and the common-dialog fallbacks already cover the "no picker" case (as on Headless).
+-
+-        public Task<string[]> ShowOpenFileDialog (OpenFileRequest request) => Task.FromResult (Array.Empty<string> ());
+-
+-        public Task<string?> ShowSaveFileDialog (SaveFileRequest request) => Task.FromResult<string?> (null);
+-
+-        public Task<string?> ShowOpenFolderDialog (FolderDialogRequest request) => Task.FromResult<string?> (null);
+-
+         public void Dispose ()
+         {
++            DisposeRelativePopup();
+             try { _window.Destroy (); } catch { /* already gone */ }
++            _transparencyCss?.Dispose();
+         }
+     }
+ }
+diff --git a/src/Majorsilence.Forms.Headless/HeadlessWindowHost.cs b/src/Majorsilence.Forms.Headless/HeadlessWindowHost.cs
+index 22f3924..9c9185e 100644
+--- a/src/Majorsilence.Forms.Headless/HeadlessWindowHost.cs
++++ b/src/Majorsilence.Forms.Headless/HeadlessWindowHost.cs
+@@ -231,6 +231,7 @@ internal SKImage Render ()
+             using var surface = SKSurface.Create (new SKImageInfo (physW, physH, SKColorType.Bgra8888, SKAlphaType.Premul));
+             _owner.RenderFrame (surface.Canvas, physW, physH, scaling);
+             surface.Canvas.Flush ();
++            FrameTransparency.Apply(_owner, surface);
+             return surface.Snapshot ();
+         }
+ 
+diff --git a/src/Majorsilence.Forms/Control.Compat.cs b/src/Majorsilence.Forms/Control.Compat.cs
+index 493b3fc..9dac050 100644
+--- a/src/Majorsilence.Forms/Control.Compat.cs
++++ b/src/Majorsilence.Forms/Control.Compat.cs
+@@ -620,6 +620,14 @@ public DragDropEffects DoDragDrop (object data, DragDropEffects allowedEffects)
+             // Real as of W6 mechanisms: an in-process session (DragDropSession) takes over the window's
+             // pointer events and this blocks in the nested loop until the drop, the cancel or Escape,
+             // returning the effect the target chose -- upstream's contract, without an OLE source.
++            if (data is IDataObject files && files.GetData(DataFormats.FileDrop) is string[] paths
++                && FindWindow()?.Backend is Backends.INativeFileDragBackend desktop) {
++                if (Control.CaptureHolder is { } capturedControl) {
++                    capturedControl.Capture = false;
++                    }
++                return Form.RunModal(desktop.BeginFileDrag(paths, allowedEffects));
++                }
++
+             var session = DragDropSession.Begin (this, data, allowedEffects);
+ 
+             return Form.RunModal (session.Completion);
+diff --git a/src/Majorsilence.Forms/Form.cs b/src/Majorsilence.Forms/Form.cs
+index 3ba892d..203a650 100644
+--- a/src/Majorsilence.Forms/Form.cs
++++ b/src/Majorsilence.Forms/Form.cs
+@@ -1699,8 +1699,21 @@ public double Opacity {
+             }
+         }
+ 
+-        /// <summary>Gets or sets the color treated as transparent. Stub in Majorsilence.Forms.</summary>
+-        public System.Drawing.Color TransparencyKey { get; set; } = System.Drawing.Color.Empty;
++        private System.Drawing.Color transparencyKey = System.Drawing.Color.Empty;
++
++        /// <summary>Gets or sets the color removed by color-key-aware presentation backends.</summary>
++        public System.Drawing.Color TransparencyKey {
++            get { return transparencyKey; }
++            set {
++                if (transparencyKey == value) {
++                    return;
++                    }
++                transparencyKey = value;
++                // Alpha pixels alone do not remove an opaque native window background.
++                Backend.SetShaped(Region != null || !value.IsEmpty);
++                Invalidate();
++                }
++            }
+ 
+         /// <inheritdoc/>
+         public override ControlStyle Style { get; } = new ControlStyle (DefaultStyle);
+@@ -2139,6 +2152,9 @@ private static System.Drawing.SizeF LegacyAutoScaleSize (Majorsilence.Forms.Draw
+         /// </summary>
+         protected virtual CreateParams CreateParams => new CreateParams ();
+ 
++        // Preserve WinForms hover-preview pass-through without invoking a Windows WndProc.
++        internal bool PointerInputTransparent => (CreateParams.ExStyle & 0x00000020) != 0;
++
+         /// <summary>
+         /// Gets whether the window is shown without taking focus from whatever is currently active.
+         /// Overridden to <see langword="true"/> by overlay windows — a drag preview, a translucent
+diff --git a/src/Majorsilence.Forms/Majorsilence.Forms.csproj b/src/Majorsilence.Forms/Majorsilence.Forms.csproj
+index 75ef3bb..f8a456e 100644
+--- a/src/Majorsilence.Forms/Majorsilence.Forms.csproj
++++ b/src/Majorsilence.Forms/Majorsilence.Forms.csproj
+@@ -70,7 +70,8 @@
+     <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
+     <!-- Pin HarfBuzz to the SkiaSharp 3.x-aligned versions (overrides RichTextKit's 2.88 transitive). -->
+     <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+-    <PackageReference Include="Topten.RichTextKit" />
++    <!-- Local probe fix for encoded variable-font face indices; see patches/. -->
++    <ProjectReference Include="../../../RichTextKit/Topten.RichTextKit.Probe.csproj" />
+     <PackageReference Include="System.Formats.Nrbf" />
+     <PackageReference Include="System.Resources.Extensions" />
+   </ItemGroup>
+diff --git a/src/Majorsilence.Forms/Renderers/MenuRenderer.cs b/src/Majorsilence.Forms/Renderers/MenuRenderer.cs
+index afb509a..33ce62d 100644
+--- a/src/Majorsilence.Forms/Renderers/MenuRenderer.cs
++++ b/src/Majorsilence.Forms/Renderers/MenuRenderer.cs
+@@ -16,6 +16,8 @@ protected override void Render (Menu control, PaintEventArgs e)
+                 MenuUpstreamLook.FillGradient (e, new Rectangle (0, 0, control.ScaledWidth, control.ScaledHeight), horizontal: true,
+                     MenuUpstreamLook.BarBegin, MenuUpstreamLook.BarEnd);
+ 
++            // Menus need the same custom background/border hooks as ordinary toolbars.
++            StripRendererBridge.Background(control, e);
+             foreach (var item in control.Items) {
+                 if (!item.Visible)
+                     continue;
+@@ -32,6 +34,7 @@ protected override void Render (Menu control, PaintEventArgs e)
+                 else
+                     RenderItem (control, item, e);
+             }
++            StripRendererBridge.Border(control, e);
+         }
+ 
+         // A maximized MDI child's icon or caption button, merged into the menu bar. The glyphs are drawn
+diff --git a/src/Majorsilence.Forms/ToolBar.cs b/src/Majorsilence.Forms/ToolBar.cs
+index abb099a..0a67a9c 100644
+--- a/src/Majorsilence.Forms/ToolBar.cs
++++ b/src/Majorsilence.Forms/ToolBar.cs
+@@ -213,6 +213,10 @@ protected override void LayoutItems ()
+             // over the first item: GripVisible and GripMargin were stored and read by nothing, so a
+             // strip that asked for a drag grip got no grip AND no space for one (TSM-43).
+             var area = LogicalClientRectangle;
++            // Padding is part of the content box, not merely a preferred-size hint.
++            // Honor it before reserving grip/overflow bands so items never cover chrome.
++            area = new Rectangle(area.X + Padding.Left, area.Y + Padding.Top,
++                Math.Max(0, area.Width - Padding.Horizontal), Math.Max(0, area.Height - Padding.Vertical));
+             var grip = GripBandWidth;
+ 
+             if (grip > 0)
+@@ -311,7 +315,7 @@ private void PinTrailingItems (List<MenuItem> visible)
+             if (trailing.Count == 0)
+                 return;
+ 
+-            var x = LogicalClientRectangle.Right;
++            var x = LogicalClientRectangle.Right - Padding.Right;
+ 
+             for (var i = trailing.Count - 1; i >= 0; i--) {
+                 var bounds = trailing[i].Bounds;
+diff --git a/src/Majorsilence.Forms/WindowBase.cs b/src/Majorsilence.Forms/WindowBase.cs
+index 2890ac4..2442222 100644
+--- a/src/Majorsilence.Forms/WindowBase.cs
++++ b/src/Majorsilence.Forms/WindowBase.cs
+@@ -3484,7 +3484,7 @@ public Majorsilence.Forms.Drawing.Region? Region {
+ 
+                 region = value;
+ 
+-                Backend.SetShaped (value is not null);
++                Backend.SetShaped (value is not null || this is Form form && !form.TransparencyKey.IsEmpty);
+                 Invalidate ();
+             }
+         }
+diff --git a/tests/Majorsilence.Forms.Tests/ControlWindowParityBaseline.txt b/tests/Majorsilence.Forms.Tests/ControlWindowParityBaseline.txt
+index fe1258a..d299ea9 100644
+--- a/tests/Majorsilence.Forms.Tests/ControlWindowParityBaseline.txt
++++ b/tests/Majorsilence.Forms.Tests/ControlWindowParityBaseline.txt
+@@ -102,7 +102,6 @@ SetAutoSizeMode/1
+ 
+ # N/A -- Win32 handle/message plumbing with no analogue here.
+ CheckForIllegalCrossThreadCalls
+-DrawToBitmap/2
+ EndInvoke/1
+ IsMirrored
+ OnPrint/1
+diff --git a/tests/Majorsilence.Forms.Tests/StoredOnlyPropertyBaseline.txt b/tests/Majorsilence.Forms.Tests/StoredOnlyPropertyBaseline.txt
+index 02f38ae..077a510 100644
+--- a/tests/Majorsilence.Forms.Tests/StoredOnlyPropertyBaseline.txt
++++ b/tests/Majorsilence.Forms.Tests/StoredOnlyPropertyBaseline.txt
+@@ -72,7 +72,6 @@ Majorsilence.Forms.ControlBindingsCollection.BindableComponent    -- framework-w
+ Majorsilence.Forms.CreateParams.Caption    -- Win32 handle/window-class detail; no equivalent here
+ Majorsilence.Forms.CreateParams.ClassName    -- Win32 handle/window-class detail; no equivalent here
+ Majorsilence.Forms.CreateParams.ClassStyle    -- Win32 handle/window-class detail; no equivalent here
+-Majorsilence.Forms.CreateParams.ExStyle    -- Win32 handle/window-class detail; no equivalent here
+ Majorsilence.Forms.CreateParams.Height    -- Win32 handle/window-class detail; no equivalent here
+ Majorsilence.Forms.CreateParams.Param    -- Win32 handle/window-class detail; no equivalent here
+ Majorsilence.Forms.CreateParams.Parent    -- Win32 handle/window-class detail; no equivalent here
+@@ -205,7 +204,6 @@ Majorsilence.Forms.Form.AllowTransparency    -- needs a backend window capabilit
+ Majorsilence.Forms.Form.AutoScale    -- legacy .NET 1.x autoscale; AutoScaleMode/Dimensions are the live path
+ Majorsilence.Forms.Form.FormScreenCaptureMode    -- Win32 handle/window-class detail; no equivalent here
+ Majorsilence.Forms.Form.MdiChildrenMinimizedAnchorBottom    -- MDI child minimisation is not modelled; the window list is real as of W6 mechanisms
+-Majorsilence.Forms.Form.TransparencyKey    -- needs a backend window capability (per-pixel transparency / shadow)
+ Majorsilence.Forms.GiveFeedbackEventArgs.CursorOffset    -- drop-description text and drag images are drawn by the OS shell drag image; the in-process session (W6) has none to hand them to
+ Majorsilence.Forms.GiveFeedbackEventArgs.DragImage    -- drop-description text and drag images are drawn by the OS shell drag image; the in-process session (W6) has none to hand them to
+ Majorsilence.Forms.GiveFeedbackEventArgs.UseDefaultDragImage    -- drop-description text and drag images are drawn by the OS shell drag image; the in-process session (W6) has none to hand them to
+--- /dev/null
++++ b/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.FileDrag.cs
+@@ -0,0 +1,101 @@
++using System;
++using System.Collections.Generic;
++using System.Runtime.InteropServices;
++using System.Text;
++using System.Threading.Tasks;
++using Majorsilence.Forms.Backends;
++
++namespace Majorsilence.Forms.Gtk4 {
++    internal sealed partial class Gtk4WindowHost : INativeFileDragBackend {
++        private global::Gtk.DropTarget? _fileDropTarget;
++
++        [DllImport("libgtk-4.so.1", CallingConvention = CallingConvention.Cdecl)]
++        private static extern IntPtr gdk_file_list_get_files(IntPtr fileList);
++
++        private void InitializeFileDrag() {
++            _fileDropTarget = global::Gtk.DropTarget.New(Gdk.FileList.GetGType(), Gdk.DragAction.Copy);
++            _fileDropTarget.SetPreload(true);
++            _fileDropTarget.OnEnter += (_, args) => FileDragOver(args.X, args.Y);
++            _fileDropTarget.OnMotion += (_, args) => FileDragOver(args.X, args.Y);
++            _fileDropTarget.OnLeave += (_, _) => _owner.HandleExternalDragLeave();
++            _fileDropTarget.OnDrop += (_, args) => {
++                DataObject? files = ReadFileDrop(args.Value);
++                if (files is null) {
++                    return false;
++                    }
++                return _owner.HandleExternalDrop(files, DragDropEffects.Copy,
++                    FileDragCoordinate(args.X), FileDragCoordinate(args.Y), Keys.None) != DragDropEffects.None;
++                };
++            _surface.Widget.AddController(_fileDropTarget);
++            }
++
++        private int FileDragCoordinate(double value) {
++            return (int)Math.Round(value * _surface.Scaling);
++            }
++
++        private Gdk.DragAction FileDragOver(double x, double y) {
++            DataObject? files = ReadFileDrop(_fileDropTarget!.GetValue());
++            if (files is null) {
++                return (Gdk.DragAction)0;
++                }
++            DragDropEffects effect = _owner.HandleExternalDragOver(files, DragDropEffects.Copy,
++                FileDragCoordinate(x), FileDragCoordinate(y), Keys.None);
++            return effect == DragDropEffects.None ? (Gdk.DragAction)0 : Gdk.DragAction.Copy;
++            }
++
++        private static DataObject? ReadFileDrop(GObject.Value? value) {
++            if (value is null) {
++                return null;
++                }
++            IntPtr boxed = value.GetBoxed();
++            if (boxed == IntPtr.Zero) {
++                return null;
++                }
++            List<string> paths = new List<string>();
++            // The GSList and its files belong to GdkFileList and remain borrowed here.
++            for (IntPtr item = gdk_file_list_get_files(boxed); item != IntPtr.Zero; item = Marshal.ReadIntPtr(item, IntPtr.Size)) {
++                using Gio.FileHelper file = Gio.FileHelper.NewFromPointer(Marshal.ReadIntPtr(item), false);
++                string? path = file.GetPath();
++                if (!string.IsNullOrEmpty(path)) {
++                    paths.Add(path);
++                    }
++                }
++            return paths.Count == 0 ? null : new DataObject(DataFormats.FileDrop, paths.ToArray());
++            }
++
++        public Task<DragDropEffects> BeginFileDrag(string[] paths, DragDropEffects allowedEffects) {
++            if ((allowedEffects & DragDropEffects.Copy) == 0 || paths.Length == 0) {
++                return Task.FromResult(DragDropEffects.None);
++                }
++            Gdk.Surface? surface = _window.GetNative()?.GetSurface();
++            Gdk.Device? pointer = Gdk.Display.GetDefault()?.GetDefaultSeat()?.GetPointer();
++            if (surface is null || pointer is null) {
++                return Task.FromResult(DragDropEffects.None);
++                }
++            StringBuilder uris = new StringBuilder();
++            foreach (string path in paths) {
++                uris.Append(new Uri(System.IO.Path.GetFullPath(path)).AbsoluteUri).Append("\r\n");
++                }
++            using GLib.Bytes bytes = GLib.Bytes.New(Encoding.UTF8.GetBytes(uris.ToString()));
++            Gdk.ContentProvider provider = Gdk.ContentProvider.NewForBytes("text/uri-list", bytes);
++            Gdk.Drag? drag = Gdk.Drag.Begin(surface, pointer, provider, Gdk.DragAction.Copy, 0, 0);
++            if (drag is null) {
++                provider.Dispose();
++                return Task.FromResult(DragDropEffects.None);
++                }
++            TaskCompletionSource<DragDropEffects> completion = new TaskCompletionSource<DragDropEffects>();
++            void Finish(bool success) {
++                if (completion.Task.IsCompleted) {
++                    return;
++                    }
++                drag.DropDone(success);
++                completion.SetResult(success ? DragDropEffects.Copy : DragDropEffects.None);
++                drag.Dispose();
++                provider.Dispose();
++                }
++            drag.OnCancel += (_, _) => Finish(false);
++            drag.OnDndFinished += (_, _) => Finish(drag.GetSelectedAction() == Gdk.DragAction.Copy);
++            return completion.Task;
++            }
++        }
++    }
+--- /dev/null
++++ b/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.FilePickers.cs
+@@ -0,0 +1,78 @@
++using System;
++using System.Collections.Generic;
++using System.IO;
++using System.Threading.Tasks;
++using Majorsilence.Forms.Backends;
++
++namespace Majorsilence.Forms.Gtk4 {
++    internal sealed partial class Gtk4WindowHost {
++        public Task<string[]> ShowOpenFileDialog(OpenFileRequest request) {
++            return ChooseFiles(request.Title ?? "Open file", global::Gtk.FileChooserAction.Open,
++                request.InitialDirectory, null, request.AllowMultiple, request.Filters, request.FilterIndex);
++            }
++
++        public async Task<string?> ShowSaveFileDialog(SaveFileRequest request) {
++            string[] files = await ChooseFiles(request.Title ?? "Save file", global::Gtk.FileChooserAction.Save,
++                request.InitialDirectory, request.SuggestedFileName, false, request.Filters, request.FilterIndex);
++            return files.Length == 0 ? null : files[0];
++            }
++
++        public async Task<string?> ShowOpenFolderDialog(FolderDialogRequest request) {
++            string[] folders = await ChooseFiles(request.Title ?? "Choose folder", global::Gtk.FileChooserAction.SelectFolder,
++                request.InitialDirectory, null, false, Array.Empty<FileDialogFilter>(), 1);
++            return folders.Length == 0 ? null : folders[0];
++            }
++
++        private Task<string[]> ChooseFiles(string title, global::Gtk.FileChooserAction action,
++                string? directory, string? suggestedName, bool multiple, IReadOnlyList<FileDialogFilter> filters, int filterIndex) {
++            TaskCompletionSource<string[]> completion = new TaskCompletionSource<string[]>();
++            global::Gtk.FileChooserNative chooser = global::Gtk.FileChooserNative.New(title, _window, action,
++                action == global::Gtk.FileChooserAction.Save ? "Save" : "Select", "Cancel");
++            chooser.SetModal(true);
++            chooser.SetSelectMultiple(multiple);
++            if (!string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory)) {
++                using Gio.File folder = Gio.FileHelper.NewForPath(directory);
++                chooser.SetCurrentFolder(folder);
++                }
++            if (!string.IsNullOrWhiteSpace(suggestedName) && action == global::Gtk.FileChooserAction.Save) {
++                chooser.SetCurrentName(Path.GetFileName(suggestedName));
++                }
++            for (int index = 0; index < filters.Count; index++) {
++                global::Gtk.FileFilter filter = global::Gtk.FileFilter.New();
++                filter.SetName(filters[index].Name);
++                foreach (string pattern in filters[index].Patterns) {
++                    filter.AddPattern(pattern == "*.*" ? "*" : pattern);
++                    }
++                chooser.AddFilter(filter);
++                if (index + 1 == filterIndex) {
++                    chooser.SetFilter(filter);
++                    }
++                }
++            chooser.OnResponse += (_, response) => {
++                try {
++                    List<string> paths = new List<string>();
++                    if (response.ResponseId == (int)global::Gtk.ResponseType.Accept) {
++                        using Gio.ListModel files = chooser.GetFiles();
++                        for (uint index = 0; index < files.GetNItems(); index++) {
++                            using Gio.FileHelper file = Gio.FileHelper.NewFromPointer(files.GetItem(index), true);
++                            string? path = file.GetPath();
++                            if (!string.IsNullOrEmpty(path)) {
++                                paths.Add(path);
++                                }
++                            }
++                        }
++                    completion.SetResult(paths.ToArray());
++                    }
++                catch (Exception error) {
++                    completion.SetException(error);
++                    }
++                finally {
++                    chooser.Destroy();
++                    chooser.Dispose();
++                    }
++                };
++            chooser.Show();
++            return completion.Task;
++            }
++        }
++    }
+--- /dev/null
++++ b/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.Popups.cs
+@@ -0,0 +1,95 @@
++using System;
++using System.Drawing;
++
++namespace Majorsilence.Forms.Gtk4 {
++    internal sealed partial class Gtk4WindowHost {
++        private global::Gtk.Popover? _relativePopup;
++        private Gtk4WindowHost? _popupParent;
++        private global::Gtk.CssProvider? _popupCss;
++        private bool _closingPopup;
++
++        // Wayland forbids positioning independent top-levels. Menus and non-activating
++        // owned previews instead use native parent-relative popup surfaces.
++        private bool ShowRelativePopup() {
++            WindowBase? parent = _owner is PopupWindow popup ? popup.ParentWindow
++                : !ShowActivated && _owner is Form form ? form.Owner : null;
++            if (parent?.Backend is not Gtk4WindowHost host) {
++                return false;
++                }
++            if (_relativePopup is null) {
++                _popupParent = host;
++                _relativePopup = global::Gtk.Popover.New();
++                _relativePopup.SetHasArrow(false);
++                _relativePopup.SetAutohide(_isPopup && ShowActivated);
++                _relativePopup.SetCanFocus(ShowActivated);
++                _relativePopup.SetFocusable(ShowActivated);
++                _relativePopup.SetParent(host._surface.Widget);
++                _window.SetChild(null!);
++                _relativePopup.SetChild(_overlay);
++                _popupCss = global::Gtk.CssProvider.New();
++                _relativePopup.AddCssClass("mnx-relative-popup");
++                _popupCss.LoadFromString("popover.mnx-relative-popup, popover.mnx-relative-popup > contents { background: transparent; border: none; border-radius: 0; box-shadow: none; padding: 0; margin: 0; }");
++                global::Gtk.StyleContext.AddProviderForDisplay(_window.GetDisplay(), _popupCss, 800);
++                _relativePopup.OnClosed += (_, _) => {
++                    if (!_closingPopup && _owner.Visible) {
++                        _owner.OnBackendDeactivated();
++                        _owner.Hide();
++                        }
++                    };
++                }
++            _overlay.SetSizeRequest(Math.Max(1, _size.Width), Math.Max(1, _size.Height));
++            UpdateRelativePopupPosition();
++            _relativePopup.Popup();
++            _inputRegionValid = false;
++            if (ShowActivated) {
++                _owner.OnBackendActivated();
++                }
++            return true;
++            }
++
++        private void UpdateRelativePopupPosition() {
++            if (_relativePopup is null || _popupParent is null) {
++                return;
++                }
++            Point origin = _popupParent.PointToClient(_location);
++            using Gdk.Rectangle anchor = new Gdk.Rectangle { X = origin.X, Y = origin.Y, Width = 1, Height = 1 };
++            _relativePopup.SetPosition(global::Gtk.PositionType.Bottom);
++            _relativePopup.SetPointingTo(anchor);
++            // A bottom popup is horizontally centered on its anchor; offset to
++            // preserve the top-left positioning contract used by WinForms.
++            _relativePopup.SetOffset(_size.Width / 2, -1);
++            }
++
++        private void HideRelativePopup() {
++            if (_relativePopup is null) {
++                return;
++                }
++            _closingPopup = true;
++            try {
++                _relativePopup.Popdown();
++                }
++            finally {
++                _closingPopup = false;
++                }
++            }
++
++        private void DisposeRelativePopup() {
++            if (_relativePopup is not null) {
++                HideRelativePopup();
++                _relativePopup.SetChild(null!);
++                _relativePopup.Unparent();
++                _relativePopup.Dispose();
++                _relativePopup = null;
++                }
++            if (_popupCss is not null) {
++                global::Gtk.StyleContext.RemoveProviderForDisplay(_window.GetDisplay(), _popupCss);
++                _popupCss.Dispose();
++                }
++            _popupCss = null;
++            }
++
++        private Gdk.Surface? CurrentNativeSurface() {
++            return _relativePopup?.GetSurface() ?? _window.GetNative()?.GetSurface();
++            }
++        }
++    }
+--- /dev/null
++++ b/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.Transparency.cs
+@@ -0,0 +1,164 @@
++using System;
++using System.Collections.Generic;
++using System.Drawing;
++using System.Runtime.InteropServices;
++using SkiaSharp;
++
++namespace Majorsilence.Forms.Gtk4 {
++    internal sealed partial class Gtk4WindowHost {
++        private global::Gtk.CssProvider? _transparencyCss;
++        private bool _isShaped;
++        private bool _inputRegionValid;
++        private List<Rectangle> _inputRows = new List<Rectangle>();
++        private List<Rectangle> _nextInputRows = new List<Rectangle>();
++
++        private void InitializeTransparency() {
++            _surface.UpdateInputRegion = UpdateTransparencyInput;
++            _window.OnRealize += (_, _) => {
++                _inputRegionValid = false;
++                };
++            }
++
++        // A color key needs both transparent frame pixels and a transparent GTK backdrop.
++        public void SetShaped(bool shaped) {
++            if (_isShaped == shaped) {
++                return;
++                }
++            _isShaped = shaped;
++            _inputRegionValid = false;
++            if (shaped) {
++                if (_transparencyCss == null) {
++                    _transparencyCss = global::Gtk.CssProvider.New();
++                    _transparencyCss.LoadFromString("window { background-color: transparent; background-image: none; box-shadow: none; }");
++                    }
++                _window.GetStyleContext().AddProvider(_transparencyCss, 800);
++                }
++            else {
++                if (_transparencyCss != null) {
++                    _window.GetStyleContext().RemoveProvider(_transparencyCss);
++                    }
++                Gdk.Surface? nativeSurface = CurrentNativeSurface();
++                nativeSurface?.SetInputRegion(null!);
++                }
++            Invalidate();
++            }
++
++        private void UpdateTransparencyInput(SKPixmap pixels, int scale) {
++            if (!_isShaped) {
++                return;
++                }
++            Gdk.Surface? nativeSurface = CurrentNativeSurface();
++            if (nativeSurface == null) {
++                return;
++                }
++            // GDK input regions use logical pixels. Include a logical pixel if ANY of its
++            // physical samples is visible, so fractional edges are clickable at HiDPI too.
++            ReadOnlySpan<byte> buffer = pixels.GetPixelSpan();
++            _nextInputRows.Clear();
++            if (_owner is Form form && form.PointerInputTransparent) {
++                ApplyNativeInputRegion(nativeSurface);
++                _inputRegionValid = false;
++                return;
++                }
++            int pixelWidth = pixels.Width;
++            int pixelHeight = pixels.Height;
++            int rowBytes = pixels.RowBytes;
++            int logicalWidth = (pixelWidth + scale - 1) / scale;
++            int logicalHeight = (pixelHeight + scale - 1) / scale;
++            for (int row = 0; row < logicalHeight; row++) {
++                int runStart = -1;
++                for (int column = 0; column <= logicalWidth; column++) {
++                    bool visible = column < logicalWidth && HasVisiblePixel(buffer, rowBytes, pixelWidth, pixelHeight, column, row, scale);
++                    if (visible && runStart < 0) {
++                        runStart = column;
++                        }
++                    else if (!visible && runStart >= 0) {
++                        _nextInputRows.Add(new Rectangle(runStart, row, column - runStart, 1));
++                        runStart = -1;
++                        }
++                    }
++                }
++            if (_inputRegionValid && _inputRows.Count == _nextInputRows.Count) {
++                bool unchanged = true;
++                for (int row = 0; row < _inputRows.Count; row++) {
++                    if (_inputRows[row] != _nextInputRows[row]) {
++                        unchanged = false;
++                        break;
++                        }
++                    }
++                if (unchanged) {
++                    return;
++                    }
++                }
++            ApplyNativeInputRegion(nativeSurface);
++            List<Rectangle> previousRows = _inputRows;
++            _inputRows = _nextInputRows;
++            _nextInputRows = previousRows;
++            _inputRegionValid = true;
++            }
++
++        private static bool HasVisiblePixel(ReadOnlySpan<byte> buffer, int rowBytes, int width, int height, int column, int row, int scale) {
++            int lastRow = Math.Min((row + 1) * scale, height);
++            int lastColumn = Math.Min((column + 1) * scale, width);
++            for (int sampleRow = row * scale; sampleRow < lastRow; sampleRow++) {
++                for (int sampleColumn = column * scale; sampleColumn < lastColumn; sampleColumn++) {
++                    if (buffer[sampleRow * rowBytes + sampleColumn * 4 + 3] != 0) {
++                        return true;
++                        }
++                    }
++                }
++            return false;
++            }
++
++        private void ApplyNativeInputRegion(Gdk.Surface nativeSurface) {
++            // gir.core exposes the region object but not Cairo's region-building functions.
++            // Keep that small native operation here; Cairo is already required by GTK4.
++            IntPtr nativeRegion = CairoRegionCreate();
++            try {
++                foreach (Rectangle row in _nextInputRows) {
++                    NativeRectangle rectangle = new NativeRectangle {
++                        X = row.X,
++                        Y = row.Y,
++                        Width = row.Width,
++                        Height = row.Height
++                        };
++                    int status = CairoRegionUnionRectangle(nativeRegion, ref rectangle);
++                    if (status != 0) {
++                        throw new InvalidOperationException("Cairo input region failed: " + status);
++                        }
++                    }
++                using Cairo.Region region = new Cairo.Region(Cairo.Internal.RegionOwnedHandle.FromUnowned(nativeRegion));
++                nativeSurface.SetInputRegion(region);
++                // Do not let the compositor treat transparent corners as opaque damage regions.
++                IntPtr nativeEmptyRegion = CairoRegionCreate();
++                try {
++                    using Cairo.Region emptyRegion = new Cairo.Region(Cairo.Internal.RegionOwnedHandle.FromUnowned(nativeEmptyRegion));
++                    nativeSurface.SetOpaqueRegion(emptyRegion);
++                    }
++                finally {
++                    CairoRegionDestroy(nativeEmptyRegion);
++                    }
++                }
++            finally {
++                CairoRegionDestroy(nativeRegion);
++                }
++            }
++
++        [StructLayout(LayoutKind.Sequential)]
++        private struct NativeRectangle {
++            public int X;
++            public int Y;
++            public int Width;
++            public int Height;
++            }
++
++        [DllImport("libcairo.so.2", EntryPoint = "cairo_region_create")]
++        private static extern IntPtr CairoRegionCreate();
++
++        [DllImport("libcairo.so.2", EntryPoint = "cairo_region_union_rectangle")]
++        private static extern int CairoRegionUnionRectangle(IntPtr region, ref NativeRectangle rectangle);
++
++        [DllImport("libcairo.so.2", EntryPoint = "cairo_region_destroy")]
++        private static extern void CairoRegionDestroy(IntPtr region);
++        }
++    }
+--- /dev/null
++++ b/src/Majorsilence.Forms/Backends/INativeFileDragBackend.cs
+@@ -0,0 +1,7 @@
++namespace Majorsilence.Forms.Backends {
++    /// <summary>Optional desktop file drag source for backends with OS drag-and-drop support.</summary>
++    public interface INativeFileDragBackend {
++        /// <summary>Starts a copy drag and completes when the desktop accepts or cancels it.</summary>
++        System.Threading.Tasks.Task<DragDropEffects> BeginFileDrag(string[] paths, DragDropEffects allowedEffects);
++        }
++    }
+--- /dev/null
++++ b/src/Majorsilence.Forms/FrameTransparency.cs
+@@ -0,0 +1,45 @@
++using System;
++using System.Drawing;
++using SkiaSharp;
++
++namespace Majorsilence.Forms {
++    // Presentation uses the existing raster buffer: no extra full-frame image or pixel copies.
++    internal static class FrameTransparency {
++        internal static void Apply(WindowBase owner, SKSurface surface) {
++            if (!(owner is Form form) || form.TransparencyKey.IsEmpty) {
++                return;
++                }
++            using SKPixmap pixels = surface.PeekPixels();
++            if (pixels == null || (pixels.ColorType != SKColorType.Bgra8888 && pixels.ColorType != SKColorType.Rgba8888)) {
++                throw new NotSupportedException("Color-key transparency requires a 32-bit raster surface.");
++                }
++            Color key = form.TransparencyKey;
++            byte first = pixels.ColorType == SKColorType.Bgra8888 ? key.B : key.R;
++            byte third = pixels.ColorType == SKColorType.Bgra8888 ? key.R : key.B;
++            Span<byte> buffer = pixels.GetPixelSpan();
++            int width = pixels.Width;
++            int height = pixels.Height;
++            int rowBytes = pixels.RowBytes;
++            for (int row = 0; row < height; row++) {
++                int rowStart = row * rowBytes;
++                for (int column = 0; column < width; column++) {
++                    int offset = rowStart + column * 4;
++                    int alpha = buffer[offset + 3];
++                    // Skia stores premultiplied channels. Compare the represented RGB color,
++                    // leaving existing transparent pixels alone and clearing all four keyed bytes.
++                    if (alpha > 0 && Matches(buffer[offset], first, alpha) &&
++                        Matches(buffer[offset + 1], key.G, alpha) && Matches(buffer[offset + 2], third, alpha)) {
++                        buffer.Slice(offset, 4).Clear();
++                        }
++                    }
++                }
++            }
++
++        private static bool Matches(byte channel, byte key, int alpha) {
++            if (alpha == 255) {
++                return channel == key;
++                }
++            return (channel * 255 + alpha / 2) / alpha == key;
++            }
++        }
++    }
+--- /dev/null
++++ b/src/Majorsilence.Forms/WindowBase.Bitmap.cs
+@@ -0,0 +1,22 @@
++using System.Drawing;
++using SkiaSharp;
++
++namespace Majorsilence.Forms {
++    public abstract partial class WindowBase {
++        /// <summary>Renders a top-level form into a caller-owned bitmap without a screen capture.</summary>
++        public void DrawToBitmap(Drawing.Bitmap destination, Rectangle targetBounds) {
++            Guard.ThrowIfNull(destination);
++            if (targetBounds.Width <= 0 || targetBounds.Height <= 0) {
++                return;
++                }
++            using SKSurface surface = SKSurface.Create(new SKImageInfo(Math.Max(1, Size.Width), Math.Max(1, Size.Height)));
++            RenderFrame(surface.Canvas, Math.Max(1, Size.Width), Math.Max(1, Size.Height), 1);
++            using SKImage snapshot = surface.Snapshot();
++            using SKData encoded = snapshot.Encode(SKEncodedImageFormat.Png, 100);
++            using MemoryStream stream = new MemoryStream(encoded.ToArray(), false);
++            using Drawing.Bitmap image = new Drawing.Bitmap(stream);
++            using Graphics graphics = Graphics.FromImage(destination);
++            graphics.DrawImage(image, targetBounds);
++            }
++        }
++    }
+
+--- a/src/Majorsilence.Forms/Application.cs
++++ b/src/Majorsilence.Forms/Application.cs
+@@ -523,7 +523,11 @@
+         /// <summary>Gets the user-specific application data path, creating it if it does not exist.</summary>
+         /// <remarks><c>&lt;roaming data&gt;/&lt;CompanyName&gt;/&lt;ProductName&gt;/&lt;ProductVersion&gt;</c>, as upstream's GetDataPath.</remarks>
+         public static string UserAppDataPath =>
+-            DataPathOf (Environment.GetFolderPath (Environment.SpecialFolder.ApplicationData), Assembly.GetEntryAssembly ());
++            // A fresh XDG_CONFIG_HOME may not exist yet. Without DoNotVerify .NET
++            // returns an empty string, making toolstrip settings relative to the
++            // executable and potentially colliding with its filename.
++            DataPathOf (Environment.GetFolderPath (Environment.SpecialFolder.ApplicationData,
++                Environment.SpecialFolderOption.DoNotVerify), Assembly.GetEntryAssembly ());
+ 
+         /// <summary>Gets the local user-specific application data path, creating it if it does not exist.</summary>
+         /// <remarks><c>&lt;local data&gt;/&lt;CompanyName&gt;/&lt;ProductName&gt;/&lt;ProductVersion&gt;</c>, as upstream's GetDataPath.</remarks>
+
+--- a/src/Majorsilence.Forms/WinFormsCompat.cs
++++ b/src/Majorsilence.Forms/WinFormsCompat.cs
+@@ -997,6 +997,9 @@
+             // window -- which reads as a silent hang. See Application.ModalStack.
+             var parent = owner ?? Application.ActiveModalForm ?? Application.ModalOwnerCandidates.FirstOrDefault ();
+             var form = new MessageBoxForm (caption, text, buttons, icon, defaultButton, options);
++            // Match the owning application's translucency, except that errors must
++            // remain fully opaque and readable regardless of the preference.
++            form.Opacity = icon == MessageBoxIcon.Error ? 1.0 : parent?.Opacity ?? 1.0;
+             form.FitWithin (parent);
+ 
+             return (parent, form);
+
+--- a/src/Majorsilence.Forms/ListView.cs
++++ b/src/Majorsilence.Forms/ListView.cs
+@@ -31,7 +31,7 @@
+                 SmallChange = 1,
+                 LargeChange = 1,
+                 Visible = false,
+-                Dock = DockStyle.Right,
++                Dock = DockStyle.None,
+             };
+ 
+             vscrollbar.ValueChanged += (_, _) => {
+@@ -40,6 +40,7 @@
+             };
+ 
+             Controls.AddImplicitControl (vscrollbar);
++            InitializeHorizontalScrolling ();
+         }
+ 
+         private readonly VerticalScrollBar vscrollbar;
+@@ -75,7 +76,7 @@
+         /// <summary>The number of whole lines that fit in the item area.</summary>
+         internal int VisibleLineCount => Math.Max (1, ItemArea.Height / Math.Max (1, ScaledLineHeight));
+ 
+-        internal void UpdateVerticalScrollBar ()
++        private void UpdateVerticalScrollBarCore ()
+         {
+             var lines = LineCount;
+             var visible = VisibleLineCount;
+@@ -261,7 +262,7 @@
+                 var width = bounds.Width - (vscrollbar.Visible ? vscrollbar.ScaledWidth : 0);
+ 
+                 return new Rectangle (bounds.Left, bounds.Top + ScaledHeaderHeight,
+-                    Math.Max (0, width), Math.Max (0, bounds.Height - ScaledHeaderHeight));
++                    Math.Max (0, width), Math.Max (0, bounds.Height - ScaledHeaderHeight - (hscrollbar.Visible ? hscrollbar.ScaledHeight : 0)));
+             }
+         }
+ 
+@@ -287,20 +288,16 @@
+             // Device pixels throughout -- ScaledCheckWidth and ScaledColumnWidth are scaled, and so is
+             // the item rectangle this is laid out inside (LAY-38). The public Bounds converts out.
+             var device = item.DeviceBounds;
+-            var x = device.Left + ScaledCheckWidth;
+-
+-            // Display order: a reordered column's cells sit where its header does (W6 mechanisms).
+-            foreach (var column in DisplayColumns) {
+-                var width = ScaledColumnWidth (column);
++            // Share the header's geometry, including display order, mirroring and scroll offset.
++            foreach (var (column, left, width) in ColumnCells (device.Left + ScaledCheckWidth, device.Right)) {
+                 var i = column.Index;
+ 
+                 if (i >= 0 && i < item.SubItems.Count) {
+                     // The owner is what lets a sub-item find the display scale for its own conversion.
+                     item.SubItems[i].Owner = item;
+-                    item.SubItems[i].DeviceBounds = new Rectangle (x, device.Top, width, device.Height);
++                    item.SubItems[i].DeviceBounds = new Rectangle (left, device.Top, width, device.Height);
+                 }
+ 
+-                x += width;
+             }
+         }
+ 
+@@ -402,7 +399,7 @@
+         internal IEnumerable<(ColumnHeader Column, int Left, int Width)> ColumnCells (int left, int right)
+         {
+             var mirrored = MirrorsColumns;
+-            var x = mirrored ? right : left;
++            var x = (mirrored ? right : left) + HorizontalContentOffset;
+ 
+             foreach (var column in DisplayColumns) {
+                 var width = ScaledColumnWidth (column);
+@@ -647,6 +644,8 @@
+                 return;
+ 
+             EndLabelEdit (commit: true);
++            if (View == View.Details && hscrollbar.Value != 0)
++                hscrollbar.Value = 0;
+ 
+             var before = new LabelEditEventArgs (item.Index);
+             OnBeforeLabelEdit (before);
+@@ -679,8 +678,10 @@
+             var bounds = item.DeviceBounds;
+             var left = bounds.Left + ScaledCheckWidth;
+ 
+-            if (View == View.Details && DisplayColumns.Count > 0)
+-                return new Rectangle (left, bounds.Top, ScaledColumnWidth (DisplayColumns[0]), bounds.Height);
++            if (View == View.Details && DisplayColumns.Count > 0) {
++                var cell = ColumnCells (bounds.Left + ScaledCheckWidth, bounds.Right).First ();
++                return new Rectangle (cell.Left, bounds.Top, cell.Width, bounds.Height);
++            }
+ 
+             if (IsRowView) {
+                 if (View == View.SmallIcon && item.ImageSK is not null)
+@@ -758,6 +759,9 @@
+                 return;
+             }
+ 
++            if (!ItemArea.Contains (location))
++                return;
++
+             // DeviceBounds, because `location` is device (ToDevice above) -- LAY-38 made the public
+             // Bounds logical and these three hit-tests were missed, so a click landed nowhere near the
+             // item it was over on any display whose scale is not 1.
+@@ -767,7 +771,8 @@
+                 return;
+ 
+             // The check box is its own hit target: clicking it toggles and does not re-select.
+-            if (CheckBoxes && location.X < clicked_item.DeviceBounds.Left + ScaledCheckWidth) {
++            var checkLeft = clicked_item.DeviceBounds.Left + HorizontalContentOffset;
++            if (CheckBoxes && location.X >= checkLeft && location.X < checkLeft + ScaledCheckWidth) {
+                 clicked_item.Checked = !clicked_item.Checked;
+                 return;
+             }
+@@ -1315,6 +1320,8 @@
+             LayoutItems ();
+ 
+             var location = ToDevice (new Point (x, y));
++            if (!ItemArea.Contains (location))
++                return null;
+ 
+             return Items.FirstOrDefault (i => i.DeviceBounds.Contains (location));
+         }
+
+--- a/src/Majorsilence.Forms/ListViewParity.cs
++++ b/src/Majorsilence.Forms/ListViewParity.cs
+@@ -308,6 +308,9 @@
+         /// says whether the point was on the label, the image, or nothing at all.</remarks>
+         public ListViewHitTestInfo HitTest (int x, int y)
+         {
++            LayoutItems ();
++            if (!DeviceToLogicalUnits (ItemArea).Contains (x, y))
++                return new ListViewHitTestInfo (null, null, ListViewHitTestLocations.None);
+             // Logical on both sides as of LAY-38: the point comes from a mouse handler, and the item
+             // bounds now answer in the same space. W6.3 converted the point to device here because the
+             // bounds were device; moving the conversion into ListViewItem.Bounds made that unnecessary
+@@ -922,17 +925,11 @@
+             if (!Bounds.Contains (x, y) || Parent is null)
+                 return null;
+ 
+-            var left = Bounds.X;
+-
+-            for (var i = 0; i < Math.Min (SubItems.Count, Parent.Columns.Count); i++) {
+-                var right = left + Parent.Columns[i].Width;
+-
+-                if (x >= left && x < right)
+-                    return SubItems[i];
+-
+-                left = right;
+-            }
+-
++            // Cell bounds already include display order, DPI and horizontal scrolling.
++            foreach (ListViewSubItem subItem in SubItems) {
++                if (subItem.Bounds.Contains (x, y))
++                    return subItem;
++            }
+             return null;
+         }
+ 
+
+--- a/src/Majorsilence.Forms/Renderers/ListViewRenderer.cs
++++ b/src/Majorsilence.Forms/Renderers/ListViewRenderer.cs
+@@ -240,9 +240,9 @@
+                 var highlight = control.FullRowSelect || display.Count == 0
+                     ? item.DeviceBounds
+                     : control.MirrorsColumns
+-                        ? new Rectangle (item.DeviceBounds.Right - control.ScaledColumnWidth (display[0]), item.DeviceBounds.Top,
++                        ? new Rectangle (item.DeviceBounds.Right - control.ScaledColumnWidth (display[0]) + control.HorizontalContentOffset, item.DeviceBounds.Top,
+                             control.ScaledColumnWidth (display[0]), item.DeviceBounds.Height)
+-                        : new Rectangle (item.DeviceBounds.Left, item.DeviceBounds.Top,
++                        : new Rectangle (item.DeviceBounds.Left + control.HorizontalContentOffset, item.DeviceBounds.Top,
+                             control.ScaledCheckWidth + control.ScaledColumnWidth (display[0]), item.DeviceBounds.Height);
+ 
+                 e.Canvas.FillRectangle (highlight, ListView.DefaultSelectionStyle.GetBackgroundColor ());
+@@ -385,7 +385,7 @@
+                 return;
+ 
+             var size = e.LogicalToDeviceUnits (13);
+-            var box = new Rectangle (item.DeviceBounds.Left + e.LogicalToDeviceUnits (2),
++            var box = new Rectangle (item.DeviceBounds.Left + control.HorizontalContentOffset + e.LogicalToDeviceUnits (2),
+                 item.DeviceBounds.Top + (item.DeviceBounds.Height - size) / 2, size, size);
+ 
+             // A state image replaces the glyph when the list has a StateImageList and the item names an
+
+--- /dev/null
++++ b/src/Majorsilence.Forms/ListView.Scrolling.cs
+@@ -0,0 +1,113 @@
++using System.Drawing;
++
++namespace Majorsilence.Forms;
++
++public partial class ListView {
++    private readonly HorizontalScrollBar hscrollbar = new HorizontalScrollBar {
++        Minimum = 0,
++        Maximum = 0,
++        SmallChange = 24,
++        LargeChange = 1,
++        Visible = false,
++        Dock = DockStyle.None
++        };
++    private bool updatingScrollBars;
++
++    // Rendering and hit tests use device coordinates. The scrollbar uses the same
++    // units so its last position aligns the final cell exactly with the viewport.
++    internal int HorizontalContentOffset {
++        get {
++            if (View != View.Details || !hscrollbar.Visible) {
++                return 0;
++                }
++            return MirrorsColumns ? hscrollbar.Value : -hscrollbar.Value;
++            }
++        }
++
++    private void InitializeHorizontalScrolling() {
++        hscrollbar.ValueChanged += (_, _) => Invalidate();
++        Controls.AddImplicitControl(hscrollbar);
++        }
++
++    /// <inheritdoc/>
++    protected override void OnSizeChanged(EventArgs e) {
++        base.OnSizeChanged(e);
++        UpdateVerticalScrollBar();
++        }
++
++    internal void UpdateVerticalScrollBar() {
++        // Base constructors can deliver SizeChanged before the bars are created.
++        if (updatingScrollBars || vscrollbar is null || hscrollbar is null) {
++            return;
++            }
++        updatingScrollBars = true;
++        try {
++            if (View == View.Details) {
++                UpdateDetailsScrollBars();
++                }
++            else {
++                hscrollbar.Visible = false;
++                hscrollbar.Value = 0;
++                UpdateVerticalScrollBarCore();
++                }
++            PositionScrollBars();
++            }
++        finally {
++            updatingScrollBars = false;
++            }
++        }
++
++    private void UpdateDetailsScrollBars() {
++        Rectangle client = PaddedClientRectangle;
++        long columnsWidth = ScaledCheckWidth;
++        foreach (ColumnHeader column in DisplayColumns) {
++            columnsWidth += ScaledColumnWidth(column);
++            }
++        int contentWidth = (int)Math.Min(int.MaxValue, columnsWidth);
++        int lines = LineCount;
++        bool horizontal = false;
++        bool vertical = false;
++        int width = client.Width;
++        int visibleLines = 1;
++
++        // Either bar can make the other necessary. Resolve their joint viewport
++        // without toggling live visibility during each paint (which would repaint forever).
++        for (int pass = 0; pass < 3; pass++) {
++            width = Math.Max(0, client.Width - (vertical ? vscrollbar.ScaledWidth : 0));
++            int height = Math.Max(0, client.Height - ScaledHeaderHeight -
++                (horizontal ? hscrollbar.ScaledHeight : 0));
++            horizontal = Scrollable && contentWidth > width;
++            visibleLines = Math.Max(1, height / Math.Max(1, ScaledLineHeight));
++            vertical = Scrollable && lines > visibleLines;
++            }
++        hscrollbar.Visible = horizontal;
++        vscrollbar.Visible = vertical;
++        hscrollbar.Maximum = Math.Max(0, contentWidth - 1);
++        hscrollbar.LargeChange = Math.Max(1, width);
++        hscrollbar.SmallChange = Math.Max(1, LogicalToDeviceUnits(24));
++        int maximumLeft = horizontal ? Math.Max(0, contentWidth - width) : 0;
++        hscrollbar.Value = Math.Clamp(hscrollbar.Value, 0, maximumLeft);
++
++        vscrollbar.Maximum = Math.Max(0, lines - 1);
++        vscrollbar.LargeChange = visibleLines;
++        int maximumTop = vertical ? Math.Max(0, lines - visibleLines) : 0;
++        top_index = Math.Clamp(top_index, 0, maximumTop);
++        vscrollbar.Value = top_index;
++        }
++
++    private void PositionScrollBars() {
++        Rectangle client = PaddedClientRectangle;
++        int verticalWidth = vscrollbar.Visible ? Math.Min(client.Width, vscrollbar.ScaledWidth) : 0;
++        int horizontalHeight = hscrollbar.Visible ? Math.Min(client.Height, hscrollbar.ScaledHeight) : 0;
++        Rectangle vertical = new Rectangle(client.Right - verticalWidth, client.Top,
++            verticalWidth, Math.Max(0, client.Height - horizontalHeight));
++        Rectangle horizontal = new Rectangle(client.Left, client.Bottom - horizontalHeight,
++            Math.Max(0, client.Width - verticalWidth), horizontalHeight);
++        if (vscrollbar.Visible) {
++            vscrollbar.Bounds = DeviceToLogicalUnits(vertical);
++            }
++        if (hscrollbar.Visible) {
++            hscrollbar.Bounds = DeviceToLogicalUnits(horizontal);
++            }
++        }
++    }
+--- a/src/Majorsilence.Forms.Drawing.Common/SystemColorPalette.cs
++++ b/src/Majorsilence.Forms.Drawing.Common/SystemColorPalette.cs
+@@ -18,8 +18,18 @@
+     /// on its channels for pixels (shading, blending), must come through <see cref="Resolve"/> or
+     /// <see cref="ToSKColor"/>; <c>SystemColorPaletteGuardTests</c> fails on a direct conversion.
+     /// </remarks>
+-    internal static class SystemColorPalette
++    public static class SystemColorPalette
+     {
++        private static System.Collections.Generic.Dictionary<string, Color> overrides =
++            new System.Collections.Generic.Dictionary<string, Color>(StringComparer.Ordinal);
++
++        /// <summary>Replace the desktop palette as one immutable snapshot; empty restores defaults.</summary>
++        public static void SetOverrides(System.Collections.Generic.IDictionary<string, Color> colors) {
++            System.Collections.Generic.Dictionary<string, Color> snapshot =
++                new System.Collections.Generic.Dictionary<string, Color>(colors, StringComparer.Ordinal);
++            System.Threading.Volatile.Write(ref overrides, snapshot);
++            }
++
+         /// <summary>
+         /// Returns the colour to paint for <paramref name="color"/>: this palette's value for a system
+         /// colour (as an anonymous ARGB colour), otherwise <paramref name="color"/> itself.
+@@ -51,6 +61,10 @@
+                 return false;
+ #endif
+ 
++            if (System.Threading.Volatile.Read(ref overrides).TryGetValue(color.Name, out Color custom)) {
++                argb = custom.ToArgb();
++                return true;
++                }
+             var rgb = PaletteRgb (color.Name);
+ 
+             if (rgb < 0)
+--- a/src/Majorsilence.Forms.Drawing.Common/SystemColorPalette.cs
++++ b/src/Majorsilence.Forms.Drawing.Common/SystemColorPalette.cs
+@@ -22,6 +22,9 @@
+     {
+         private static System.Collections.Generic.Dictionary<string, Color> overrides =
+             new System.Collections.Generic.Dictionary<string, Color>(StringComparer.Ordinal);
++
++        /// <summary>Whether a custom desktop palette is active.</summary>
++        public static bool HasOverrides => System.Threading.Volatile.Read(ref overrides).Count > 0;
+ 
+         /// <summary>Replace the desktop palette as one immutable snapshot; empty restores defaults.</summary>
+         public static void SetOverrides(System.Collections.Generic.IDictionary<string, Color> colors) {
+--- a/src/Majorsilence.Forms/ControlPaint.cs
++++ b/src/Majorsilence.Forms/ControlPaint.cs
+@@ -193,7 +193,8 @@
+         private static readonly SKColor UpstreamDisabled = new SKColor (0xC3, 0xC3, 0xC3);
+         private static readonly SKColor UpstreamDisabledClearFill = new SKColor (0xF9, 0xF9, 0xF9);
+ 
+-        internal static bool UsesUpstreamGlyphs => SystemFonts.HasDefaultFontOverride;
++        internal static bool UsesUpstreamGlyphs => SystemFonts.HasDefaultFontOverride
++            && !Majorsilence.Forms.Drawing.SystemColorPalette.HasOverrides;
+ 
+         private static void DrawUpstreamCheckBox (PaintEventArgs e, Rectangle rectangle, CheckState state, bool disabled)
+         {
+--- a/src/Majorsilence.Forms/ControlPaint.cs
++++ b/src/Majorsilence.Forms/ControlPaint.cs
+@@ -193,8 +193,7 @@
+         private static readonly SKColor UpstreamDisabled = new SKColor (0xC3, 0xC3, 0xC3);
+         private static readonly SKColor UpstreamDisabledClearFill = new SKColor (0xF9, 0xF9, 0xF9);
+ 
+-        internal static bool UsesUpstreamGlyphs => SystemFonts.HasDefaultFontOverride
+-            && !Majorsilence.Forms.Drawing.SystemColorPalette.HasOverrides;
++        internal static bool UsesUpstreamGlyphs => SystemFonts.HasDefaultFontOverride;
+ 
+         private static void DrawUpstreamCheckBox (PaintEventArgs e, Rectangle rectangle, CheckState state, bool disabled)
+         {
+--- a/src/Majorsilence.Forms/ButtonUpstreamLook.cs
++++ b/src/Majorsilence.Forms/ButtonUpstreamLook.cs
+@@ -24,6 +24,7 @@
+         /// <summary>Whether this button paints upstream's themed face rather than the theme's.</summary>
+         internal bool PaintsUpstreamLook
+             => ControlPaint.UsesUpstreamGlyphs
++               && !Majorsilence.Forms.Drawing.SystemColorPalette.HasOverrides
+                && UseVisualStyleBackColor
+                && FlatStyle is FlatStyle.Standard or FlatStyle.System
+                && Style.BackgroundColor is null;
+--- a/src/Majorsilence.Forms/TabControlUpstreamLook.cs
++++ b/src/Majorsilence.Forms/TabControlUpstreamLook.cs
+@@ -23,6 +23,7 @@
+         /// <summary>Whether this tab control lays out and paints as upstream's themed one.</summary>
+         internal bool UsesUpstreamTabs
+             => ControlPaint.UsesUpstreamGlyphs
++               && !Majorsilence.Forms.Drawing.SystemColorPalette.HasOverrides
+                && Appearance == TabAppearance.Normal
+                && Alignment is TabAlignment.Top or TabAlignment.Bottom
+                && !IsOwnerDrawn
+--- a/src/Majorsilence.Forms/FieldUpstreamLook.cs
++++ b/src/Majorsilence.Forms/FieldUpstreamLook.cs
+@@ -63,7 +63,8 @@
+         internal static readonly SKColor SpinFace = new SKColor (0xFA, 0xFA, 0xFA);
+         internal static readonly SKColor SpinOutline = new SKColor (0xD2, 0xD2, 0xD2);
+ 
+-        internal static bool Applies => ControlPaint.UsesUpstreamGlyphs;
++        internal static bool Applies => ControlPaint.UsesUpstreamGlyphs
++            && !Majorsilence.Forms.Drawing.SystemColorPalette.HasOverrides;
+ 
+         // Fills the field and draws its 1px outline; bottom, when given, is the colour of the bottom edge.
+         internal static void Paint (PaintEventArgs e, int width, int height, SKColor face, SKColor outline, SKColor? bottom)
+--- a/src/Majorsilence.Forms/TabPage.cs
++++ b/src/Majorsilence.Forms/TabPage.cs
+@@ -101,7 +101,8 @@
+         internal static readonly SkiaSharp.SKColor ThemedBodyColor = new SkiaSharp.SKColor (0xF9, 0xF9, 0xF9);
+ 
+         private bool PaintsThemedBody
+-            => use_visual_style_back_color && ControlPaint.UsesUpstreamGlyphs && BackgroundImage is null
++            => use_visual_style_back_color && ControlPaint.UsesUpstreamGlyphs
++               && !Majorsilence.Forms.Drawing.SystemColorPalette.HasOverrides && BackgroundImage is null
+                && Parent is TabControl { Appearance: TabAppearance.Normal };
+ 
+         // Upstream's TabPage.BackColor is Color.Transparent while it paints the themed body and its own colour is the
+--- a/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.Popups.cs
++++ b/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.Popups.cs
+@@ -11,8 +11,9 @@
+         // Wayland forbids positioning independent top-levels. Menus and non-activating
+         // owned previews instead use native parent-relative popup surfaces.
+         private bool ShowRelativePopup() {
++            bool rightDialog = _owner is Form dialog && dialog.Tag as string == "MNX.Preview.RightDialog";
+             WindowBase? parent = _owner is PopupWindow popup ? popup.ParentWindow
+-                : !ShowActivated && _owner is Form form ? form.Owner : null;
++                : (!ShowActivated || rightDialog) && _owner is Form form ? form.Owner : null;
+             if (parent?.Backend is not Gtk4WindowHost host) {
+                 return false;
+                 }
+@@ -20,7 +21,7 @@
+                 _popupParent = host;
+                 _relativePopup = global::Gtk.Popover.New();
+                 _relativePopup.SetHasArrow(false);
+-                _relativePopup.SetAutohide(_isPopup && ShowActivated);
++                _relativePopup.SetAutohide((_isPopup && ShowActivated) || rightDialog);
+                 _relativePopup.SetCanFocus(ShowActivated);
+                 _relativePopup.SetFocusable(ShowActivated);
+                 _relativePopup.SetParent(host._surface.Widget);
+@@ -49,6 +50,18 @@
+ 
+         private void UpdateRelativePopupPosition() {
+             if (_relativePopup is null || _popupParent is null) {
++                return;
++                }
++            if (_owner is Form dialog && dialog.Tag as string == "MNX.Preview.RightDialog") {
++                // A fixed, dismiss-on-focus-loss preview can use a native popup
++                // on Wayland, where independent window positions are not writable.
++                using Gdk.Rectangle edge = new Gdk.Rectangle {
++                    X = Math.Max(0, _popupParent._surface.Widget.GetWidth() - 1),
++                    Y = 0, Width = 1, Height = 1
++                    };
++                _relativePopup.SetPosition(global::Gtk.PositionType.Right);
++                _relativePopup.SetPointingTo(edge);
++                _relativePopup.SetOffset(0, _size.Height / 2);
+                 return;
+                 }
+             Point origin = _popupParent.PointToClient(_location);
+--- a/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.cs
++++ b/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.cs
+@@ -109,9 +109,18 @@
+             if (_owner is Form form && form.Owner?.Backend is Gtk4WindowHost ownerHost) {
+                 _window.SetTransientFor(ownerHost._window);
+                 }
++            bool positionRight = IsRightPreviewOnX11();
++            if (positionRight) {
++                // Map without flashing at the compositor's initial position.
++                _window.SetOpacity(0);
++                }
+             _window.SetVisible (true);
+             if (ShowActivated && !_isPopup)
+                 _window.Present ();
++            if (positionRight) {
++                PositionRightPreviewOnX11();
++                _window.SetOpacity(_opacity);
++                }
+             ReportActivation(true);
+         }
+ 
+@@ -208,7 +217,7 @@
+ 
+         public double Opacity {
+             get => _opacity;
+-            set { _opacity = value; _window.SetOpacity (value); }
++            set { _opacity = value; _window.SetOpacity (value); _relativePopup?.SetOpacity(value); }
+         }
+ 
+         public FormWindowState WindowState {
+--- a/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.Popups.cs
++++ b/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.Popups.cs
+@@ -40,6 +40,7 @@
+                 }
+             _overlay.SetSizeRequest(Math.Max(1, _size.Width), Math.Max(1, _size.Height));
+             UpdateRelativePopupPosition();
++            _relativePopup.SetOpacity(_opacity);
+             _relativePopup.Popup();
+             _inputRegionValid = false;
+             if (ShowActivated) {
+--- /dev/null
++++ b/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.PreviewPlacement.cs
+@@ -0,0 +1,50 @@
++using System;
++using System.Runtime.InteropServices;
++
++namespace Majorsilence.Forms.Gtk4 {
++    internal sealed partial class Gtk4WindowHost {
++        private bool IsRightPreviewOnX11() {
++            if (_owner is not Form form || form.Tag as string != "MNX.Preview.RightWindow") {
++                return false;
++                }
++            IntPtr display = _window.GetDisplay().Handle.DangerousGetHandle();
++            return Marshal.PtrToStringUTF8(NativeTypeName(display)) == "GdkX11Display";
++            }
++
++        private void PositionRightPreviewOnX11() {
++            if (_owner is not Form form || form.Owner?.Backend is not Gtk4WindowHost parent) {
++                return;
++                }
++            Gdk.Surface? surface = _window.GetSurface();
++            Gdk.Surface? parentSurface = parent._window.GetSurface();
++            if (surface is null || parentSurface is null) {
++                return;
++                }
++            IntPtr display = XDisplay(_window.GetDisplay().Handle.DangerousGetHandle());
++            nuint parentId = XSurface(parentSurface.Handle.DangerousGetHandle());
++            nuint previewId = XSurface(surface.Handle.DangerousGetHandle());
++            if (XTranslateCoordinates(display, parentId, XDefaultRootWindow(display), 0, 0, out int x, out int y, out _) == 0) {
++                return;
++                }
++            // X11 coordinates are physical pixels; GTK sizes are logical pixels.
++            int scale = parentSurface.GetScaleFactor();
++            XMoveWindow(display, previewId, x + parentSurface.GetWidth() * scale, y);
++            XSync(display, 0);
++            }
++
++        [DllImport("libgobject-2.0.so.0", EntryPoint = "g_type_name_from_instance")]
++        private static extern IntPtr NativeTypeName(IntPtr instance);
++        [DllImport("libgtk-4.so.1", EntryPoint = "gdk_x11_display_get_xdisplay")]
++        private static extern IntPtr XDisplay(IntPtr display);
++        [DllImport("libgtk-4.so.1", EntryPoint = "gdk_x11_surface_get_xid")]
++        private static extern nuint XSurface(IntPtr surface);
++        [DllImport("libX11.so.6")]
++        private static extern nuint XDefaultRootWindow(IntPtr display);
++        [DllImport("libX11.so.6")]
++        private static extern int XTranslateCoordinates(IntPtr display, nuint source, nuint destination, int sourceX, int sourceY, out int destinationX, out int destinationY, out nuint child);
++        [DllImport("libX11.so.6")]
++        private static extern int XMoveWindow(IntPtr display, nuint window, int x, int y);
++        [DllImport("libX11.so.6")]
++        private static extern int XSync(IntPtr display, int discard);
++        }
++    }

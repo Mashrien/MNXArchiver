@@ -1,0 +1,32 @@
+{
+  "supplied_directory": "author-supplied MIT icon collection; normalized SVGs are included in Source/",
+  "supplied": {
+    "add": "ADDFILE.txt",
+    "alert": "ALERT.txt",
+    "question": "CIRCLEQUESTIONMARK.txt",
+    "compact": "COMPACTING_PROGRESS.txt",
+    "delete": "DELETE.txt",
+    "extract-plain": "EXTRACT_PLAIN.txt",
+    "save": "FLOPPYDISK.txt",
+    "info": "INFO-PLUGIN.txt",
+    "new": "NEWFILE.txt",
+    "new-folder": "NEWFOLDER.txt",
+    "open": "OPENFILE.txt",
+    "options": "OPTIONSMENU.txt",
+    "recheck": "RECHECK.txt",
+    "search": "SEARCH.txt",
+    "sliders": "SETTINGSSLIDERS.txt",
+    "test": "TEST_VALIDATE.txt",
+    "warning": "WARNING.txt"
+  },
+  "added": {
+    "file": "Plain variant of open.svg with text removed",
+    "folder": "MNX rounded folder in supplied gold palette",
+    "up": "MNX rounded arrow in supplied blue palette",
+    "home": "MNX rounded house in supplied blue/gold palette",
+    "extract": "User-designed composite: new-folder.svg plus a 75-percent-size clockwise-rotated green up.svg arrow, with a white halo and dark green outline for contrast"
+  },
+  "replaced_supplied": {
+    "extract": "EXTRACT.txt (fast-forward); the supplied original remains in supplied_directory"
+  }
+}

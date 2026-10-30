@@ -1,0 +1,34 @@
+MNX Archive Manager - unified Linux NativeAOT release
+
+One mnx-gui executable incorporates the native GTK3 and MWin/GTK4 frontends.
+No installed .NET runtime or managed ICU library is required.
+The MNXFile archive engine remains a separately installed libmnxfile.so.1.
+MNXFILE_NATIVE_LIBRARY=/absolute/path/libmnxfile.so.1 selects a development engine.
+
+Install at least one supported toolkit:
+  MWin (preferred): GTK4, fontconfig, FreeType and installed fonts.
+    Keep the shipped libSkiaSharp.so and libHarfBuzzSharp.so beside mnx-gui.
+  Native GTK3: GTK3, GDK3, GdkPixbuf2, GLib/GObject/GIO, Pango and Cairo.
+Both toolkits may be installed. Only the selected one is initialized in the GUI process.
+Tiny short-lived copies of this same executable probe dependencies independently.
+
+Common requirements: glibc, OpenSSL 3 (archive/.NET cryptography), native MNX engine.
+Toolkit packages pull their distribution's normal native dependencies.
+Optional saved default password: secret-tool plus a running Secret Service keyring
+(Fedora/Nobara: libsecret; Debian/Ubuntu: libsecret-tools). Archive encryption itself
+does not require the desktop keyring.
+No runtime SVG renderer, icon theme, libgdiplus or WebKit is needed by this application.
+
+Fedora/Nobara: gtk3 and/or gtk4; fontconfig freetype openssl-libs glibc.
+Debian/Ubuntu: libgtk-3-0[t64] and/or libgtk-4-1; libfontconfig1 libfreetype6 libssl3[t64] libc6.
+Package suffixes vary by distribution release.
+
+Build: .NET 10 SDK, Python 3.12+, git, flock, C/C++ compiler/linker, zlib headers.
+Build scripts download pinned dependencies and restore NuGet packages on first use.
+Managed development output additionally requires the .NET 10 runtime.
+
+./mnx-gui --list-backends
+./mnx-gui --backend=mwin ARCHIVE.mnx
+./mnx-gui --backend=gtk3 ARCHIVE.mnx
+Saving Options > General > Interface changes the preference for the next launch.
+Automatic prefers MWin. Windows and ARM64 runtime behavior are not validated by Linux x64 tests.

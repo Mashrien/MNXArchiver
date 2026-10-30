@@ -1,0 +1,25 @@
+MNX MWin GUI - Linux runtime requirements
+
+NativeAOT executable: .NET runtime and ICU are not required.
+Keep libSkiaSharp.so and libHarfBuzzSharp.so beside mnx-gui.
+Install the separate MNXFile engine providing libmnxfile.so.1 (client protocol 1).
+MNXFILE_NATIVE_LIBRARY=/absolute/path/libmnxfile.so.1 selects a development engine.
+
+Direct system libraries:
+  GTK4 (libgtk-4.so.1) and its GDK/GSK, GLib/GObject/GIO, Pango, Cairo dependencies
+  fontconfig, FreeType, installed fonts, standard glibc/libm/libpthread/libdl
+  OpenSSL 3 libraries (archive cryptography and .NET cryptography)
+Skia's fontconfig/FreeType dependencies can bring additional distribution libraries.
+No GTK3, SVG renderer, icon theme, WebKit, or libgdiplus is used by this port.
+No WebBrowser controls are created: the optional upstream WebKit support is unused.
+
+Fedora/Nobara runtime packages:
+  gtk4 fontconfig freetype openssl-libs glibc
+Debian/Ubuntu equivalents:
+  libgtk-4-1 libfontconfig1 libfreetype6 libssl3 libc6
+Package names vary by distribution release (libssl3t64 on newer Debian derivatives).
+
+Build tools: .NET 10 SDK, Python 3.12+, git, C/C++ compiler and linker, zlib headers.
+Build downloads pinned source revisions plus NuGet packages on first use.
+Managed mode additionally requires .NET 10 runtime, with separately replaceable DLLs.
+GTK4/Wayland window placement restrictions remain; see linux/README.md.

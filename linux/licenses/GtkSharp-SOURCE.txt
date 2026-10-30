@@ -1,0 +1,3 @@
+GtkSharp package bindings 3.24.24.95
+https://github.com/GtkSharp/GtkSharp
+License text retrieved from https://raw.githubusercontent.com/GtkSharp/GtkSharp/c01f5f97d0a0ac6367b1300519be682ca63de608/LICENSE

@@ -1,0 +1,12 @@
+{
+  "Majorsilence.Forms": {
+    "repository": "majorsilence/Majorsilence.Forms",
+    "commit": "ea5fb3402bdbad23741df4eb6c9bf9e1cc80c7d3",
+    "patch": "forms.patch"
+  },
+  "RichTextKit": {
+    "repository": "toptensoftware/RichTextKit",
+    "commit": "2e8a37a8041f4e404a86283fed40920c867c9764",
+    "patch": "richtext.patch"
+  }
+}

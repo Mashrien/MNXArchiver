@@ -1,0 +1,76 @@
+; Copy to ~/.config/mnxarchiver/mnxarchiver.conf (Linux) or
+; %APPDATA%\mnxarchiver\mnxarchiver.conf (Windows).
+; Saving Options creates this file. Unknown sections/keys are preserved.
+; No passwords belong in this file. The optional .mnxdefaultkey is AES-256-GCM
+; ciphertext; its key requires your Linux desktop wallet or Windows login.
+
+[MNX.Storage]
+OverrideTemp=false
+TempPath=/tmp
+
+[MNX.Compression]
+Compress=true
+Compressor=Snappy
+; Snappy / LZ4 / Brotli. Effort applies only to Brotli: 1..9.
+Level=4
+; Requires an explicitly stored default key. Never changes an existing archive.
+
+[MNX.Encryption]
+Encrypt=false
+
+[MNX.Previews]
+Enabled=false
+Trigger=Double-Click
+; Alternatives: Single-Click / Mouse-Over With Delay. Delay: 500..2000, steps of 250 ms.
+DelayMs=750
+; File input buffer, 16..128 MiB. Decoded images have a separate limit.
+BufferMiB=32
+; Decoded pixels and animation frames: 64..1024 MiB per image.
+DecodedMiB=512
+; Combined reservations across all open previews: 256..4096 MiB.
+TotalMiB=1024
+
+[MNX.Previews.Text]
+Plain=true
+Source=true
+; Additional extensions; built-in lists remain available.
+PlainTypes=
+SourceTypes=
+
+[MNX.Previews.Images]
+Static=true
+Animated=false
+StaticTypes=
+
+[MNX.Previews.Display]
+Customize=false
+Mode=Window
+; Mode: Tooltip / Window. Tooltip Anchor: File / Cursor / Bottom-Right.
+Anchor=File
+WindowType=Dialog
+Origin=Center
+RelativeTo=Program Window
+; WindowType: Dialog / Window. Origin: Center / Top-Left.
+; RelativeTo: Program Window / Current Screen.
+; Only Window + Current Screen permits multiple independent previews.
+LimitSize=false
+SizeMode=Ratio
+MaxX=800
+MaxY=640
+Percent=66
+SizeRelativeTo=Main Window
+; SizeMode: Pixels / Ratio. SizeRelativeTo: Main Window / Current Screen.
+; MaxX/MaxY: 64,128,256,384,512,640,720,800,896,1024,1280,1366,
+; 1440,1536,1664,1792,1920,2048,2304,2560,2816,3072.
+; Percent: 10,12.5,15,20,25,33,50,66,75,80,85,87.5,90.
+ScaleMode=Scale
+; Scale / Zoom / Stretch / Center.
+; Hard limits: 10 windows, 16..128 MiB input per file (default 32), 2 MiB displayed text,
+; Decoded and combined memory are separately adjustable above.
+
+[MNX.Display]
+Backend=auto
+OpacityPercent=100
+
+[MNX.Display.MWin]
+UseDesktopColors=true

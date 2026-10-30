@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="MNXFile.Gui.props" />
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <AssemblyName>MNXFile.Gtk3.Frontend</AssemblyName>
+  </PropertyGroup>
+</Project>

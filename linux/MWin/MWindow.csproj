@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>MashWin</RootNamespace>
+    <AssemblyName>MWindow</AssemblyName>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <MNXPortableRoot Condition="'$(MNXPortableRoot)' == ''">$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)', '..', '..', '..', 'mnx_clutter', 'build', 'mnx-gui-port'))</MNXPortableRoot>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(MNXPortableRoot)/vendor/Majorsilence.Forms/src/Majorsilence.Forms/Majorsilence.Forms.csproj" />
+  </ItemGroup>
+</Project>

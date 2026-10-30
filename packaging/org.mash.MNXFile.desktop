@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=MNX Archive Manager
+Comment=Browse, create, and extract MNX archives
+Exec=mnx-gui -- %F
+TryExec=mnx-gui
+Icon=org.mash.MNXFile
+Terminal=false
+Categories=Utility;Archiving;
+MimeType=application/x-mnx;
+StartupWMClass=org.mash.MNXFile

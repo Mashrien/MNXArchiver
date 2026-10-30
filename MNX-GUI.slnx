@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/Linux/">
+    <Project Path="linux/MNXFile.Launcher.csproj" />
+    <Project Path="linux/Backends/MNXFile.Backends.csproj" />
+    <Project Path="src/MNXFile.Gtk3Frontend.csproj" />
+    <Project Path="linux/MNXFile.MWinFrontend.csproj" />
+  </Folder>
+  <Project Path="windows/MNXFile.WinForms.csproj" />
+</Solution>

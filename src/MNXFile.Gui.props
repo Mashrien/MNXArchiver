@@ -1,0 +1,48 @@
+<Project>
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>Mash.UI.MNXFile.GUI</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- Keep Unicode paths and case mapping without an ICU runtime dependency. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>mnx-gui</AssemblyName>
+    <ApplicationIcon Condition="'$(OS)' == 'Windows_NT' Or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win'))">archive.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="Settings/INI_Config.cs" />
+    <ProjectReference Include="../linux/Backends/MNXFile.Backends.csproj" />
+    <PackageReference Include="GtkSharp" Version="3.24.24.95" />
+    <PackageReference Include="Mash.MNXFile.Client" Version="1.2.0-alpha.3" />
+    <!-- Keep editable sidecars in development; published apps load embedded assets. -->
+    <EmbeddedResource Include="MainWindow.ui" LogicalName="Mash.UI.MNXFile.GUI.MainWindow.ui" />
+    <EmbeddedResource Include="style.css" LogicalName="Mash.UI.MNXFile.GUI.style.css" />
+    <EmbeddedResource Include="archive_100x100.png" LogicalName="Mash.UI.MNXFile.GUI.archive.png" />
+    <EmbeddedResource Include="Icons/Rendered/16/*.png" LogicalName="Mash.UI.MNXFile.GUI.Icons.16.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Icons/Rendered/24/*.png" LogicalName="Mash.UI.MNXFile.GUI.Icons.24.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Icons/Rendered/32/*.png" LogicalName="Mash.UI.MNXFile.GUI.Icons.32.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Icons/Rendered/48/*.png" LogicalName="Mash.UI.MNXFile.GUI.Icons.48.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Icons/LICENSE.txt" LogicalName="Mash.UI.MNXFile.GUI.Icons.LICENSE.txt" />
+    <None Update="MainWindow.ui" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+    <None Update="style.css" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(PublishAot)' == 'true'">
+    <!-- GtkSharp discovers widget constructors, properties and signal args through
+         reflection. These assemblies must survive AOT's mandatory trimming. -->
+    <TrimmerRootAssembly Include="GtkSharp" />
+    <TrimmerRootAssembly Include="GdkSharp" />
+    <TrimmerRootAssembly Include="GLibSharp" />
+    <TrimmerRootAssembly Include="GioSharp" />
+    <TrimmerRootAssembly Include="AtkSharp" />
+    <TrimmerRootAssembly Include="PangoSharp" />
+    <TrimmerRootAssembly Include="CairoSharp" />
+  </ItemGroup>
+  <Target Name="ExcludeNativeReleaseSymbols" AfterTargets="ComputeResolvedFilesToPublishList"
+          Condition="'$(PublishAot)' == 'true' and '$(CopyOutputSymbolsToPublishDirectory)' == 'false'">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+          Condition="'%(ResolvedFileToPublish.Extension)' == '.pdb' or '%(ResolvedFileToPublish.Extension)' == '.dbg'" />
+    </ItemGroup>
+  </Target>
+</Project>

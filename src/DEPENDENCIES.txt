@@ -1,0 +1,194 @@
+MNX GTK GUI: native AOT and runtime dependencies
+=============================================
+
+Status
+------
+The current GtkSharp 3.24.24.95 GUI passes its integration check as a
+Linux x64 NativeAOT executable when the seven GTK binding assemblies are
+preserved through trimming. No installed .NET framework/runtime is needed.
+GTK itself remains an external native dependency. Windows native AOT needs
+a Windows build and runtime check; a publish profile is provided but unverified.
+GtkSharp/GLibSharp still emit trim/AOT analysis warnings, so future controls
+and handlers must also be exercised in the native build.
+
+The .ui and CSS are embedded in the executable. Editable files beside the
+executable can override them, but are not needed in a published release.
+Debug symbol files are not runtime requirements.
+
+The GUI, CLI and native shared library use globalization-invariant mode, so
+ICU is not a runtime requirement. Unicode filenames, Unicode case-insensitive
+search and UTF-8/UTF-16 text handling remain supported. Numbers use fixed
+comma grouping and dates keep the requested dd-MM-yyyy format. Region-specific
+.NET culture data/formatting is unavailable in these standalone binaries.
+The managed library uses its calling application's globalization settings.
+
+Linux runtime packages (Nobara/Fedora names)
+-------------------------------------------
+Install these top-level packages; DNF resolves their native dependencies:
+
+  sudo dnf install mnxfile gtk3 openssl-libs
+
+Core GTK stack, normally pulled in by gtk3:
+  gtk3                GTK3 and GDK3
+  glib2               GLib, GObject, GIO and GModule
+  atk, at-spi2-atk,
+  at-spi2-core        accessibility libraries and bridge
+  cairo               Cairo and Cairo-GObject rendering
+  pango               Pango, Pango-Cairo and Pango-FT2 text layout
+  gdk-pixbuf2          bitmap/image loading; loader plugins/cache vary by distro
+  harfbuzz, fribidi,
+  fontconfig, freetype text shaping and font support
+  openssl-libs         libcrypto: AES-256-GCM, password key derivation and SHA-256
+                      integrity checks through .NET's Linux crypto implementation
+
+MNX embeds its own PNG icons at 16, 24, 32 and 48 pixels. Its toolbar, file
+rows, navigation, menus and messages do not require an installed icon theme
+or SVG loader. The desktop installer also installs owned PNG action icons.
+A distribution may still pull icon packages in as GTK package dependencies;
+standard GTK file choosers can use whichever desktop theme is available.
+
+A desktop session with X11 or Wayland and installed fonts is also needed.
+A standalone window manager, GTK development headers and a .NET SDK are not
+runtime requirements. The developer SDK has its own build-time requirements. gsettings-desktop-schemas is useful desktop integration
+support, not an unconditional requirement of the archive UI.
+
+GTK's exact dependency set varies by distribution/version/build options.
+The resolved .so dependency closure for this machine is listed below; install
+the owning packages rather than copying Nobara libraries to other distros.
+Image loaders, themes and accessibility modules may load additional files
+at runtime and are distributed with their corresponding GTK packages.
+
+Windows runtime distribution
+----------------------------
+Use a complete 64-bit GTK3 runtime built for Windows, with its matching
+transitive DLLs and data assets. The MSYS2 UCRT64 GTK3 package is:
+
+  mingw-w64-ucrt-x86_64-gtk3
+
+MNX's embedded PNG icons do not need adwaita/hicolor assets or an SVG loader.
+Installing GTK3 through MSYS2 resolves its native package dependencies. MSYS2
+is a developer packaging tool; end users need the bundled runtime assets.
+
+Principal GTK DLL families (exact names depend on the chosen runtime):
+  libgtk-3-0.dll, libgdk-3-0.dll
+  libglib-2.0-0.dll, libgobject-2.0-0.dll, libgio-2.0-0.dll, libgmodule-2.0-0.dll
+  libatk-1.0-0.dll
+  libcairo-2.dll, libcairo-gobject-2.dll
+  libpango-1.0-0.dll, libpangocairo-1.0-0.dll, libpangoft2-1.0-0.dll
+  libgdk_pixbuf-2.0-0.dll
+  plus the runtime's dependent font/image/XML/compression/support DLLs
+
+Bundle the GTK DLL closure AND GdkPixbuf loader plugins/cache, GTK/GIO modules
+used by the runtime, and relevant GLib schemas. Optional system theme assets
+can supply icons inside standard GTK file choosers. DLLs alone
+are insufficient. The complete Windows closure must be collected from that
+actual Windows runtime; it cannot be inferred exactly from Linux's .so list.
+
+Sources:
+  https://www.gtk.org/docs/installations/windows/
+  https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/
+  https://learn.microsoft.com/en-us/dotnet/core/deploying/single-file/overview
+
+Managed packages (compiled into AOT; no separate NuGet installation)
+------------------------------------------------------------------
+  GtkSharp, GdkSharp, GLibSharp, GioSharp, AtkSharp, PangoSharp, CairoSharp
+    version 3.24.24.95
+  Mash.MNXFile.Client 1.2.0-alpha.2 (thin native bindings only)
+
+The GUI and both CLIs load the separately installed MNXFile archive engine.
+The engine supplies Snappy/LZ4/Brotli, crypto, archive processing and recovery.
+Those implementations are not embedded in the frontend executable.
+Linux: libmnxfile.so.1; Windows: MNXFile.Native.dll (matching architecture).
+Engine format updates preserve the application protocol where possible;
+restart the frontend after replacing the shared library.
+
+Separate native Snappy, LZ4 or Brotli installs are not required by these
+managed archive codecs. The .NET native compiler/linker is build-time only.
+
+Embedding GTK itself
+--------------------
+The current release embeds application code, managed packages, UI and CSS;
+it uses external GTK libraries. Shipping all native GTK assets inside a
+single download is possible with an extraction bundle or an AppImage/installer,
+but that is separate packaging work, not a fully static single executable.
+Native library and plugin loading still needs actual files at runtime.
+
+Host GTK3/GDK3 linked-library closure (2026-10-03, linux-x64)
+---------------------------------------------------------
+  libX11.so.6                    libX11.x86_64
+  libXau.so.6                    libXau.x86_64
+  libXcomposite.so.1             libXcomposite.x86_64
+  libXcursor.so.1                libXcursor.x86_64
+  libXdamage.so.1                libXdamage.x86_64
+  libXext.so.6                   libXext.x86_64
+  libXfixes.so.3                 libXfixes.x86_64
+  libXi.so.6                     libXi.x86_64
+  libXinerama.so.1               libXinerama.x86_64
+  libXrandr.so.2                 libXrandr.x86_64
+  libXrender.so.1                libXrender.x86_64
+  libatk-1.0.so.0                atk.x86_64
+  libatk-bridge-2.0.so.0         at-spi2-atk.x86_64
+  libatspi.so.0                  at-spi2-core.x86_64
+  libblkid.so.1                  libblkid.x86_64
+  libbrotlicommon.so.1           libbrotli.x86_64
+  libbrotlidec.so.1              libbrotli.x86_64
+  libbz2.so.1                    bzip2-libs.x86_64
+  libc.so.6                      glibc.x86_64
+  libcairo-gobject.so.2          cairo-gobject.x86_64
+  libcairo.so.2                  cairo.x86_64
+  libcloudproviders.so.0         libcloudproviders.x86_64
+  libdatrie.so.1                 libdatrie.x86_64
+  libdbus-1.so.3                 dbus-libs.x86_64
+  libepoxy.so.0                  libepoxy.x86_64
+  libffi.so.8                    libffi.x86_64
+  libfontconfig.so.1             fontconfig.x86_64
+  libfreetype.so.6               freetype.x86_64
+  libfribidi.so.0                fribidi.x86_64
+  libgcc_s.so.1                  libgcc.x86_64
+  libgdk-3.so.0                  gtk3.x86_64
+  libgdk_pixbuf-2.0.so.0         gdk-pixbuf2.x86_64
+  libgio-2.0.so.0                glib2.x86_64
+  libglib-2.0.so.0               glib2.x86_64
+  libglycin-2.so.0               glycin-libs.x86_64
+  libgmodule-2.0.so.0            glib2.x86_64
+  libgobject-2.0.so.0            glib2.x86_64
+  libgraphite2.so.3              graphite2.x86_64
+  libharfbuzz.so.0               harfbuzz.x86_64
+  libjson-glib-1.0.so.0          json-glib.x86_64
+  liblcms2.so.2                  lcms2.x86_64
+  liblzma.so.5                   xz-libs.x86_64
+  libm.so.6                      glibc.x86_64
+  libmount.so.1                  libmount.x86_64
+  libpango-1.0.so.0              pango.x86_64
+  libpangocairo-1.0.so.0         pango.x86_64
+  libpangoft2-1.0.so.0           pango.x86_64
+  libpcre2-8.so.0                pcre2.x86_64
+  libpixman-1.so.0               pixman.x86_64
+  libpng16.so.16                 libpng.x86_64
+  libseccomp.so.2                libseccomp.x86_64
+  libselinux.so.1                libselinux.x86_64
+  libsqlite3.so.0                sqlite-libs.x86_64
+  libsystemd.so.0                systemd-libs.x86_64
+  libthai.so.0                   libthai.x86_64
+  libtinysparql-3.0.so.0         libtinysparql.x86_64
+  libwayland-client.so.0         libwayland-client.x86_64
+  libwayland-cursor.so.0         libwayland-cursor.x86_64
+  libwayland-egl.so.1            libwayland-egl.x86_64
+  libxcb-render.so.0             libxcb.x86_64
+  libxcb-shm.so.0                libxcb.x86_64
+  libxcb.so.1                    libxcb.x86_64
+  libxkbcommon.so.0              libxkbcommon.x86_64
+  libxml2.so.2                   libxml2.x86_64
+  libz.so.1                      zlib-ng-compat.x86_64
+
+OPTIONAL INTEGRATION TEST ONLY
+  --smoke-test uses Xvfb plus libX11.so.6 and libXtst.so.6 for synthetic
+  pointer gestures. These are not additional requirements for normal use.
+
+OPTIONAL SAVED-DEFAULT PASSWORDS
+  Linux: secret-tool plus an unlocked org.freedesktop.secrets keyring.
+         Fedora/Nobara: libsecret; Debian/Ubuntu: libsecret-tools.
+  Windows: current-user DPAPI (built into Windows); no extra package.
+  Saving a default refuses to proceed if the OS credential service is unavailable.
+  Normal archiving, encryption with a manually supplied password, and previews do
+  not require a keyring helper. Image previews use the existing GTK pixbuf loaders.

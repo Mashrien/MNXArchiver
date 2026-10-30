@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>MNXFile.Backends</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/Settings/INI_Config.cs" Link="Settings/INI_Config.cs" />
+    <Compile Include="../../src/Settings/AppSettings.cs" Link="Settings/AppSettings.cs" />
+    <InternalsVisibleTo Include="MNXFile.BackendChecks" />
+  </ItemGroup>
+</Project>

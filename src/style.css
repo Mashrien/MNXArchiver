@@ -1,0 +1,6 @@
+/* Cosmetic only: pane sizes and resize behavior live in MainWindow.ui. */
+#archive_toolbar { padding: 6px; border-bottom: 1px solid alpha(@theme_fg_color, 0.16); }
+#archive_toolbar button { padding: 5px 10px; }
+#path_bar { padding: 6px; }
+#footer { padding: 6px 10px; border-top: 1px solid alpha(@theme_fg_color, 0.16); }
+treeview { padding: 3px; }

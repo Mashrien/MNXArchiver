@@ -1,0 +1,101 @@
+--- a/Program.cs
++++ b/Program.cs
+@@ -3,7 +3,16 @@
+ internal static class Program {
+     [STAThread]
+     private static int Main(string[] args) {
+-        // ApplicationConfiguration.Initialize(); // [majorsilence-migrate] no Majorsilence equivalent
++        if (args.Length > 0 && args[0] == "--headless-smoke") {
++            Majorsilence.Forms.Headless.HeadlessRenderer.Use();
++            args[0] = "--smoke-test";
++            }
++        else {
++            Majorsilence.Forms.Gtk4.Gtk4Application.Use();
++            }
++        // Portable startup must retain the UI thread after async archive operations.
++        SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
++        Application.SetDefaultFont(new Majorsilence.Forms.Drawing.Font("Noto Sans", 9)); // [majorsilence-migrate] no Majorsilence equivalent
+         try {
+             bool smoke = args.Length > 0 && args[0] == "--smoke-test";
+             if (smoke && args.Length != 2) {
+--- a/MainForm.PreviewsAndDrag.cs
++++ b/MainForm.PreviewsAndDrag.cs
+@@ -103,7 +103,7 @@
+         }
+ 
+     private void ConfigureDragAndDrop() {
+-        foreach (Control control in new Control[] { this, folderTree, fileList }) {
++        foreach (Control control in new Control[] { folderTree, fileList }) {
+             control.DragEnter += (_, args) => args.Effect = !_busy && !_draggingOut && args.Data?.GetDataPresent(DataFormats.FileDrop) == true ? DragDropEffects.Copy : DragDropEffects.None;
+             control.DragOver += (_, args) => args.Effect = !_busy && !_draggingOut && args.Data?.GetDataPresent(DataFormats.FileDrop) == true ? DragDropEffects.Copy : DragDropEffects.None;
+             control.DragDrop += async (_, args) => {
+--- a/MainForm.Smoke.cs
++++ b/MainForm.Smoke.cs
+@@ -20,6 +20,8 @@
+         evidence.Add("PASS: all ten parameterless designer forms instantiate/dispose; MWin caption visibility, defaults and standalone RoundButton painting");
+         LoadPreview();
+         await Task.Delay(200);
++        CheckMenuSeparator(directory);
++        CheckBackendOptions(directory);
+         Require(folderTree.Nodes.Count == 1 && fileList.Items.Count > 0, "Preview layout was not populated.");
+         SaveScreenshot(Path.Combine(directory, "01-layout.png"));
+         Require(browserSplit.SplitterDistance == 192, "The folder pane must start at 192 pixels.");
+@@ -136,8 +137,9 @@
+         Require(rejected && _archive is not null, "Corrupt archive input was not rejected while preserving the previous view.");
+         string diagnostic = ArchiveOpenError(bad, new InvalidDataException("Invalid MNX archive format"), ArchiveFile.ReturnCode.NotValidMNXFile);
+         Require(diagnostic.Contains("Error code:", StringComparison.Ordinal), "Archive diagnostics omitted the error code.");
+-        await CheckInvalidCommandLine(bad);
+-        evidence.Add("PASS: corrupt .mnx preserves current archive interactively; command-line invalid archive shows format/error-code dialog and exits with code 1");
++        // Windows' EnumWindows test is kept in the Windows source. The Linux run
++        // checks diagnostic text above and exercises launch dialogs separately.
++        evidence.Add("PASS: corrupt .mnx preserves current archive interactively; invalid archive returns format/error-code text");
+         PreviewSmokeTests.Run(this, directory);
+         evidence.Add("PASS: options and preview smoke assertions");
+         SaveScreenshot(Path.Combine(directory, "04-complete.png"));
+@@ -300,7 +302,7 @@
+ 
+     private void SaveScreenshot(string path) {
+         using Bitmap image = new Bitmap(Width, Height);
+-        DrawToBitmap(image, new Rectangle(Point.Empty, Size));
++        this.DrawToBitmap(image, new Rectangle(Point.Empty, Size));
+         image.Save(path, ImageFormat.Png);
+         }
+ 
+--- a/MainForm.DesignerSmoke.cs
++++ b/MainForm.DesignerSmoke.cs
+@@ -6,7 +6,7 @@
+ public sealed partial class MainForm {
+     private static void RunDesignerConstructionChecks(string directory) {
+         // The VS property grid uses named cultures when converting numeric properties.
+-        System.Globalization.CultureInfo designerCulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
++        System.Globalization.CultureInfo designerCulture = System.Globalization.CultureInfo.InvariantCulture;
+         PropertyDescriptor radiusProperty = TypeDescriptor.GetProperties(new MashWin.MWindowSettings().Frame)["CornerRadius"]!;
+         Require((int)radiusProperty.Converter.ConvertFromString(null, designerCulture, "6")! == 6,
+             "Designer numeric property conversion is unavailable.");
+--- a/Previews/PreviewControls.cs
++++ b/Previews/PreviewControls.cs
+@@ -2,6 +2,9 @@
+ 
+ public sealed class ImageSurface : Control {
+     internal bool PassThrough;
++    internal void ClickForSmoke() {
++        OnMouseDown(new MouseEventArgs(MouseButtons.Left, 1, 10, 10, 0));
++        }
+     public ImageSurface() {
+         DoubleBuffered = true;
+         ResizeRedraw = true;
+--- a/Previews/PreviewSmokeTests.cs
++++ b/Previews/PreviewSmokeTests.cs
+@@ -125,10 +125,10 @@
+                         }
+                     else if (cycle % 5 == 3) {
+                         Control imageSurface = imageWindow.Controls.OfType<ImageSurface>().Single();
+-                        SendMessage(imageSurface.Handle, 0x0201, new IntPtr(1), new IntPtr(10 | (10 << 16)));
++                        ((ImageSurface)imageSurface).ClickForSmoke();
+                         }
+                     else {
+-                        SendMessage(imageWindow.Handle, 0x0010, IntPtr.Zero, IntPtr.Zero);
++                        imageWindow.Close();
+                         }
+                     Application.DoEvents();
+                     Require(imageWindow.IsDisposed && bytes.All(value => value == 0), "Closing a repeated image did not dispose its window and plaintext snapshot.");

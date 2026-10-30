@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <MNXFrontendLibrary>true</MNXFrontendLibrary>
+  </PropertyGroup>
+  <Import Project="MNXFile.Linux.props" />
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <AssemblyName>MNXFile.MWin.Frontend</AssemblyName>
+  </PropertyGroup>
+</Project>

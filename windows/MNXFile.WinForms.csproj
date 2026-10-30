@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <RootNamespace>Mash.UI.MNXFile.GUI</RootNamespace>
+    <AssemblyName>mnx-gui</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- The out-of-process WinForms designer needs real cultures to edit numeric
+         properties. Windows supplies NLS, so this does not add an ICU dependency. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <ApplicationIcon>../src/archive.ico</ApplicationIcon>
+    <PublishAot>false</PublishAot>
+    <PublishTrimmed>false</PublishTrimmed>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="MashWin/**/*.cs" />
+    <None Remove="MashWin/**" />
+    <EmbeddedResource Remove="MashWin/**/*.resx" />
+    <ProjectReference Include="MashWin/MWin/MWindow.csproj" />
+  </ItemGroup>
+  <PropertyGroup Condition="Exists('$(MSBuildThisFileDirectory)../../MNX_Builds/mnxfile/packages')">
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Update="ArchiveDropForm.cs;MainForm.cs;InputSelectionForm.cs;CreationForm.cs;ProgressForm.cs;Dialogs/OptionsForm.cs;Previews/PreviewForm.cs;TextPromptForm.cs;TextViewerForm.cs;CancellationForm.cs"><SubType>Form</SubType></Compile>
+    <Compile Update="MainForm.Operations.cs;MainForm.PreviewsAndDrag.cs;MainForm.Layout.cs;MainForm.Smoke.cs;MainForm.DropSmoke.cs;MainForm.DesignerSmoke.cs"><DependentUpon>MainForm.cs</DependentUpon></Compile>
+    <Compile Update="**/*.Designer.cs"><DependentUpon>$([System.String]::Copy('%(Filename)').Replace('.Designer', '')).cs</DependentUpon></Compile>
+    <EmbeddedResource Update="**/*.resx"><DependentUpon>%(Filename).cs</DependentUpon></EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.Globalization.UseNls" Value="true" />
+    <PackageReference Include="Mash.MNXFile.Client" Version="1.2.0-alpha.3" />
+    <Compile Include="../src/ArchiveBrowser.cs" Link="Shared/ArchiveBrowser.cs" />
+    <Compile Include="../src/FileTransfer.cs" Link="Shared/FileTransfer.cs" />
+    <Compile Include="../src/ExtractionPlan.cs" Link="Shared/ExtractionPlan.cs" />
+    <Compile Include="../src/TransferCancellation.cs" Link="Shared/TransferCancellation.cs" />
+    <Compile Include="../src/TransferTracker.cs" Link="Shared/TransferTracker.cs" />
+    <Compile Include="../src/Settings/INI_Config.cs" Link="Shared/Settings/INI_Config.cs" />
+    <Compile Include="../src/Settings/AppSettings.cs" Link="Shared/Settings/AppSettings.cs" />
+    <Compile Include="../src/Settings/DefaultKeyStore.cs" Link="Shared/Settings/DefaultKeyStore.cs" />
+    <Compile Include="../src/Previews/PreviewData.cs" Link="Shared/Previews/PreviewData.cs" />
+    <EmbeddedResource Include="../src/Icons/Rendered/32/*.png" Link="Resources/Icons/32/%(Filename)%(Extension)" LogicalName="Mash.UI.MNXFile.GUI.Icons.32.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../src/Icons/Rendered/16/*.png" Link="Resources/Icons/16/%(Filename)%(Extension)" LogicalName="Mash.UI.MNXFile.GUI.Icons.16.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../src/archive.ico" Link="Resources/archive.ico" LogicalName="Mash.UI.MNXFile.GUI.archive.ico" />
+    <EmbeddedResource Include="../src/Icons/LICENSE.txt" Link="Resources/Icons/LICENSE.txt" LogicalName="Mash.UI.MNXFile.GUI.Icons.LICENSE.txt" />
+  </ItemGroup>
+</Project>
