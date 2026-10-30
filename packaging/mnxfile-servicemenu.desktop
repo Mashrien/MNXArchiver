@@ -3,6 +3,7 @@ Type=Service
 MimeType=all/all;
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 Actions=create;
+X-KDE-Submenu=MNX Archive
 
 [Desktop Action create]
 Name=Create or open MNX archive

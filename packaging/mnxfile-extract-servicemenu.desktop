@@ -4,7 +4,7 @@ MimeType=application/x-mnx;
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 X-KDE-RequiredNumberOfUrls=1
 Actions=extractHere;extractTo;
-X-KDE-Submenu=MNX Archive Manager
+X-KDE-Submenu=MNX Archive
 
 [Desktop Action extractHere]
 Name=Extract MNX archive here

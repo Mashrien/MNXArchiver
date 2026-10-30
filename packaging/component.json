@@ -1,0 +1,33 @@
+{
+  "component": "gui",
+  "name": "mnx-gui",
+  "summary": "MNX Archive Manager",
+  "url": "https://github.com/Mashrien/MNXArchiver",
+  "binaries": [
+    "mnx-gui",
+    "libSkiaSharp.so",
+    "libHarfBuzzSharp.so"
+  ],
+  "required_notices": {
+    "linux-x64": [
+      "dotnet-LICENSE.txt",
+      "dotnet-ThirdPartyNotices.txt",
+      "Majorsilence.Forms-MIT.txt",
+      "Majorsilence.Forms-notices.md",
+      "RichTextKit-Apache-2.0.txt",
+      "MNX-icons-MIT.txt",
+      "GtkSharp-LICENSE.txt",
+      "GtkSharp-SOURCE.txt",
+      "SkiaSharp-3.119.4-LICENSE.txt",
+      "SkiaSharp-3.119.4-THIRD-PARTY-NOTICES.txt",
+      "HarfBuzzSharp-8.3.1.3-LICENSE.txt",
+      "HarfBuzzSharp-8.3.1.3-THIRD-PARTY-NOTICES.txt"
+    ],
+    "win-x64": [
+      "dotnet-LICENSE.txt",
+      "dotnet-ThirdPartyNotices.txt",
+      "WindowsDesktop-LICENSE.txt",
+      "MNX-icons-MIT.txt"
+    ]
+  }
+}

@@ -12,6 +12,17 @@ traditional archive-manager interface. Archive handling comes from the separatel
 installed **[MNXFile](https://github.com/Mashrien/MNXFile)** engine. For terminal use,
 see **[mnx-cli](https://github.com/Mashrien/mnx-cli)**.
 
+## Downloads and installation
+
+[Releases](https://github.com/Mashrien/MNXArchiver/releases) provide **mnx-gui**
+RPM/DEB/portable Linux packages and a Windows x64 ZIP. Install the separate
+[MNXFile engine](https://github.com/Mashrien/MNXFile/releases) first. Linux requires
+glibc2.39+, OpenSSL3 and GTK4 >=4.12 for MWin or GTK3 >=3.24 for the native frontend.
+The RPM/DEB includes desktop/MIME registration and Dolphin's **MNX Archive** submenu.
+Optional saved-password support also needs `secret-tool` and an unlocked desktop
+Secret Service. Windows10 x64 and later need no GTK. Neither platform needs an
+installed .NET runtime. See [packaging instructions](packaging/README.md).
+
 ## Features
 
 - Create/open archives; add, extract, delete, search, verify and compact entries.
@@ -166,10 +177,11 @@ opt-in convenience features; consult [MNXFile's queue specification](https://git
 
 Package resources use the installed `mnx-gui` name, not a developer's shell alias.
 Install the desktop file to `share/applications`, MIME XML to `share/mime/packages`,
-the PNG to `share/icons/hicolor/100x100/apps/org.mash.MNXFile.png`, and service menus
+the PNG to `share/pixmaps/org.mash.MNXFile.png`, and service menus
 to `share/kio/servicemenus`. Refresh the distribution's desktop/MIME caches.
-[packaging/OWNERSHIP.md](packaging/OWNERSHIP.md) documents package ownership; RPM/DEB
-specifications are not yet a completed release pipeline.
+[packaging/OWNERSHIP.md](packaging/OWNERSHIP.md) documents package ownership.
+[Packaging scripts](packaging/README.md) create RPM/DEB and portable releases with
+these resources and desktop-cache hooks.
 
 `./build.sh --test` runs backend/settings and offscreen MWin checks. Actual frontend
 checks need a display session or Xvfb:
@@ -183,8 +195,9 @@ MNXFILE_NATIVE_LIBRARY=/absolute/path/libmnxfile.so.1 \
 
 [Validation notes](docs/LINUX-DUAL-BACKEND-VALIDATION.md) separate tested behavior,
 known limits and unverified platforms. Linux x64 is the primary test target;
-Windows x64 has been built and exercised, though later changes may only have a
-cross-target compilation check. Native ARM64 runtime behavior is not validated here.
+The initial Windows x64 release was built and exercised in Windows10, including
+engine/client/C API/CLI and all nine WinForms smoke sections. Native ARM64 runtime
+behavior is not validated here.
 
 ## License
 

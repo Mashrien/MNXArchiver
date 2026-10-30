@@ -77,6 +77,12 @@ internal static class OwnedIcons {
         // GTK resets MessageType to Other when replacing the image. Restore
         // the question/warning/error identity used by accessibility and callers.
         dialog.MessageType = type;
+        // Restoring the type also changes GTK's image back to a themed icon.
+        // Replace the pixels on that image directly so its message type remains
+        // intact and dialogs still work without an installed desktop icon theme.
+        if (dialog.Image is Image messageImage) {
+            messageImage.Pixbuf = Get(name, 48);
+            }
         return dialog;
         }
 
