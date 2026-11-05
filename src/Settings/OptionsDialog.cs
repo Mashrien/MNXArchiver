@@ -9,6 +9,7 @@ namespace Mash.UI.MNXFile.GUI.Settings;
 /// <summary>Expandable settings editor. Ordinary changes are committed only by Save.</summary>
 internal sealed class OptionsDialog : IDisposable {
     internal Dialog Window { get; }
+    internal bool ExitRequested { get; private set; }
     private readonly AppSettings _settings;
     private readonly DefaultKeyStore _keys;
     private readonly List<Action> _readControls = [];
@@ -78,7 +79,26 @@ internal sealed class OptionsDialog : IDisposable {
         Box realtime = Group(previews, "Memory limits");
         Number(realtime, "Maximum input buffer (MiB)", "Previews", "BufferMiB", 32, 16, 128, 16);
         Number(realtime, "Decoded image/animation memory (MiB)", "Previews", "DecodedMiB", AppSettings.DefaultDecodedMiB, 64, 1024, 64);
-        Number(realtime, "Combined preview memory (MiB)", "Previews", "TotalMiB", AppSettings.DefaultTotalPreviewMiB, 256, 4096, 256);
+        Number(realtime, "Combined preview memory (MiB)", "Previews", "TotalMiB", AppSettings.DefaultTotalPreviewMiB, 256, 2048, 256);
+        if (_settings.HasPreviewOverrides) {
+            Label overrideWarning = new Label {
+                Markup = "<span foreground='red'>WARNING: EXPERIMENTAL OVERRIDES IN USER CONF!</span>",
+                Xalign = 0,
+                Wrap = true
+                };
+            Button revert = new Button("revert") { Name = "revertPreviewOverridesButton" };
+            Row(realtime, overrideWarning, revert);
+            revert.Clicked += (_, _) => {
+                try {
+                    _settings.RevertPreviewOverrides();
+                    ExitRequested = true;
+                    Window.Respond(ResponseType.Cancel);
+                    }
+                catch (Exception error) {
+                    Error(Window, error.Message);
+                    }
+                };
+            }
         RadioButton hover = new RadioButton("Mouse-Over With Delay");
         RadioButton doubleClick = new RadioButton(hover, "Double-Click");
         RadioButton singleClick = new RadioButton(hover, "Single-Click");
@@ -248,8 +268,20 @@ internal sealed class OptionsDialog : IDisposable {
         }
     private SpinButton Number(Box parent, string label, string section, string key, int fallback, int min, int max, int step) {
         SpinButton value = new SpinButton(min, max, step) { Value = _settings.Number(section, key, fallback, min, max), Numeric = true };
-        Row(parent, new Label(label), value);
-        _readControls.Add(() => _settings.Set(section, key, value.ValueAsInt));
+        if (section == "Previews") {
+            value.Name = "previews" + key + "NumericUpDown";
+            }
+        if (section == "Previews" && _settings.TryPreviewOverride(key, out int overridden)) {
+            value.Sensitive = false;
+            Label overrideValue = new Label {
+                Markup = "<span foreground='red'>" + overridden.ToString("N0", CultureInfo.InvariantCulture) + " MiB</span>"
+                };
+            Row(parent, new Label(label), value, overrideValue);
+            }
+        else {
+            Row(parent, new Label(label), value);
+            _readControls.Add(() => _settings.Set(section, key, value.ValueAsInt));
+            }
         return value;
         }
     private void TypeCategory(Box parent, string label, string section, string enabled, string key, bool fallback) {

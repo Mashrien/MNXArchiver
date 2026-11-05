@@ -8,6 +8,8 @@ internal sealed class AppSettings {
     internal const int MinimumHoverDelay = 500;
     internal const int DefaultDecodedMiB = 512;
     internal const int DefaultTotalPreviewMiB = 1024;
+    internal const int MaximumPreviewBufferMiB = 384;
+    private const string PreviewOverrideSection = "MNX.Previews.OVERRIDE";
     internal static readonly int[] Resolutions = [64,128,256,384,512,640,720,800,896,1024,1280,1366,1440,1536,1664,1792,1920,2048,2304,2560,2816,3072];
     internal static readonly double[] Percentages = [10,12.5,15,20,25,33,50,66,75,80,85,87.5,90];
     private INI_Config _config = new INI_Config();
@@ -59,9 +61,58 @@ internal sealed class AppSettings {
         return choices.Contains(value, StringComparer.Ordinal) ? value : fallback;
         }
 
-    internal int PreviewBufferBytes => Number("Previews", "BufferMiB", 32, 16, 128) * 1024 * 1024;
-    internal long DecodedPreviewBytes => Number("Previews", "DecodedMiB", DefaultDecodedMiB, 64, 1024) * 1024L * 1024;
-    internal long TotalPreviewBytes => Number("Previews", "TotalMiB", DefaultTotalPreviewMiB, 256, 4096) * 1024L * 1024;
+    internal bool HasPreviewOverrides => _config.SectionNames.Contains(PreviewOverrideSection, StringComparer.OrdinalIgnoreCase);
+
+    internal bool TryPreviewOverride(string key, out int value) {
+        value = 0;
+        if (!HasPreviewOverrides) {
+            return false;
+            }
+        int minimum;
+        int maximum;
+        switch (key) {
+            case "BufferMiB":
+                minimum = 16;
+                maximum = MaximumPreviewBufferMiB;
+                break;
+            case "DecodedMiB":
+                minimum = 64;
+                maximum = 3072;
+                break;
+            case "TotalMiB":
+                minimum = 256;
+                maximum = 6144;
+                break;
+            default:
+                return false;
+            }
+        string text = _config[PreviewOverrideSection].GetString(key);
+        if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int requested) || requested < minimum) {
+            return false;
+            }
+        value = Math.Min(requested, maximum);
+        return true;
+        }
+
+    private int PreviewLimitMiB(string key, int fallback, int minimum, int maximum) {
+        if (TryPreviewOverride(key, out int value)) {
+            return value;
+            }
+        return Number("Previews", key, fallback, minimum, maximum);
+        }
+
+    internal int PreviewBufferBytes => PreviewLimitMiB("BufferMiB", 32, 16, 128) * 1024 * 1024;
+    internal long DecodedPreviewBytes => PreviewLimitMiB("DecodedMiB", DefaultDecodedMiB, 64, 1024) * 1024L * 1024;
+    internal long TotalPreviewBytes => PreviewLimitMiB("TotalMiB", DefaultTotalPreviewMiB, 256, 2048) * 1024L * 1024;
+
+    internal void RevertPreviewOverrides() {
+        // Reload the saved file: reverting must not save unrelated, unconfirmed
+        // edits from the Options window or overwrite a newer edit made on disk.
+        AppSettings current = Load(DirectoryPath);
+        current._config.RemoveSection(PreviewOverrideSection);
+        current.Save();
+        _config = current._config.Copy();
+        }
     internal bool Previews => Flag("Previews", "Enabled");
     internal string Trigger => Choice("Previews", "Trigger", "Double-Click", "Double-Click", "Single-Click", "Mouse-Over With Delay");
     internal int OpacityPercent => Number("Interface", "OpacityPercent", 100, 10, 100);

@@ -14,7 +14,8 @@ see **[mnx-cli](https://github.com/Mashrien/mnx-cli)**.
 
 ## Downloads and installation
 
-Latest source changes: [Linux MWin menu colors and portable library lookup](docs/releases/1.4.1.52.md).
+Recent source changes include Linux MWin menu colors, portable library lookup,
+Options layout fixes and the testing-only preview overrides described below.
 
 [Releases](https://github.com/Mashrien/MNXArchiver/releases) provide **mnx-gui**
 RPM/DEB/portable Linux packages and a Windows x64 ZIP. Install the separate
@@ -148,6 +149,7 @@ Builds do not install programs or register context menus.
 Settings are plain INI under `~/.config/mnxarchiver/` on Linux or
 `%APPDATA%\mnxarchiver\` on Windows. The main file is `mnxarchiver.conf`; MWin's
 editable palette is `mnx.mwin-colors.conf`. See [INI-CONFIG.md](docs/INI-CONFIG.md).
+
 For example:
 
 ```ini
@@ -174,6 +176,24 @@ window positions; X11 right Window previews position before becoming visible.
 Opacity applies to owned forms/previews; errors remain fully opaque. System file
 pickers remain OS-managed. Optional saved defaults/queue key export are explicitly
 opt-in convenience features; consult [MNXFile's queue specification](https://github.com/Mashrien/MNXFile/blob/master/MNQ_FORMAT.md).
+
+### Unsupported development/testing settings
+
+For development or controlled testing only, manually add this section to
+`mnxarchiver.conf`. These are the **hard maximum values**, in MiB:
+
+```ini
+[MNX.Previews.OVERRIDE]
+BufferMiB=384
+DecodedMiB=3072
+TotalMiB=6144
+```
+
+These unsupported overrides can substantially increase memory use. Options keeps
+the ordinary 128/1024/2048 MiB ranges, disables overridden controls and shows the
+effective values in red. **revert** removes the entire override section and exits
+the program. This setting is intentionally absent from shipped user documentation
+and cannot be enabled or edited through the GUI.
 
 ## Desktop integration and tests
 

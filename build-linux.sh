@@ -29,6 +29,8 @@ for mnx_tool in dotnet git python3 flock; do
     command -v "$mnx_tool" >/dev/null || { printf 'Missing build tool: %s\n' "$mnx_tool" >&2; exit 2; }
     done
 export DOTNET_PROCESSOR_COUNT=${DOTNET_PROCESSOR_COUNT:-2}
+# Persistent MSBuild workers must never keep this build's lock descriptors alive.
+export MSBUILDDISABLENODEREUSE=1
 export MNXPortableRoot=${MNXPortableRoot:-"$mnx_parent/mnx_clutter/build/mnx-gui-port"}
 export MNXBuildRoot=${MNXBuildRoot:-"$mnx_parent/mnx_clutter/build/mnx-gui-dual"}
 export MNXReleaseRoot=${MNXReleaseRoot:-"$mnx_parent/MNX_Builds/mnx-gui"}
@@ -66,16 +68,16 @@ if $mnx_managed; then
     fi
 mnx_properties=(-p:EnableMobileHeads=false -p:UseSharedCompilation=false -p:TreatWarningsAsErrors=false -nodeReuse:false)
 if $mnx_clean; then
-    dotnet clean "$mnx_project" -c Release -r "$mnx_rid" "${mnx_properties[@]}"
+    dotnet clean "$mnx_project" -c Release -r "$mnx_rid" "${mnx_properties[@]}" 7>&- 8>&-
     fi
 if $mnx_managed; then
-    dotnet publish "$mnx_project" -c Release -r "$mnx_rid" --self-contained false -o "$mnx_output" "${mnx_properties[@]}"
+    dotnet publish "$mnx_project" -c Release -r "$mnx_rid" --self-contained false -o "$mnx_output" "${mnx_properties[@]}" 7>&- 8>&-
 else
-    dotnet publish "$mnx_project" -c Release -r "$mnx_rid" -p:MNXNativeAot=true -p:StripSymbols=true -o "$mnx_output" "${mnx_properties[@]}"
+    dotnet publish "$mnx_project" -c Release -r "$mnx_rid" -p:MNXNativeAot=true -p:StripSymbols=true -o "$mnx_output" "${mnx_properties[@]}" 7>&- 8>&-
     fi
 if $mnx_test; then
-    dotnet run --project "$mnx_root/tests/BackendChecks/BackendChecks.csproj" -c Release -p:UseSharedCompilation=false
-    dotnet run --project "$mnx_root/tests/MenuRenderingChecks/MenuRenderingChecks.csproj" -c Release "${mnx_properties[@]}" -- "$MNXBuildRoot/evidence/menu-colors-$MNXBuildNumber"
+    dotnet run --project "$mnx_root/tests/BackendChecks/BackendChecks.csproj" -c Release "${mnx_properties[@]}" 7>&- 8>&-
+    dotnet run --project "$mnx_root/tests/MenuRenderingChecks/MenuRenderingChecks.csproj" -c Release "${mnx_properties[@]}" -- "$MNXBuildRoot/evidence/menu-colors-$MNXBuildNumber" 7>&- 8>&-
     "$mnx_output/mnx-gui" --list-backends
     if "$mnx_output/mnx-gui" --probe-backend mwin >/dev/null 2>&1; then
         "$mnx_output/mnx-gui" --backend=mwin --headless-smoke "$MNXBuildRoot/evidence/$mnx_rid-$mnx_kind-$MNXBuildNumber"

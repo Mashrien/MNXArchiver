@@ -4,6 +4,10 @@ namespace Mash.UI.MNXFile.GUI;
 
 public sealed partial class OptionsForm {
     partial void ConfigurePlatformOptions() {
+        // The portable toolkit's theme tabs have no page frame by default.
+        // Keep a visible foreground-colored outline around the tab control.
+        optionsTabs.Style.Border.Width = 1;
+        optionsTabs.Style.Border.Color = Theme.ForegroundColor;
         // Linux uses the desktop keyring rather than Windows DPAPI.
         label4.Text = "WARNING: PRIVATE/PERSONAL COMPUTER USE ONLY. Never enable on shared machines. The saved password is protected using your desktop keyring.";
         BackendAvailability? available = BackendRuntime.Availability;

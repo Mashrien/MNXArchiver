@@ -100,6 +100,7 @@ public sealed partial class MainForm {
         }
 
     private void CheckBackendOptions(string directory) {
+        CheckPreviewOverrideOptions(directory);
         CheckDetailsHorizontalScrolling();
         CheckPreviewModes(directory);
         // Exercise the toolkit's lazy menu settings path before menu painting.
@@ -132,6 +133,35 @@ public sealed partial class MainForm {
         Require(groups.Count > 6 && groups.Select(group => group.Width).Distinct().Count() == 1,
             "Options top-level group boxes must have one uniform width across all tabs: " +
             string.Join(", ", groups.Select(group => group.Name + "=" + group.Width)));
+        foreach (Size size in new Size[] { new Size(760, 560), new Size(1060, 800) }) {
+            options.Size = size;
+            for (int index = 0; index < tabs!.TabPages.Count; index++) {
+                tabs.SelectedIndex = index;
+                options.PerformLayout();
+                Application.DoEvents();
+                foreach (GroupBox group in groups.Where(group => group.Visible)) {
+                    Control ancestor = group.Parent!;
+                    int actualRight = group.PointToScreen(new Point(group.Width, 0)).X;
+                    while (ancestor is not TabPage && ancestor.Parent is not null) {
+                        int ancestorRight = ancestor.PointToScreen(new Point(ancestor.ClientRectangle.Right - ancestor.Padding.Right, 0)).X;
+                        Require(actualRight <= ancestorRight,
+                            "Options group is clipped by " + ancestor.Name + ": " + group.Name + " right=" + actualRight + " parent=" + ancestorRight);
+                        ancestor = ancestor.Parent;
+                        }
+                    Control viewport = group.Parent!;
+                    while (viewport is not TabPage && viewport.Name != "optionsScrollPanel" && viewport.Parent is not null) {
+                        viewport = viewport.Parent;
+                        }
+                    int visibleRight = viewport.PointToScreen(new Point(viewport.ClientRectangle.Right - SystemInformation.VerticalScrollBarWidth, 0)).X;
+                    int groupRight = group.PointToScreen(new Point(group.Width, 0)).X;
+                    Require(groupRight <= visibleRight,
+                        "Options group extends beyond the visible viewport at " + size + ": " + group.Name + " right=" + groupRight + " viewport=" + visibleRight);
+                    }
+                using Bitmap resized = new Bitmap(options.Width, options.Height);
+                options.DrawToBitmap(resized, options.ClientRectangle);
+                resized.Save(Path.Combine(directory, "options-" + size.Width + "-tab-" + index + ".png"));
+                }
+            }
         options.Close();
         CheckSavedInterfaceOptions(directory);
         double previous = MnxDialog.ConfiguredOpacity;

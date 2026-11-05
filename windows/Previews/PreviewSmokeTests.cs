@@ -14,6 +14,7 @@ internal static class PreviewSmokeTests {
     internal static void Run(Form owner, string evidenceDirectory) {
         string directory = Path.Combine(Path.GetTempPath(), "mnx-options-smoke-" + Guid.NewGuid().ToString("N"));
         try {
+            CheckOverrideInputReader(directory);
             AppSettings settings = new AppSettings(directory);
             DefaultKeyStore keys = new DefaultKeyStore(settings);
             string password = "Windows DPAPI あいうえお smoke password";
@@ -54,7 +55,7 @@ internal static class PreviewSmokeTests {
                 "Decoded and combined preview memory minima were not enforced.");
             boundedMemory.Set("Previews", "DecodedMiB", 9999);
             boundedMemory.Set("Previews", "TotalMiB", 9999);
-            Require(boundedMemory.DecodedPreviewBytes == 1024L * 1024 * 1024 && boundedMemory.TotalPreviewBytes == 4096L * 1024 * 1024,
+            Require(boundedMemory.DecodedPreviewBytes == 1024L * 1024 * 1024 && boundedMemory.TotalPreviewBytes == 2048L * 1024 * 1024,
                 "Decoded and combined preview memory maxima were not enforced.");
             Require(reloaded.Get("Previews", "DelayMs", "") == "750", "The default hover delay changed.");
             AppSettings shortDelay = settings.Copy();
@@ -184,6 +185,25 @@ internal static class PreviewSmokeTests {
                 Directory.Delete(directory, true);
                 }
             }
+        }
+
+    private static void CheckOverrideInputReader(string directory) {
+        Directory.CreateDirectory(directory);
+        string input = Path.Combine(directory, "large-preview-input.txt");
+        using (FileStream source = new FileStream(input, FileMode.CreateNew, FileAccess.Write)) {
+            source.SetLength(129L * 1024 * 1024 + 1);
+            source.WriteByte(65);
+            }
+        using ArchiveFile archive = new ArchiveFile();
+        archive.Options.Compression = Mash.IO.Format.MNX.Archive.Codecs.ArchiveCompression.Snappy;
+        archive.Create(new FileInfo(Path.Combine(directory, "large-preview.mnx")));
+        archive.AddFileNow(new FileInfo(input));
+        VirtualFile entry = archive.Files.Single(file => !file.IsDirectory);
+        using PreviewData data = PreviewData.Read(archive, entry.FileID, PreviewKind.Text, CancellationToken.None, 384 * 1024 * 1024);
+        // Text still reads only its normal 2 MiB excerpt. This catches a hidden
+        // 128 MiB input clamp without allocating a huge image or decoded frames.
+        Require(data.Bytes.Length == PreviewData.TextLimit && data.Bytes[0] == 65 && data.Truncated,
+            "The preview reader rejected an overridden input size or lost its text bound.");
         }
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]

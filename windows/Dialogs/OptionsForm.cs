@@ -26,9 +26,9 @@ public sealed partial class OptionsForm : MnxDialog {
         LoadNumber(defaultsLevelNumericUpDown, "Defaults", "Level", (int)4m);
         LoadCheckBox(defaultEncryptionCheckBox, "Defaults", "Encrypt", false);
         LoadCheckBox(previewsEnabledCheckBox, "Previews", "Enabled", false);
-        LoadNumber(previewsBufferMiBNumericUpDown, "Previews", "BufferMiB", (int)32m);
-        LoadNumber(previewsDecodedMiBNumericUpDown, "Previews", "DecodedMiB", (int)512m);
-        LoadNumber(previewsTotalMiBNumericUpDown, "Previews", "TotalMiB", (int)1024m);
+        LoadPreviewMemory(previewsBufferMiBNumericUpDown, previewBufferOverrideLabel, "BufferMiB", 32);
+        LoadPreviewMemory(previewsDecodedMiBNumericUpDown, previewDecodedOverrideLabel, "DecodedMiB", 512);
+        LoadPreviewMemory(previewsTotalMiBNumericUpDown, previewTotalOverrideLabel, "TotalMiB", 1024);
         LoadChoice(previewsTriggerComboBox, "Previews", "Trigger", "Double-Click");
         LoadNumber(previewsDelayMsNumericUpDown, "Previews", "DelayMs", (int)750m);
         LoadCheckBox(textPlainCheckBox, "Text", "Plain", true);
@@ -55,6 +55,8 @@ public sealed partial class OptionsForm : MnxDialog {
         _readControls.Add(() => _settings.Set("General", "TempPath", tempPathTextBox.Text));
         previewsDelayMsNumericUpDown.Value = _settings.HoverDelay;
         _readControls.Add(() => _settings.Set("Previews", "DelayMs", (int)previewsDelayMsNumericUpDown.Value / 250 * 250));
+        previewOverridesWarningPanel.Visible = _settings.HasPreviewOverrides;
+        revertPreviewOverridesButton.Click += (_, _) => RevertPreviewOverrides();
         saveButton.Click += (_, _) => SaveSettings();
         browseTempButton.Click += (_, _) => ChooseTemp();
         passwordTextBox.TextChanged += (_, _) => UpdatePasswordState();
@@ -65,6 +67,9 @@ public sealed partial class OptionsForm : MnxDialog {
         optionsTabs.SelectedIndexChanged += (_, _) => UpdateLayoutChoices();
         optionsTabs.SizeChanged += (_, _) => UpdateLayoutChoices();
         optionsScrollPanel.ClientSizeChanged += (_, _) => UpdateLayoutChoices();
+        compressionTabPage.ClientSizeChanged += (_, _) => UpdateLayoutChoices();
+        previewsTabPage.ClientSizeChanged += (_, _) => UpdateLayoutChoices();
+        displayTabPage.ClientSizeChanged += (_, _) => UpdateLayoutChoices();
         previewsEnabledCheckBox.CheckedChanged += (_, _) => UpdateLayoutChoices();
         overrideTempCheckBox.CheckedChanged += (_, _) => UpdateLayoutChoices();
         defaultsCompressCheckBox.CheckedChanged += (_, _) => UpdateLayoutChoices();
@@ -85,18 +90,33 @@ public sealed partial class OptionsForm : MnxDialog {
     partial void ConfigurePlatformOptions();
 
     private void UpdateLayoutChoices() {
-        int bodyWidth = Math.Max(560, optionsTabs.ClientSize.Width - 52);
-        foreach (FlowLayoutPanel body in new FlowLayoutPanel[] { optionsBodyPanel, compressionBodyPanel, previewBodyPanel, flowLayoutPanel16, displayBodyPanel }) {
-            body.MinimumSize = new Size(bodyWidth, 0);
-            body.MaximumSize = new Size(bodyWidth, 0);
-            body.Width = bodyWidth;
+        if (IsDisposed) {
+            return;
+            }
+        // Use visible viewports, never the scrollable content extent. Reserve a
+        // scrollbar on every tab to keep group widths consistent when scrolling.
+        FlowLayoutPanel[] bodies = new FlowLayoutPanel[] { optionsBodyPanel, compressionBodyPanel, previewBodyPanel, displayBodyPanel };
+        int selectedIndex = Math.Clamp(optionsTabs.SelectedIndex, 0, bodies.Length - 1);
+        if (bodies[selectedIndex].Parent is not Control viewport) {
+            // A queued callback may arrive while controls are being detached.
+            return;
+            }
+        // Hidden tab pages retain placeholder sizes in the Linux backend until
+        // selected. Only the visible page can supply an actual viewport width.
+        int bodyWidth = Math.Max(1, viewport.ClientSize.Width - viewport.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth);
+        int groupWidth = Math.Max(1, bodyWidth - flowLayoutPanel16.Margin.Horizontal - previewMemoryGroup.Margin.Horizontal);
+        foreach (FlowLayoutPanel body in bodies.Concat(new FlowLayoutPanel[] { flowLayoutPanel16 })) {
+            int width = ReferenceEquals(body, flowLayoutPanel16) ? bodyWidth - body.Margin.Horizontal : bodyWidth;
+            body.MinimumSize = new Size(Math.Max(1, width), 0);
+            body.MaximumSize = new Size(Math.Max(1, width), 0);
+            body.Width = Math.Max(1, width);
             foreach (GroupBox group in body.Controls.OfType<GroupBox>()) {
-                int groupWidth = bodyWidth - group.Margin.Horizontal;
                 group.MinimumSize = new Size(groupWidth, 0);
                 group.MaximumSize = new Size(groupWidth, 0);
                 group.Width = groupWidth;
                 }
             }
+        previewOverridesWarningPanel.MaximumSize = new Size(Math.Max(1, groupWidth - previewMemoryGroup.Padding.Horizontal), 0);
         groupBox4.Enabled = previewsEnabledCheckBox.Checked;
         int textWidth = Math.Max(500, compressionBodyPanel.Width - 64);
         label3.MaximumSize = new Size(textWidth, 0);
@@ -133,6 +153,27 @@ public sealed partial class OptionsForm : MnxDialog {
     private void LoadNumber(NumericUpDown control, string section, string key, int fallback) {
         control.Value = _settings.Number(section, key, fallback, (int)control.Minimum, (int)control.Maximum);
         _readControls.Add(() => _settings.Set(section, key, (int)control.Value));
+        }
+
+    private void LoadPreviewMemory(NumericUpDown control, Label overrideLabel, string key, int fallback) {
+        control.Value = _settings.Number("Previews", key, fallback, (int)control.Minimum, (int)control.Maximum);
+        if (_settings.TryPreviewOverride(key, out int value)) {
+            control.Enabled = false;
+            overrideLabel.Text = value.ToString("N0", CultureInfo.InvariantCulture) + " MiB";
+            overrideLabel.Visible = true;
+            return;
+            }
+        _readControls.Add(() => _settings.Set("Previews", key, (int)control.Value));
+        }
+
+    private void RevertPreviewOverrides() {
+        try {
+            _settings.RevertPreviewOverrides();
+            Application.Exit();
+            }
+        catch (Exception error) {
+            Error(error);
+            }
         }
 
     private void LoadExtensions(TextBox control, string section, string key) {

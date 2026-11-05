@@ -50,7 +50,7 @@ internal sealed class PreviewData : IDisposable {
 
     internal static PreviewData Read(ArchiveFile archive, Guid id, PreviewKind kind, CancellationToken cancellation, int bufferLimit = InputLimit) {
         ulong size = archive.GetFile(id)?.SizeOriginal ?? throw new FileNotFoundException("The archived entry no longer exists.");
-        bufferLimit = Math.Clamp(bufferLimit, 16 * 1024 * 1024, 128 * 1024 * 1024);
+        bufferLimit = Math.Clamp(bufferLimit, 16 * 1024 * 1024, AppSettings.MaximumPreviewBufferMiB * 1024 * 1024);
         if (size > (ulong)bufferLimit) {
             throw new IOException("Preview skipped: this file exceeds the configured input-buffer limit.");
             }

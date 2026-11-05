@@ -9,6 +9,44 @@ using DiskFile = System.IO.File;
 namespace Mash.UI.MNXFile.GUI;
 
 internal static class OptionsPreviewSmoke {
+    private static T? FindSetting<T>(Widget widget, string name) where T : Widget {
+        if (widget is T match && widget.Name == name) {
+            return match;
+            }
+        if (widget is Container container) {
+            foreach (Widget child in container.Children) {
+                T? nested = FindSetting<T>(child, name);
+                if (nested is not null) {
+                    return nested;
+                    }
+                }
+            }
+        return null;
+        }
+
+    private static void CheckPreviewOverrides(MainWindow host, string directory) {
+        AppSettings settings = new AppSettings(Path.Combine(directory, "override-options"));
+        settings.Set("Previews", "Enabled", true);
+        settings.Set("MNX.Previews.OVERRIDE", "BufferMiB", 384);
+        settings.Set("MNX.Previews.OVERRIDE", "DecodedMiB", 3072);
+        settings.Set("MNX.Previews.OVERRIDE", "TotalMiB", 6144);
+        settings.Save();
+        using (OptionsDialog options = new OptionsDialog(host.TestWidget<Window>("main_window"), settings)) {
+            string[] keys = { "BufferMiB", "DecodedMiB", "TotalMiB" };
+            double[] maxima = { 128, 1024, 2048 };
+            for (int index = 0; index < keys.Length; index++) {
+                SpinButton numeric = FindSetting<SpinButton>(options.Window.ContentArea, "previews" + keys[index] + "NumericUpDown")!;
+                Check(!numeric.Sensitive && numeric.Adjustment.Upper == maxima[index], "GTK3 override leaves ordinary range disabled and unchanged");
+                }
+            GLib.Idle.Add(() => { options.Window.Respond(ResponseType.Accept); return false; });
+            Check(options.Run()!.TotalPreviewBytes == 6144L * 1024 * 1024, "GTK3 Save preserves large overrides");
+            }
+        using (OptionsDialog options = new OptionsDialog(host.TestWidget<Window>("main_window"), AppSettings.Load(settings.DirectoryPath))) {
+            GLib.Idle.Add(() => { FindSetting<Button>(options.Window.ContentArea, "revertPreviewOverridesButton")!.Click(); return false; });
+            Check(options.Run() is null && options.ExitRequested && !AppSettings.Load(settings.DirectoryPath).HasPreviewOverrides,
+                "GTK3 Revert removes the whole override category and requests application exit");
+            }
+        }
     private static ComboBoxText? FindBackendChoice(Widget widget) {
         if (widget is ComboBoxText choice && choice.Name == "interfaceBackendComboBox") {
             return choice;
@@ -72,6 +110,7 @@ internal static class OptionsPreviewSmoke {
         }
 
     internal static void Run(MainWindow host, string directory, string screenshots) {
+        CheckPreviewOverrides(host, directory);
         Console.WriteLine("CHECK: INI options, key envelopes and bounded previews");
         string invalidArchive = Path.Combine(directory, "invalid.MNX");
         DiskFile.WriteAllText(invalidArchive, "This is not an archive.");

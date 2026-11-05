@@ -13,6 +13,8 @@ public sealed partial class MainForm {
     internal async Task RunSmokeTest(string directory) {
         directory = Path.GetFullPath(directory);
         Directory.CreateDirectory(directory);
+        DiskFile.Delete(Path.Combine(directory, "PASS.txt"));
+        DiskFile.Delete(Path.Combine(directory, "FAIL.txt"));
         string work = Path.Combine(directory, "run-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(work);
         List<string> evidence = new List<string>();
@@ -157,8 +159,11 @@ public sealed partial class MainForm {
         PreviewSmokeTests.Run(this, directory);
         evidence.Add("PASS: options and preview smoke assertions");
         SaveScreenshot(Path.Combine(directory, "04-complete.png"));
+        FinishPlatformSmoke(directory);
         DiskFile.WriteAllLines(Path.Combine(directory, "PASS.txt"), evidence);
         }
+
+    partial void FinishPlatformSmoke(string directory);
 
     private static async Task CheckInvalidCommandLine(string path) {
         ProcessStartInfo start = new ProcessStartInfo(Environment.ProcessPath ?? throw new InvalidOperationException("Cannot locate the running GUI executable.")) { UseShellExecute = false };

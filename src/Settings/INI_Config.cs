@@ -7,6 +7,10 @@ namespace Mash.UI.MNXFile.GUI.Settings;
 public sealed class INI_Config {
     private readonly Dictionary<string, Section> _sections = new Dictionary<string, Section>(StringComparer.OrdinalIgnoreCase);
     public IEnumerable<string> SectionNames => _sections.Keys;
+    public bool RemoveSection(string name) {
+        ValidateName(name, true);
+        return _sections.Remove(name);
+        }
     public Section this[string name] {
         get {
             ValidateName(name, true);

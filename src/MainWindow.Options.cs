@@ -20,6 +20,10 @@ public sealed partial class MainWindow {
             ClosePreviews();
             using OptionsDialog dialog = new OptionsDialog(_window, _settings);
             AppSettings? chosen = dialog.Run();
+            if (dialog.ExitRequested) {
+                RequestQuit();
+                return;
+                }
             if (chosen is not null) {
                 _settings = chosen;
                 // Keep existing drag leases alive; a new transfer uses the new directory.

@@ -95,6 +95,46 @@ finally {
     }
 Console.WriteLine("PASS: " + checks + " backend policy, argument and INI checks.");
 
+string overrideDirectory = Path.Combine(Path.GetTempPath(), "mnx-preview-overrides-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(overrideDirectory);
+try {
+    string overrideFile = Path.Combine(overrideDirectory, "mnxarchiver.conf");
+    System.IO.File.WriteAllText(overrideFile, "[MNX.Previews]\nBufferMiB=32\nDecodedMiB=512\nTotalMiB=1024\n[MNX.Previews.OVERRIDE]\nBufferMiB=384\nDecodedMiB=3072\nTotalMiB=6144\n");
+    AppSettings settings = AppSettings.Load(overrideDirectory);
+    Require(settings.PreviewBufferBytes == 384 * 1024 * 1024,
+        "The explicit input-buffer override was reset to the ordinary maximum.");
+    Require(settings.DecodedPreviewBytes == 3072L * 1024 * 1024 && settings.TotalPreviewBytes == 6144L * 1024 * 1024,
+        "The large decoded/combined overrides were reset or overflowed a 32-bit counter.");
+    settings.Save();
+    AppSettings saved = AppSettings.Load(overrideDirectory);
+    Require(saved.TotalPreviewBytes == 6144L * 1024 * 1024 && saved.Get("Previews", "TotalMiB", "") == "1024",
+        "Saving unrelated options must preserve the override and ordinary setting separately.");
+    saved.Set("MNX.Previews.OVERRIDE", "BufferMiB", int.MaxValue);
+    saved.Set("MNX.Previews.OVERRIDE", "DecodedMiB", int.MaxValue);
+    saved.Set("MNX.Previews.OVERRIDE", "TotalMiB", int.MaxValue);
+    Require(saved.PreviewBufferBytes == 384 * 1024 * 1024 && saved.DecodedPreviewBytes == 3072L * 1024 * 1024
+        && saved.TotalPreviewBytes == 6144L * 1024 * 1024, "Overrides exceeded their hard maxima.");
+    saved.Set("MNX.Previews.OVERRIDE", "BufferMiB", "broken");
+    saved.Set("MNX.Previews.OVERRIDE", "DecodedMiB", "-1");
+    Require(saved.PreviewBufferBytes == 32 * 1024 * 1024 && saved.DecodedPreviewBytes == 512L * 1024 * 1024,
+        "Malformed overrides must retain normal settings.");
+    // Revert reloads disk, preserving newer unrelated edits rather than saving
+    // the old Options snapshot or leaving an empty override section behind.
+    AppSettings latest = AppSettings.Load(overrideDirectory);
+    latest.Set("Future", "Keep", "ひらがな");
+    latest.Save();
+    saved.RevertPreviewOverrides();
+    AppSettings reverted = AppSettings.Load(overrideDirectory);
+    Require(!reverted.HasPreviewOverrides && !System.IO.File.ReadAllText(overrideFile).Contains("[MNX.Previews.OVERRIDE]"),
+        "Revert left the override section in the saved file.");
+    Require(reverted.Get("Future", "Keep", "") == "ひらがな" && reverted.TotalPreviewBytes == 1024L * 1024 * 1024,
+        "Revert changed unrelated settings or failed to restore ordinary limits.");
+    Console.WriteLine("PASS: preview override limits and independent INI persistence.");
+    }
+finally {
+    Directory.Delete(overrideDirectory, true);
+    }
+
 
 string paletteWork = Path.Combine(Path.GetTempPath(), "mnx-palette-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(paletteWork);

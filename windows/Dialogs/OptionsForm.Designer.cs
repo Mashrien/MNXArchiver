@@ -17,6 +17,12 @@ partial class OptionsForm {
         ((System.ComponentModel.ISupportInitialize)opacityNumericUpDown).BeginInit();
         previewActivationGroup = new System.Windows.Forms.GroupBox();
         previewMemoryGroup = new System.Windows.Forms.GroupBox();
+        previewBufferOverrideLabel = new System.Windows.Forms.Label();
+        previewDecodedOverrideLabel = new System.Windows.Forms.Label();
+        previewTotalOverrideLabel = new System.Windows.Forms.Label();
+        previewOverridesWarningLabel = new System.Windows.Forms.Label();
+        previewOverridesWarningPanel = new System.Windows.Forms.FlowLayoutPanel();
+        revertPreviewOverridesButton = new System.Windows.Forms.Button();
         previewActivationPanel = new System.Windows.Forms.FlowLayoutPanel();
         previewMemoryPanel = new System.Windows.Forms.FlowLayoutPanel();
         previewDisplayNote = new System.Windows.Forms.Label();
@@ -340,6 +346,39 @@ partial class OptionsForm {
         previewMemoryPanel.Controls.Add(flowLayoutPanel17);
         previewMemoryPanel.Controls.Add(flowLayoutPanel18);
         previewMemoryPanel.Controls.Add(flowLayoutPanel19);
+        previewMemoryPanel.Controls.Add(previewOverridesWarningPanel);
+        previewOverridesWarningPanel.Name = "previewOverridesWarningPanel";
+        previewOverridesWarningPanel.AutoSize = true;
+        previewOverridesWarningPanel.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+        previewOverridesWarningPanel.FlowDirection = System.Windows.Forms.FlowDirection.LeftToRight;
+        previewOverridesWarningPanel.WrapContents = true;
+        previewOverridesWarningPanel.Visible = false;
+        previewOverridesWarningPanel.Controls.Add(previewOverridesWarningLabel);
+        previewOverridesWarningPanel.Controls.Add(revertPreviewOverridesButton);
+        previewOverridesWarningLabel.Name = "previewOverridesWarningLabel";
+        previewOverridesWarningLabel.Text = "WARNING: EXPERIMENTAL OVERRIDES IN USER CONF!";
+        previewOverridesWarningLabel.ForeColor = System.Drawing.Color.Red;
+        previewOverridesWarningLabel.AutoSize = true;
+        previewOverridesWarningLabel.Margin = new System.Windows.Forms.Padding(3, 7, 3, 3);
+        revertPreviewOverridesButton.Name = "revertPreviewOverridesButton";
+        revertPreviewOverridesButton.Text = "revert";
+        revertPreviewOverridesButton.AutoSize = true;
+        previewBufferOverrideLabel.Name = "previewBufferOverrideLabel";
+        previewBufferOverrideLabel.ForeColor = System.Drawing.Color.Red;
+        previewBufferOverrideLabel.AutoSize = true;
+        previewBufferOverrideLabel.Margin = new System.Windows.Forms.Padding(8, 7, 3, 3);
+        previewBufferOverrideLabel.Visible = false;
+        previewDecodedOverrideLabel.Name = "previewDecodedOverrideLabel";
+        previewDecodedOverrideLabel.ForeColor = System.Drawing.Color.Red;
+        previewDecodedOverrideLabel.AutoSize = true;
+        previewDecodedOverrideLabel.Margin = new System.Windows.Forms.Padding(8, 7, 3, 3);
+        previewDecodedOverrideLabel.Visible = false;
+        previewTotalOverrideLabel.Name = "previewTotalOverrideLabel";
+        previewTotalOverrideLabel.ForeColor = System.Drawing.Color.Red;
+        previewTotalOverrideLabel.AutoSize = true;
+        previewTotalOverrideLabel.Margin = new System.Windows.Forms.Padding(8, 7, 3, 3);
+        previewTotalOverrideLabel.Visible = false;
+
         previewDisplayNote.AutoSize = true;
         previewDisplayNote.Text = "Enable file previews on the Previews tab to change these settings.";
         previewDisplayNote.Margin = new System.Windows.Forms.Padding(3, 3, 3, 12);
@@ -1070,6 +1109,7 @@ partial class OptionsForm {
         flowLayoutPanel17.Text = "";
         flowLayoutPanel17.Controls.Add(label8);
         flowLayoutPanel17.Controls.Add(previewsBufferMiBNumericUpDown);
+        flowLayoutPanel17.Controls.Add(previewBufferOverrideLabel);
         // label8
         label8.Location = new System.Drawing.Point(3, 7);
         label8.Size = new System.Drawing.Size(160, 15);
@@ -1131,6 +1171,7 @@ partial class OptionsForm {
         flowLayoutPanel18.Text = "";
         flowLayoutPanel18.Controls.Add(label9);
         flowLayoutPanel18.Controls.Add(previewsDecodedMiBNumericUpDown);
+        flowLayoutPanel18.Controls.Add(previewDecodedOverrideLabel);
         // label9
         label9.Location = new System.Drawing.Point(3, 7);
         label9.Size = new System.Drawing.Size(229, 15);
@@ -1192,6 +1233,7 @@ partial class OptionsForm {
         flowLayoutPanel19.Text = "";
         flowLayoutPanel19.Controls.Add(label10);
         flowLayoutPanel19.Controls.Add(previewsTotalMiBNumericUpDown);
+        flowLayoutPanel19.Controls.Add(previewTotalOverrideLabel);
         // label10
         label10.Location = new System.Drawing.Point(3, 7);
         label10.Size = new System.Drawing.Size(187, 15);
@@ -1224,7 +1266,7 @@ partial class OptionsForm {
         previewsTotalMiBNumericUpDown.AutoScroll = false;
         previewsTotalMiBNumericUpDown.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
         previewsTotalMiBNumericUpDown.Minimum = 256m;
-        previewsTotalMiBNumericUpDown.Maximum = 4096m;
+        previewsTotalMiBNumericUpDown.Maximum = 2048m;
         previewsTotalMiBNumericUpDown.Increment = 256m;
         previewsTotalMiBNumericUpDown.DecimalPlaces = 0;
         previewsTotalMiBNumericUpDown.ReadOnly = false;
@@ -2750,6 +2792,12 @@ partial class OptionsForm {
 
     private System.Windows.Forms.GroupBox previewActivationGroup = null!;
     private System.Windows.Forms.GroupBox previewMemoryGroup = null!;
+    private System.Windows.Forms.Label previewBufferOverrideLabel = null!;
+    private System.Windows.Forms.Label previewDecodedOverrideLabel = null!;
+    private System.Windows.Forms.Label previewTotalOverrideLabel = null!;
+    private System.Windows.Forms.Label previewOverridesWarningLabel = null!;
+    private System.Windows.Forms.FlowLayoutPanel previewOverridesWarningPanel = null!;
+    private System.Windows.Forms.Button revertPreviewOverridesButton = null!;
     private System.Windows.Forms.FlowLayoutPanel previewActivationPanel = null!;
     private System.Windows.Forms.FlowLayoutPanel previewMemoryPanel = null!;
     private System.Windows.Forms.Label previewDisplayNote = null!;
