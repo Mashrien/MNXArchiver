@@ -16,13 +16,15 @@ internal sealed class PreviewWindow : IDisposable {
         return OperatingSystem.IsLinux()
             && Marshal.PtrToStringUTF8(g_type_name_from_instance(display.Handle)) == "GdkWaylandDisplay";
         }
-    internal bool IsAnimating => !_closed && _frames is not null;
+    internal bool IsAnimating => !_closed && (_frames is not null || _cachedImage?.FrameCount > 1 && _timer != 0);
+    internal (int Width, int Height) ImageSize => (_image?.Width ?? 0, _image?.Height ?? 0);
     private readonly int _border = 8;
     private readonly bool _relativeDialog;
     private readonly PreviewData _data;
     private readonly string _fileName;
     private readonly AppSettings _settings;
     private readonly long _availableMemory;
+    private CachedImageDecoder? _cachedImage;
     private Gdk.PixbufLoader? _loader;
     private Gdk.PixbufAnimation? _animation;
     private Gdk.PixbufAnimationIter? _frames;
@@ -142,6 +144,10 @@ internal sealed class PreviewWindow : IDisposable {
         }
 
     private void DecodeImage() {
+        if (CachedImageDecoder.IsGif(_data.Bytes)) {
+            DecodeCachedImage();
+            return;
+            }
         int frameCount = PreviewData.CheckGif(_data.Bytes, _settings.Flag("Images", "Animated"), _settings.DecodedPreviewBytes);
         _loader = Gdk.PixbufLoader.NewWithType(ImageFormat(_data.Bytes, _fileName));
         bool tooLarge = false;
@@ -149,10 +155,22 @@ internal sealed class PreviewWindow : IDisposable {
         _loader.SizePrepared += (_, size) => {
             bool invalidDimensions = size.Width <= 0 || size.Height <= 0 || size.Width > 16384 || size.Height > 16384;
             requiredDecodedMemory = invalidDimensions ? long.MaxValue : (long)size.Width * size.Height * 4 * (frameCount == 0 ? 2L : frameCount + 2L);
+            int outputWidth = size.Width;
+            int outputHeight = size.Height;
+            if (_settings.HalfResolutionPreviews && !invalidDimensions) {
+                outputWidth = Math.Max(1, (size.Width + 1) / 2);
+                outputHeight = Math.Max(1, (size.Height + 1) / 2);
+                // Platform codecs for static formats may keep a full-size working
+                // raster while producing the reduced output. Reserve both sizes.
+                requiredDecodedMemory = (long)size.Width * size.Height * 8 + (long)outputWidth * outputHeight * 8;
+                }
             if (invalidDimensions || requiredDecodedMemory > _settings.DecodedPreviewBytes
                 || _data.Bytes.Length + requiredDecodedMemory > _availableMemory) {
                 tooLarge = true;
                 _loader.SetSize(1, 1);
+                }
+            else if (_settings.HalfResolutionPreviews) {
+                _loader.SetSize(outputWidth, outputHeight);
                 }
             };
         // Feed headers separately. SizePrepared can reject huge dimensions before
@@ -207,8 +225,47 @@ internal sealed class PreviewWindow : IDisposable {
         else {
             _image = _animation.StaticImage;
             }
-        MemoryCost = _data.Bytes.Length + (long)_animation.Width * _animation.Height * 4 * (frameCount == 0 ? 2L : frameCount + 2L);
+        MemoryCost = _data.Bytes.Length + requiredDecodedMemory;
         CheckAvailableMemory(MemoryCost);
+        }
+
+    private void DecodeCachedImage() {
+        ImagePreflight.ImageInfo info = ImagePreflight.Inspect(_data.Bytes, _settings.Flag("Images", "Animated"),
+            _settings.DecodedPreviewBytes, _settings.HalfResolutionPreviews);
+        MemoryCost = _data.Bytes.Length + info.MemoryCost;
+        CheckAvailableMemory(MemoryCost);
+        _cachedImage = new CachedImageDecoder(_data.Bytes, info.Width, info.Height, _settings.DecodedPreviewBytes);
+        _image = new Gdk.Pixbuf(Gdk.Colorspace.Rgb, true, 8, info.Width, info.Height);
+        _cachedImage.CopyRgbaFrame(0, _image.Pixels, _image.Rowstride);
+        if (_cachedImage.FrameCount <= 1) {
+            return;
+            }
+        int frameIndex = 0;
+        int plays = 0;
+        _nextFrame = unchecked(Environment.TickCount + _cachedImage.Delay(0));
+        _timer = GLib.Timeout.Add(10, () => {
+            if (_closed || _cachedImage is null || _image is null) {
+                _timer = 0;
+                return false;
+                }
+            if (Environment.TickCount - _nextFrame < 0) {
+                return true;
+                }
+            int next = frameIndex + 1;
+            if (next == _cachedImage.FrameCount) {
+                plays++;
+                if (_cachedImage.TotalPlays > 0 && plays >= _cachedImage.TotalPlays) {
+                    _timer = 0;
+                    return false;
+                    }
+                next = 0;
+                }
+            frameIndex = next;
+            _cachedImage.CopyRgbaFrame(next, _image.Pixels, _image.Rowstride);
+            _canvas?.QueueDraw();
+            _nextFrame = unchecked(Environment.TickCount + _cachedImage.Delay(next));
+            return true;
+            });
         }
 
     private void CheckAvailableMemory(long bytes) {
@@ -426,6 +483,8 @@ internal sealed class PreviewWindow : IDisposable {
             }
         Window.Hide();
         _image?.Dispose();
+        _cachedImage?.Dispose();
+        _cachedImage = null;
         _frames?.Dispose();
         _animation?.Dispose();
         if (_loader is not null) {

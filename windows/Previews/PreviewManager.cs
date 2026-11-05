@@ -56,7 +56,7 @@ internal sealed class PreviewManager : IDisposable {
             if (_windows.Count >= MaximumWindows) {
                 throw new IOException("Close a preview first: at most ten preview windows may be open.");
                 }
-            ImagePreflight.ImageInfo? imageInfo = data.Kind == PreviewKind.Image ? ImagePreflight.Inspect(data.Bytes, _settings.Flag("Images", "Animated"), _settings.DecodedPreviewBytes) : null;
+            ImagePreflight.ImageInfo? imageInfo = data.Kind == PreviewKind.Image ? ImagePreflight.Inspect(data.Bytes, _settings.Flag("Images", "Animated"), _settings.DecodedPreviewBytes, _settings.HalfResolutionPreviews) : null;
             long memoryCost = data.Bytes.Length + (imageInfo.HasValue ? imageInfo.Value.MemoryCost : 4L * data.Bytes.Length + 4096);
             if (_windows.Sum(window => window.MemoryCost) + memoryCost > _settings.TotalPreviewBytes) {
                 throw new IOException($"Close a preview first: the combined preview memory limit is {_settings.TotalPreviewBytes / (1024 * 1024):N0} MiB. You can change it in Options.");

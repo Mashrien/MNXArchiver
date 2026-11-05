@@ -26,9 +26,10 @@ public sealed partial class MainForm {
         settings.Set("Previews", "BufferMiB", 32);
         settings.Set("Previews", "DecodedMiB", 512);
         settings.Set("Previews", "TotalMiB", 1024);
-        settings.Set("MNX.Previews.OVERRIDE", "BufferMiB", 384);
-        settings.Set("MNX.Previews.OVERRIDE", "DecodedMiB", 3072);
-        settings.Set("MNX.Previews.OVERRIDE", "TotalMiB", 6144);
+        settings.Set("MNX.Previews.OVERRIDE", "BufferMiB", 512);
+        settings.Set("MNX.Previews.OVERRIDE", "DecodedMiB", 5120);
+        settings.Set("MNX.Previews.OVERRIDE", "TotalMiB", 8192);
+        settings.Set("MNX.Previews.OVERRIDE", "DebugFlags", 1);
         settings.Save();
         using OptionsForm options = new OptionsForm(settings);
         TabControl tabs = FindOption<TabControl>(options.Controls.Owner, "optionsTabs");
@@ -38,7 +39,7 @@ public sealed partial class MainForm {
         string[] numbers = { "previewsBufferMiBNumericUpDown", "previewsDecodedMiBNumericUpDown", "previewsTotalMiBNumericUpDown" };
         string[] labels = { "previewBufferOverrideLabel", "previewDecodedOverrideLabel", "previewTotalOverrideLabel" };
         decimal[] maxima = { 128, 1024, 2048 };
-        string[] values = { "384 MiB", "3,072 MiB", "6,144 MiB" };
+        string[] values = { "512 MiB", "5,120 MiB", "8,192 MiB" };
         for (int index = 0; index < numbers.Length; index++) {
             NumericUpDown numeric = FindOption<NumericUpDown>(options.Controls.Owner, numbers[index]);
             Label label = FindOption<Label>(options.Controls.Owner, labels[index]);
@@ -62,7 +63,7 @@ public sealed partial class MainForm {
             }
         options.SaveSettings();
         AppSettings saved = AppSettings.Load(settings.DirectoryPath);
-        Require(saved.PreviewBufferBytes == 384 * 1024 * 1024 && saved.TotalPreviewBytes == 6144L * 1024 * 1024,
+        Require(saved.PreviewBufferBytes == 512 * 1024 * 1024 && saved.TotalPreviewBytes == 8192L * 1024 * 1024 && saved.HalfResolutionPreviews,
             "Saving Options clamped the overrides back to ordinary limits.");
         }
 

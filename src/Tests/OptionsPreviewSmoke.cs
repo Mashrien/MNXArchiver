@@ -27,9 +27,10 @@ internal static class OptionsPreviewSmoke {
     private static void CheckPreviewOverrides(MainWindow host, string directory) {
         AppSettings settings = new AppSettings(Path.Combine(directory, "override-options"));
         settings.Set("Previews", "Enabled", true);
-        settings.Set("MNX.Previews.OVERRIDE", "BufferMiB", 384);
-        settings.Set("MNX.Previews.OVERRIDE", "DecodedMiB", 3072);
-        settings.Set("MNX.Previews.OVERRIDE", "TotalMiB", 6144);
+        settings.Set("MNX.Previews.OVERRIDE", "BufferMiB", 512);
+        settings.Set("MNX.Previews.OVERRIDE", "DecodedMiB", 5120);
+        settings.Set("MNX.Previews.OVERRIDE", "TotalMiB", 8192);
+        settings.Set("MNX.Previews.OVERRIDE", "DebugFlags", 1);
         settings.Save();
         using (OptionsDialog options = new OptionsDialog(host.TestWidget<Window>("main_window"), settings)) {
             string[] keys = { "BufferMiB", "DecodedMiB", "TotalMiB" };
@@ -39,7 +40,7 @@ internal static class OptionsPreviewSmoke {
                 Check(!numeric.Sensitive && numeric.Adjustment.Upper == maxima[index], "GTK3 override leaves ordinary range disabled and unchanged");
                 }
             GLib.Idle.Add(() => { options.Window.Respond(ResponseType.Accept); return false; });
-            Check(options.Run()!.TotalPreviewBytes == 6144L * 1024 * 1024, "GTK3 Save preserves large overrides");
+            Check(options.Run()!.TotalPreviewBytes == 8192L * 1024 * 1024, "GTK3 Save preserves large overrides");
             }
         using (OptionsDialog options = new OptionsDialog(host.TestWidget<Window>("main_window"), AppSettings.Load(settings.DirectoryPath))) {
             GLib.Idle.Add(() => { FindSetting<Button>(options.Window.ContentArea, "revertPreviewOverridesButton")!.Click(); return false; });
@@ -188,6 +189,17 @@ internal static class OptionsPreviewSmoke {
         string animationPath = Path.Combine(directory, "preview.gif");
         byte[] gif = Convert.FromBase64String("R0lGODlhBAAEAIEAAP8AAAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAFAAAACwAAAAABAAEAAAICQABCBxIsCCAgAAh+QQBFAABACwAAAAABAAEAIEAAP8AAAAAAAAAAAAICQABCBxIsCCAgAA7");
         DiskFile.WriteAllBytes(animationPath, gif);
+        AppSettings reducedSettings = settings.Copy();
+        reducedSettings.Set("Images", "Animated", true);
+        reducedSettings.Set("MNX.Previews.OVERRIDE", "DebugFlags", 1);
+        using (PreviewWindow reduced = new PreviewWindow(host.TestWidget<Window>("main_window"), "half.gif",
+            new PreviewData(gif.ToArray(), PreviewKind.Image, false), reducedSettings, new Gdk.Rectangle(10, 10, 10, 10), 10, 10)) {
+            Check(reduced.ImageSize == (2, 2) && reduced.IsAnimating, "GTK3 uses half-size cached GIF pixels and preserves animation");
+            }
+        using (PreviewWindow reduced = new PreviewWindow(host.TestWidget<Window>("main_window"), "half.png",
+            new PreviewData(DiskFile.ReadAllBytes(imagePath), PreviewKind.Image, false), reducedSettings, new Gdk.Rectangle(10, 10, 10, 10), 10, 10)) {
+            Check(reduced.ImageSize == (50, 25), "GTK3 static previews use reduced pixel buffers");
+            }
         Check(PreviewData.CheckGif(gif, true) == 2, "GIF frames counted before native decode");
         Reject(() => PreviewData.CheckGif(gif, false), "Animation opt-in enforced");
         byte[] giantGif = gif.ToArray();

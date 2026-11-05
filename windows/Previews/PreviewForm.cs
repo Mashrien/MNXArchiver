@@ -13,6 +13,11 @@ public sealed partial class PreviewForm : MnxDialog {
     private readonly bool _dialog;
     private MemoryStream? _imageStream;
     private Image? _image;
+    private CachedImageDecoder? _cachedImage;
+    private readonly List<Bitmap> _cachedFrames = new List<Bitmap>();
+    private System.Windows.Forms.Timer? _cachedTimer;
+    private int _cachedFrameIndex;
+    private int _cachedPlays;
     private ImageSurface? _surface;
     private EventHandler? _animationCallback;
     private Font? _textFont;
@@ -21,7 +26,7 @@ public sealed partial class PreviewForm : MnxDialog {
     internal bool IsTooltip { get; }
     internal long MemoryCost { get; }
     internal Size? ImageSize => _image?.Size;
-    internal bool IsAnimating => !_released && _animationCallback is not null;
+    internal bool IsAnimating => !_released && (_animationCallback is not null || _cachedTimer?.Enabled == true);
 
     public PreviewForm() {
         InitializeComponent();
@@ -84,9 +89,27 @@ public sealed partial class PreviewForm : MnxDialog {
                 if (!imageInfo.HasValue) {
                     throw new IOException("The image has not passed header validation.");
                     }
-                _imageStream = new MemoryStream(data.Bytes, false);
-                _image = Image.FromStream(_imageStream, false, true);
-                if (_image.Width <= 0 || _image.Height <= 0 || _image.Width > imageInfo.Value.Width || _image.Height > imageInfo.Value.Height) {
+                if (CachedImageDecoder.IsGif(data.Bytes) || settings.HalfResolutionPreviews) {
+                    try {
+                        LoadCachedImage(data, imageInfo.Value, settings.DecodedPreviewBytes);
+                        }
+                    catch (NotSupportedException) when (!CachedImageDecoder.IsGif(data.Bytes)) {
+                        // Keep native-only static formats (such as TIFF) available.
+                        // Preflight already counted the full-size temporary raster.
+                        _imageStream = new MemoryStream(data.Bytes, false);
+                        using Image source = Image.FromStream(_imageStream, false, true);
+                        Bitmap reduced = new Bitmap(imageInfo.Value.Width, imageInfo.Value.Height);
+                        _image = reduced;
+                        using Graphics drawing = Graphics.FromImage(reduced);
+                        drawing.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                        drawing.DrawImage(source, new Rectangle(0, 0, reduced.Width, reduced.Height));
+                        }
+                    }
+                else {
+                    _imageStream = new MemoryStream(data.Bytes, false);
+                    _image = Image.FromStream(_imageStream, false, true);
+                    }
+                if (_image is null || _image.Width <= 0 || _image.Height <= 0 || _image.Width > imageInfo.Value.Width || _image.Height > imageInfo.Value.Height) {
                     throw new IOException("The decoded image dimensions disagree with its validated header.");
                     }
                 _surface = imageSurface;
@@ -95,7 +118,7 @@ public sealed partial class PreviewForm : MnxDialog {
                 _surface.PassThrough = _hoverTooltip;
                 _surface.Paint += PaintImage;
                 _surface.MouseDown += (_, _) => Close();
-                if (imageInfo.Value.Frames > 1 && ImageAnimator.CanAnimate(_image)) {
+                if (_cachedImage is null && imageInfo.Value.Frames > 1 && ImageAnimator.CanAnimate(_image)) {
                     _animationCallback = (_, _) => {
                         if (_released || IsDisposed || !IsHandleCreated) {
                             return;
@@ -126,6 +149,42 @@ public sealed partial class PreviewForm : MnxDialog {
             Dispose();
             throw;
             }
+        }
+
+    private void LoadCachedImage(PreviewData data, ImagePreflight.ImageInfo info, long decodedLimit) {
+        _cachedImage = new CachedImageDecoder(data.Bytes, info.Width, info.Height, decodedLimit);
+        for (int index = 0; index < _cachedImage.FrameCount; index++) {
+            SkiaSharp.SKBitmap pixels = _cachedImage.Frame(index);
+            // These lightweight drawing wrappers borrow the cached pixels. Release
+            // the wrappers before the decoder cache when the preview closes.
+            Bitmap frame = new Bitmap(pixels.Width, pixels.Height, pixels.RowBytes,
+                System.Drawing.Imaging.PixelFormat.Format32bppPArgb, pixels.GetPixels());
+            _cachedFrames.Add(frame);
+            }
+        _image = _cachedFrames[0];
+        if (_cachedFrames.Count <= 1) {
+            return;
+            }
+        _cachedTimer = new System.Windows.Forms.Timer { Interval = _cachedImage.Delay(0) };
+        _cachedTimer.Tick += (_, _) => {
+            if (_released || _cachedImage is null) {
+                return;
+                }
+            int next = _cachedFrameIndex + 1;
+            if (next == _cachedFrames.Count) {
+                _cachedPlays++;
+                if (_cachedImage.TotalPlays > 0 && _cachedPlays >= _cachedImage.TotalPlays) {
+                    _cachedTimer.Stop();
+                    return;
+                    }
+                next = 0;
+                }
+            _cachedFrameIndex = next;
+            _image = _cachedFrames[next];
+            _cachedTimer.Interval = _cachedImage.Delay(next);
+            _surface?.Invalidate();
+            };
+        _cachedTimer.Start();
         }
 
     protected override bool PreserveOwnFrameStyle => _dialog;
@@ -269,8 +328,19 @@ public sealed partial class PreviewForm : MnxDialog {
             if (_image is not null && _animationCallback is not null) {
                 ImageAnimator.StopAnimate(_image, _animationCallback);
                 }
-            _image?.Dispose();
+            _cachedTimer?.Stop();
+            _cachedTimer?.Dispose();
+            _cachedTimer = null;
+            if (_cachedImage is null) {
+                _image?.Dispose();
+                }
+            foreach (Bitmap frame in _cachedFrames) {
+                frame.Dispose();
+                }
+            _cachedFrames.Clear();
             _image = null;
+            _cachedImage?.Dispose();
+            _cachedImage = null;
             _imageStream?.Dispose();
             _imageStream = null;
             // RichEdit keeps its own text copy; release it before clearing the input snapshot.

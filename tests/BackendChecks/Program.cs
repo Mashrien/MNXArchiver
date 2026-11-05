@@ -99,21 +99,28 @@ string overrideDirectory = Path.Combine(Path.GetTempPath(), "mnx-preview-overrid
 Directory.CreateDirectory(overrideDirectory);
 try {
     string overrideFile = Path.Combine(overrideDirectory, "mnxarchiver.conf");
-    System.IO.File.WriteAllText(overrideFile, "[MNX.Previews]\nBufferMiB=32\nDecodedMiB=512\nTotalMiB=1024\n[MNX.Previews.OVERRIDE]\nBufferMiB=384\nDecodedMiB=3072\nTotalMiB=6144\n");
+    System.IO.File.WriteAllText(overrideFile, "[MNX.Previews]\nBufferMiB=32\nDecodedMiB=512\nTotalMiB=1024\n[MNX.Previews.OVERRIDE]\nBufferMiB=512\nDecodedMiB=5120\nTotalMiB=8192\nDebugFlags=1\n");
     AppSettings settings = AppSettings.Load(overrideDirectory);
-    Require(settings.PreviewBufferBytes == 384 * 1024 * 1024,
+    Require(settings.PreviewBufferBytes == 512 * 1024 * 1024,
         "The explicit input-buffer override was reset to the ordinary maximum.");
-    Require(settings.DecodedPreviewBytes == 3072L * 1024 * 1024 && settings.TotalPreviewBytes == 6144L * 1024 * 1024,
+    Require(settings.DecodedPreviewBytes == 5120L * 1024 * 1024 && settings.TotalPreviewBytes == 8192L * 1024 * 1024,
         "The large decoded/combined overrides were reset or overflowed a 32-bit counter.");
+    Require(settings.HalfResolutionPreviews, "DebugFlags bit 0 did not enable half-resolution previews.");
     settings.Save();
     AppSettings saved = AppSettings.Load(overrideDirectory);
-    Require(saved.TotalPreviewBytes == 6144L * 1024 * 1024 && saved.Get("Previews", "TotalMiB", "") == "1024",
+    Require(saved.HalfResolutionPreviews && saved.Copy().HalfResolutionPreviews, "Debug flags did not survive save or Options copying.");
+    foreach (int flags in new int[] { 0, 2, 128, 255, 256, -1 }) {
+        saved.Set("MNX.Previews.OVERRIDE", "DebugFlags", flags);
+        Require(saved.HalfResolutionPreviews == (flags == 255), "DebugFlags accepted an out-of-byte value or confused an unknown bit with bit 0.");
+        }
+    saved.Set("MNX.Previews.OVERRIDE", "DebugFlags", 1);
+    Require(saved.TotalPreviewBytes == 8192L * 1024 * 1024 && saved.Get("Previews", "TotalMiB", "") == "1024",
         "Saving unrelated options must preserve the override and ordinary setting separately.");
     saved.Set("MNX.Previews.OVERRIDE", "BufferMiB", int.MaxValue);
     saved.Set("MNX.Previews.OVERRIDE", "DecodedMiB", int.MaxValue);
     saved.Set("MNX.Previews.OVERRIDE", "TotalMiB", int.MaxValue);
-    Require(saved.PreviewBufferBytes == 384 * 1024 * 1024 && saved.DecodedPreviewBytes == 3072L * 1024 * 1024
-        && saved.TotalPreviewBytes == 6144L * 1024 * 1024, "Overrides exceeded their hard maxima.");
+    Require(saved.PreviewBufferBytes == 512 * 1024 * 1024 && saved.DecodedPreviewBytes == 5120L * 1024 * 1024
+        && saved.TotalPreviewBytes == 8192L * 1024 * 1024, "Overrides exceeded their hard maxima.");
     saved.Set("MNX.Previews.OVERRIDE", "BufferMiB", "broken");
     saved.Set("MNX.Previews.OVERRIDE", "DecodedMiB", "-1");
     Require(saved.PreviewBufferBytes == 32 * 1024 * 1024 && saved.DecodedPreviewBytes == 512L * 1024 * 1024,
@@ -129,6 +136,7 @@ try {
         "Revert left the override section in the saved file.");
     Require(reverted.Get("Future", "Keep", "") == "ひらがな" && reverted.TotalPreviewBytes == 1024L * 1024 * 1024,
         "Revert changed unrelated settings or failed to restore ordinary limits.");
+    Require(!reverted.HalfResolutionPreviews && !reverted.HasPreviewOverrides, "Reading default debug flags recreated the removed section.");
     Console.WriteLine("PASS: preview override limits and independent INI persistence.");
     }
 finally {

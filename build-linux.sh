@@ -77,6 +77,7 @@ else
     fi
 if $mnx_test; then
     dotnet run --project "$mnx_root/tests/BackendChecks/BackendChecks.csproj" -c Release "${mnx_properties[@]}" 7>&- 8>&-
+    dotnet run --project "$mnx_root/tests/ImageDecoderChecks/ImageDecoderChecks.csproj" -c Release "${mnx_properties[@]}" 7>&- 8>&-
     dotnet run --project "$mnx_root/tests/MenuRenderingChecks/MenuRenderingChecks.csproj" -c Release "${mnx_properties[@]}" -- "$MNXBuildRoot/evidence/menu-colors-$MNXBuildNumber" 7>&- 8>&-
     "$mnx_output/mnx-gui" --list-backends
     if "$mnx_output/mnx-gui" --probe-backend mwin >/dev/null 2>&1; then

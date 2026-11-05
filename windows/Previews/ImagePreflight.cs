@@ -11,14 +11,24 @@ internal readonly struct ImagePreflight {
     private const int MaximumFrames = 1024;
 
     private readonly long _decodedLimit;
+    private readonly bool _halfResolution;
 
-    private ImagePreflight(long decodedLimit) {
+    private ImagePreflight(long decodedLimit, bool halfResolution) {
         _decodedLimit = decodedLimit;
+        _halfResolution = halfResolution;
         }
 
-    internal static ImageInfo Inspect(byte[] data, bool animated, long decodedLimit = PreviewData.DecodedLimit) {
-        ImagePreflight reader = new ImagePreflight(decodedLimit);
-        return reader.ReadImage(data, animated);
+    internal static ImageInfo Inspect(byte[] data, bool animated, long decodedLimit = PreviewData.DecodedLimit, bool halfResolution = false) {
+        ImagePreflight reader = new ImagePreflight(decodedLimit, halfResolution);
+        ImageInfo source = reader.ReadImage(data, animated);
+        if (!halfResolution) {
+            return source;
+            }
+        // Bounded applies the reduced pixel cost during parsing. Preserve all
+        // metadata and multi-page costs accumulated by each format's reader.
+        int width = Math.Max(1, (source.Width + 1) / 2);
+        int height = Math.Max(1, (source.Height + 1) / 2);
+        return new ImageInfo(width, height, source.Frames, source.MemoryCost);
         }
 
     private ImageInfo ReadImage(byte[] data, bool animated) {
@@ -171,7 +181,7 @@ internal readonly struct ImagePreflight {
     private ImageInfo Gif(byte[] data, bool animated) {
         int width = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(6, 2));
         int height = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(8, 2));
-        Bounded(width, height, 1);
+        Bounded(width, height, 1, gif: true);
         int position = 13;
         if ((data[10] & 128) != 0) {
             position += 3 * (1 << ((data[10] & 7) + 1));
@@ -208,7 +218,7 @@ internal readonly struct ImagePreflight {
                 position++;
                 GifBlocks(data, ref position);
                 frames++;
-                Bounded(width, height, frames);
+                Bounded(width, height, frames, gif: true);
                 }
             else {
                 throw new IOException("The GIF contains an invalid block.");
@@ -220,7 +230,7 @@ internal readonly struct ImagePreflight {
         if (frames > 1 && !animated) {
             throw new IOException("Animated previews are disabled. Enable Animated GIF in Options.");
             }
-        return Bounded(width, height, frames);
+        return Bounded(width, height, frames, gif: true);
         }
     private void GifBlocks(byte[] data, ref int position) {
         while (true) {
@@ -330,12 +340,19 @@ internal readonly struct ImagePreflight {
         Require(bytes, position, 4);
         return littleEndian ? BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(position, 4)) : BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(position, 4));
         }
-    private ImageInfo Bounded(int width, int height, int frames) {
+    private ImageInfo Bounded(int width, int height, int frames, bool gif = false) {
         if (width < 1 || height < 1 || width > MaximumDimension || height > MaximumDimension || frames < 1 || frames > MaximumFrames) {
             throw new IOException("The image dimensions or frame count exceed safe preview limits.");
             }
-        // Reserve 8 bytes per pixel for high-depth input and extra canvases for decoding/compositing.
-        long memory = checked((long)width * height * 8 * (frames + 2L));
+        int outputWidth = _halfResolution ? Math.Max(1, (width + 1) / 2) : width;
+        int outputHeight = _halfResolution ? Math.Max(1, (height + 1) / 2) : height;
+        // GIF caches are explicitly 32bpp. Other formats keep the high-depth
+        // allowance, plus the full temporary raster some static decoders need.
+        int bytesPerPixel = gif ? 4 : 8;
+        long memory = checked((long)outputWidth * outputHeight * bytesPerPixel * (frames + 2L));
+        if (_halfResolution && !gif) {
+            memory += (long)width * height * 8;
+            }
         CheckBudget(memory);
         return new ImageInfo(width, height, frames, memory);
         }

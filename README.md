@@ -180,14 +180,24 @@ opt-in convenience features; consult [MNXFile's queue specification](https://git
 ### Unsupported development/testing settings
 
 For development or controlled testing only, manually add this section to
-`mnxarchiver.conf`. These are the **hard maximum values**, in MiB:
+`mnxarchiver.conf`. The three memory limits below are the **hard maximum values**, in MiB:
 
 ```ini
 [MNX.Previews.OVERRIDE]
-BufferMiB=384
-DecodedMiB=3072
-TotalMiB=6144
+BufferMiB=512
+DecodedMiB=5120
+TotalMiB=8192
+DebugFlags=1
 ```
+
+`DebugFlags` is a byte of bitflags (0–255); bit 0 (`1 << 0`, decimal `1`)
+requests half-width, half-height image decoding, rounding odd dimensions up.
+Unset/zero keeps full resolution; other bits are reserved. GIFs decode directly
+to the selected size and cache every composited frame in RAM, so later loops do
+not decode again. Half resolution uses roughly one-quarter of the pixel cache.
+Static formats that cannot decode at reduced size use a temporary full-size
+raster; that allocation is included in the memory check. No preview temp files
+are created. GIF caches are released when their preview closes.
 
 These unsupported overrides can substantially increase memory use. Options keeps
 the ordinary 128/1024/2048 MiB ranges, disables overridden controls and shows the

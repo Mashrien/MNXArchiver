@@ -27,7 +27,9 @@
       "dotnet-LICENSE.txt",
       "dotnet-ThirdPartyNotices.txt",
       "WindowsDesktop-LICENSE.txt",
-      "MNX-icons-MIT.txt"
+      "MNX-icons-MIT.txt",
+      "SkiaSharp-3.119.4-LICENSE.txt",
+      "SkiaSharp-3.119.4-THIRD-PARTY-NOTICES.txt"
     ]
   }
 }

@@ -3,12 +3,18 @@ using DiskFile = System.IO.File;
 
 namespace Mash.UI.MNXFile.GUI.Settings;
 
+[Flags]
+internal enum PreviewDebugFlags : byte {
+    None = 0,
+    HalfResolution = 1 << 0,
+    }
+
 /// <summary>Small, editable INI file. Unknown keys survive a save.</summary>
 internal sealed class AppSettings {
     internal const int MinimumHoverDelay = 500;
     internal const int DefaultDecodedMiB = 512;
     internal const int DefaultTotalPreviewMiB = 1024;
-    internal const int MaximumPreviewBufferMiB = 384;
+    internal const int MaximumPreviewBufferMiB = 512;
     private const string PreviewOverrideSection = "MNX.Previews.OVERRIDE";
     internal static readonly int[] Resolutions = [64,128,256,384,512,640,720,800,896,1024,1280,1366,1440,1536,1664,1792,1920,2048,2304,2560,2816,3072];
     internal static readonly double[] Percentages = [10,12.5,15,20,25,33,50,66,75,80,85,87.5,90];
@@ -77,11 +83,11 @@ internal sealed class AppSettings {
                 break;
             case "DecodedMiB":
                 minimum = 64;
-                maximum = 3072;
+                maximum = 5120;
                 break;
             case "TotalMiB":
                 minimum = 256;
-                maximum = 6144;
+                maximum = 8192;
                 break;
             default:
                 return false;
@@ -100,6 +106,9 @@ internal sealed class AppSettings {
             }
         return Number("Previews", key, fallback, minimum, maximum);
         }
+
+    internal PreviewDebugFlags PreviewDebug => HasPreviewOverrides ? (PreviewDebugFlags)_config[PreviewOverrideSection].GetByte("DebugFlags") : PreviewDebugFlags.None;
+    internal bool HalfResolutionPreviews => (PreviewDebug & PreviewDebugFlags.HalfResolution) != 0;
 
     internal int PreviewBufferBytes => PreviewLimitMiB("BufferMiB", 32, 16, 128) * 1024 * 1024;
     internal long DecodedPreviewBytes => PreviewLimitMiB("DecodedMiB", DefaultDecodedMiB, 64, 1024) * 1024L * 1024;

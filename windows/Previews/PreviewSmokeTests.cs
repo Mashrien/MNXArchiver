@@ -166,6 +166,7 @@ internal static class PreviewSmokeTests {
             Require(PreviewForm.ImageBounds("Zoom", new Size(100, 50), new Size(100, 100)) == new RectangleF(-50, 0, 200, 100), "Zoom geometry failed.");
             Require(PreviewForm.ImageBounds("Stretch", new Size(100, 50), new Size(100, 100)) == new RectangleF(0, 0, 100, 100), "Stretch geometry failed.");
             Require(PreviewForm.ImageBounds("Center", new Size(100, 50), new Size(200, 100)) == new RectangleF(50, 25, 100, 50), "Center geometry failed.");
+            CheckHalfResolution(owner, settings);
             CheckImageLimits();
             CheckCombinedImageBudget(owner, settings);
             CheckArchiveAnimations(owner, settings, evidenceDirectory);
@@ -187,6 +188,30 @@ internal static class PreviewSmokeTests {
             }
         }
 
+    private static void CheckHalfResolution(Form owner, AppSettings defaults) {
+        AppSettings settings = defaults.Copy();
+        settings.Set("MNX.Previews.OVERRIDE", "DebugFlags", 1);
+        settings.Set("Images", "Animated", true);
+        using PreviewManager previews = new PreviewManager(owner, settings);
+        byte[] png = Png();
+        previews.Show(new PreviewData(png, PreviewKind.Image, false), "half.png", owner.Location, false);
+        PreviewForm image = (PreviewForm)previews.Windows[0];
+        Require(image.ImageSize == new Size(2, 2), "DebugFlags bit 0 did not decode a half-resolution preview (rounding odd dimensions up).");
+        image.Close();
+        Require(png.All(value => value == 0), "A half-resolution preview retained its source snapshot after closing.");
+        byte[] gif = Convert.FromBase64String("R0lGODlhBAAEAIEAAP8AAAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAFAAAACwAAAAABAAEAAAICQABCBxIsCCAgAAh+QQBFAABACwAAAAABAAEAIEAAP8AAAAAAAAAAAAICQABCBxIsCCAgAA7");
+        previews.Show(new PreviewData(gif, PreviewKind.Image, false), "half.gif", owner.Location, false);
+        PreviewForm animation = (PreviewForm)previews.Windows[0];
+        Require(animation.ImageSize == new Size(2, 2) && animation.IsAnimating, "Half-resolution GIF pixels or animation were lost.");
+        animation.Close();
+        Require(gif.All(value => value == 0), "Closing a reduced GIF did not clear its source snapshot.");
+        settings.Set("MNX.Previews.OVERRIDE", "DebugFlags", 2);
+        using PreviewManager unknownBit = new PreviewManager(owner, settings);
+        unknownBit.Show(new PreviewData(Png(), PreviewKind.Image, false), "unknown-bit.png", owner.Location, false);
+        Require(((PreviewForm)unknownBit.Windows[0]).ImageSize == new Size(4, 3), "An unknown debug bit enabled half-resolution decoding.");
+        unknownBit.Windows[0].Close();
+        }
+
     private static void CheckOverrideInputReader(string directory) {
         Directory.CreateDirectory(directory);
         string input = Path.Combine(directory, "large-preview-input.txt");
@@ -199,7 +224,7 @@ internal static class PreviewSmokeTests {
         archive.Create(new FileInfo(Path.Combine(directory, "large-preview.mnx")));
         archive.AddFileNow(new FileInfo(input));
         VirtualFile entry = archive.Files.Single(file => !file.IsDirectory);
-        using PreviewData data = PreviewData.Read(archive, entry.FileID, PreviewKind.Text, CancellationToken.None, 384 * 1024 * 1024);
+        using PreviewData data = PreviewData.Read(archive, entry.FileID, PreviewKind.Text, CancellationToken.None, 512 * 1024 * 1024);
         // Text still reads only its normal 2 MiB excerpt. This catches a hidden
         // 128 MiB input clamp without allocating a huge image or decoded frames.
         Require(data.Bytes.Length == PreviewData.TextLimit && data.Bytes[0] == 65 && data.Truncated,
@@ -217,6 +242,10 @@ internal static class PreviewSmokeTests {
         return stream.ToArray();
         }
     private static void CheckImageLimits() {
+        byte[] metadataPng = PngWithMetadata();
+        ExpectRejected(() => ImagePreflight.Inspect(metadataPng, false, 1024 * 1024, halfResolution: true));
+        Require(ImagePreflight.Inspect(metadataPng, false, 8 * 1024 * 1024, halfResolution: true).MemoryCost > 4 * 1024 * 1024,
+            "Reducing pixels discarded the PNG's expanded metadata reservation.");
         byte[] largerAnimation = LargerAnimation();
         ImagePreflight.ImageInfo largerInfo = ImagePreflight.Inspect(largerAnimation, true);
         Require(largerInfo.Frames == 144 && largerInfo.MemoryCost > 64L * 1024 * 1024,
@@ -242,6 +271,29 @@ internal static class PreviewSmokeTests {
         ExpectRejected(() => ImagePreflight.Inspect(gif, true));
         ExpectRejected(() => ImagePreflight.Inspect(new byte[] { 1, 2, 3, 4 }, true));
         }
+    private static byte[] PngWithMetadata() {
+        byte[] png = Png();
+        using MemoryStream metadata = new MemoryStream();
+        metadata.Write("note\0\0"u8);
+        using (System.IO.Compression.ZLibStream compressor = new System.IO.Compression.ZLibStream(metadata, System.IO.Compression.CompressionLevel.Fastest, true)) {
+            byte[] piece = new byte[8192];
+            for (int index = 0; index < 256; index++) {
+                compressor.Write(piece);
+                }
+            }
+        using MemoryStream result = new MemoryStream();
+        result.Write(png, 0, png.Length - 12);
+        byte[] length = new byte[4];
+        BinaryPrimitives.WriteInt32BigEndian(length, (int)metadata.Length);
+        result.Write(length);
+        result.Write("zTXt"u8);
+        metadata.Position = 0;
+        metadata.CopyTo(result);
+        result.Write(new byte[4]); // Header-validation fixture: CRC is not read by preflight.
+        result.Write(png, png.Length - 12, 12);
+        return result.ToArray();
+        }
+
     private static byte[] LargerAnimation() {
         byte[] gif = Convert.FromBase64String("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7");
         BinaryPrimitives.WriteUInt16LittleEndian(gif.AsSpan(6, 2), 600);
@@ -263,12 +315,13 @@ internal static class PreviewSmokeTests {
         settings.Set("Previews", "TotalMiB", 256);
         using PreviewManager previews = new PreviewManager(owner, settings);
         previews.Show(new PreviewData(LargerAnimation(), PreviewKind.Image, false), "first.gif", owner.Location, false);
+        previews.Show(new PreviewData(LargerAnimation(), PreviewKind.Image, false), "second.gif", owner.Location, false);
         byte[] rejected = LargerAnimation();
-        ExpectRejected(() => previews.Show(new PreviewData(rejected, PreviewKind.Image, false), "second.gif", owner.Location, false));
-        Require(previews.Count == 1 && rejected.All(value => value == 0), "The combined decoded reservation was not enforced.");
+        ExpectRejected(() => previews.Show(new PreviewData(rejected, PreviewKind.Image, false), "third.gif", owner.Location, false));
+        Require(previews.Count == 2 && rejected.All(value => value == 0), "The combined decoded reservation was not enforced.");
         previews.Windows[0].Close();
         previews.Show(new PreviewData(LargerAnimation(), PreviewKind.Image, false), "replacement.gif", owner.Location, false);
-        Require(previews.Count == 1, "Closing a large image did not return its decoded memory reservation.");
+        Require(previews.Count == 2, "Closing a large image did not return its decoded memory reservation.");
         previews.Windows[0].Close();
         }
 

@@ -16,7 +16,7 @@
   <ItemGroup>
     <Compile Include="$(MNXPortableRoot)/gui/**/*.cs" Exclude="$(MNXPortableRoot)/gui/**/obj/**;$(MNXPortableRoot)/gui/**/bin/**" />
     <Compile Include="overrides/**/*.cs" />
-    <Compile Include="../src/ArchiveBrowser.cs;../src/FileTransfer.cs;../src/ExtractionPlan.cs;../src/TransferCancellation.cs;../src/TransferTracker.cs;../src/Settings/AppSettings.cs;../src/Settings/MWinColors.cs;../src/Settings/DefaultKeyStore.cs;../src/Previews/PreviewData.cs" />
+    <Compile Include="../src/ArchiveBrowser.cs;../src/FileTransfer.cs;../src/ExtractionPlan.cs;../src/TransferCancellation.cs;../src/TransferTracker.cs;../src/Settings/AppSettings.cs;../src/Settings/MWinColors.cs;../src/Settings/DefaultKeyStore.cs;../src/Previews/PreviewData.cs;../src/Previews/CachedImageDecoder.cs" />
     <ProjectReference Include="MWin/MWindow.csproj" />
     <ProjectReference Include="Backends/MNXFile.Backends.csproj" />
     <ProjectReference Include="$(MNXPortableRoot)/vendor/Majorsilence.Forms/src/Majorsilence.Forms.Gtk4/Majorsilence.Forms.Gtk4.csproj" />
