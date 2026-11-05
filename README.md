@@ -14,6 +14,8 @@ see **[mnx-cli](https://github.com/Mashrien/mnx-cli)**.
 
 ## Downloads and installation
 
+Latest source changes: [Linux MWin menu colors and portable library lookup](docs/releases/1.4.1.52.md).
+
 [Releases](https://github.com/Mashrien/MNXArchiver/releases) provide **mnx-gui**
 RPM/DEB/portable Linux packages and a Windows x64 ZIP. Install the separate
 [MNXFile engine](https://github.com/Mashrien/MNXFile/releases) first. Linux requires

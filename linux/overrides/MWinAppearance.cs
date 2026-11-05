@@ -94,15 +94,19 @@ internal static class MWinAppearance {
         window.Settings.Frame.BorderColor = Drawing("Border");
         window.Settings.MenuSeparator.Color = Drawing("Border");
         MashWin.ToolStripSettings strips = window.Settings.ToolStrips;
-        strips.BackgroundColor = Drawing("WindowBackground");
-        strips.MenuBackgroundColor = Drawing("WindowBackground");
-        strips.TextColor = Drawing("WindowText");
-        strips.DisabledTextColor = Drawing("DisabledText");
-        strips.BorderColor = Drawing("Border");
-        strips.HoverColor = Drawing("Accent");
-        strips.PressedColor = Drawing("SelectionBackground");
-        strips.PressedTextColor = Drawing("SelectionText");
-        strips.CheckedColor = Drawing("SelectionBackground");
+        strips.BackgroundColor = Drawing("MenuBarBackground");
+        strips.MenuBackgroundColor = Drawing("MenuBackground");
+        strips.TextColor = Drawing("MenuText");
+        strips.DisabledTextColor = Drawing("MenuDisabledText");
+        strips.BorderColor = Drawing("MenuBorder");
+        strips.HoverColor = Drawing("MenuHoverBackground");
+        strips.PressedColor = Drawing("MenuPressedBackground");
+        strips.PressedTextColor = Drawing("MenuPressedText");
+        strips.CheckedColor = Drawing("MenuCheckedBackground");
+        strips.HoverTextColor = Drawing("MenuHoverText");
+        strips.CheckedTextColor = Drawing("MenuCheckedText");
+        strips.ImageMarginColor = Drawing("MenuImageMargin");
+        strips.SeparatorColor = Drawing("MenuSeparator");
         ApplyControls(window.Controls.Owner);
         window.Invalidate(true);
         }

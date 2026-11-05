@@ -109,6 +109,14 @@ try {
     string paletteFile = Path.Combine(paletteWork, MWinColors.FileName);
     Require(System.IO.File.ReadAllText(paletteFile).Contains("[MNX.Display.MWin]"), "The palette must use INI format.");
     Require(created["TitleText"] == 0xFFF0F1F2, "Title colors did not survive creation.");
+    Require(created["MenuBackground"] == imported["WindowBackground"], "Menu backgrounds must inherit the desktop palette.");
+    Require(System.IO.File.ReadAllText(paletteFile).Contains("[MNX.Display.MWin.Menus]"), "New palettes must include editable menu settings.");
+    System.IO.File.WriteAllText(paletteFile, "[MNX.Display.MWin]\nWindowBackground=#202326\nWindowText=#FCFCFC\nSelectionBackground=#334455\nSelectionText=#EEEEEE\n[MNX.Display.MWin.Menus]\nBackground=#112233\nText=240,241,242\nHoverText=invalid\n");
+    MWinColors menuColors = MWinColors.Read(paletteFile);
+    Require(menuColors["MenuBackground"] == 0xFF112233 && menuColors["MenuText"] == 0xFFF0F1F2,
+        "Menu overrides did not load from their INI section.");
+    Require(menuColors["MenuBarBackground"] == 0xFF202326 && menuColors["MenuHoverText"] == 0xFFEEEEEE,
+        "Missing or invalid menu colors must inherit the configured palette, not light defaults.");
     System.IO.File.WriteAllText(paletteFile, "[MNX.Display.MWin]\nWindowBackground=#123456\nWindowText=250,249,248\nViewBackground=invalid\nAccent=999,0,0\n");
     MWinColors edited = MWinColors.LoadOrCreate(paletteWork, () => throw new Exception("Existing palette must not read the desktop."));
     Require(edited["WindowBackground"] == 0xFF123456 && edited["WindowText"] == 0xFFFAF9F8,

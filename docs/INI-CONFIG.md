@@ -33,11 +33,33 @@ Border=#808080
 DisabledText=#A1A9B1
 TitleBackground=#272C31
 TitleText=#FCFCFC
+
+[MNX.Display.MWin.Menus]
+BarBackground=#202326
+Background=#202326
+Text=#FCFCFC
+DisabledText=#A1A9B1
+HoverBackground=#3DAEE9
+HoverText=#FCFCFC
+PressedBackground=#3DAEE9
+PressedText=#FCFCFC
+CheckedBackground=#3DAEE9
+CheckedText=#FCFCFC
+ImageMargin=#202326
+Border=#808080
+Separator=#808080
 ```
 
 `#RRGGBB` or `red,green,blue` is accepted. MWin creates the palette from the desktop
 only when the file is missing. KDE's kdeglobals takes precedence on KDE; GTK4 named
 colors are the fallback, then readable built-in colors. Manual edits are preserved.
+The `Menus` section controls the menu bar, its popup and nested menus, context
+menus and the shared toolbar item states. Missing or invalid menu values inherit
+the corresponding window, selection or border color from the main palette, so an
+older dark palette stays dark without being rewritten. New palette files include
+all menu keys. `ImageMargin` is the icon/checkmark gutter; `Separator` controls the
+rules between menu groups.
+
 Restart after editing the palette or changing the colors switch. Delete the palette
 file to recapture a new desktop theme. Unreadable/malformed individual colors use
 fallback values; reading the file never overwrites its contents.

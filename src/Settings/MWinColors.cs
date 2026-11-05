@@ -7,6 +7,24 @@ namespace Mash.UI.MNXFile.GUI.Settings;
 /// <summary>An editable INI snapshot. Existing user colors always win over desktop changes.</summary>
 internal sealed class MWinColors {
     internal const string FileName = "mnx.mwin-colors.conf";
+    // Older palettes contain only the window colors. Menu defaults resolve lazily
+    // so those files inherit their existing dark/light colors without a migration.
+    private static readonly Dictionary<string, string> MenuDefaults = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+        ["BarBackground"] = "WindowBackground",
+        ["Background"] = "WindowBackground",
+        ["Text"] = "WindowText",
+        ["DisabledText"] = "DisabledText",
+        ["HoverBackground"] = "SelectionBackground",
+        ["HoverText"] = "SelectionText",
+        ["PressedBackground"] = "SelectionBackground",
+        ["PressedText"] = "SelectionText",
+        ["CheckedBackground"] = "SelectionBackground",
+        ["CheckedText"] = "SelectionText",
+        ["ImageMargin"] = "WindowBackground",
+        ["Border"] = "Border",
+        ["Separator"] = "Border",
+        };
+    private readonly Dictionary<string, uint> _menuColors = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, uint> _colors = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase) {
         ["WindowBackground"] = 0xFFF0F0F0,
         ["WindowText"] = 0xFF202020,
@@ -23,8 +41,23 @@ internal sealed class MWinColors {
         ["TitleText"] = 0xFF202020,
         };
     internal uint this[string name] {
-        get { return _colors[name]; }
-        set { _colors[name] = value | 0xFF000000; }
+        get {
+            if (_colors.TryGetValue(name, out uint color)) {
+                return color;
+                }
+            if (_menuColors.TryGetValue(name, out color)) {
+                return color;
+                }
+            return _colors[MenuDefaults[name.Substring(4)]];
+            }
+        set {
+            if (name.StartsWith("Menu", StringComparison.OrdinalIgnoreCase) && MenuDefaults.ContainsKey(name.Substring(4))) {
+                _menuColors[name] = value | 0xFF000000;
+                }
+            else {
+                _colors[name] = value | 0xFF000000;
+                }
+            }
         }
 
     internal static MWinColors LoadOrCreate(string directory, Func<MWinColors> desktopColors) {
@@ -67,6 +100,12 @@ internal sealed class MWinColors {
                 string value = config["MNX.Display.MWin"].GetString(key).Split(';')[0].Trim();
                 if (TryColor(value, out uint color)) {
                     colors[key] = color;
+                    }
+                }
+            foreach (string key in MenuDefaults.Keys) {
+                string value = config["MNX.Display.MWin.Menus"].GetString(key).Split(';')[0].Trim();
+                if (TryColor(value, out uint color)) {
+                    colors._menuColors["Menu" + key] = color;
                     }
                 }
             }
@@ -122,6 +161,9 @@ internal sealed class MWinColors {
         INI_Config config = new INI_Config();
         foreach (KeyValuePair<string, uint> color in _colors) {
             config["MNX.Display.MWin"].Set(color.Key, "#" + (color.Value & 0xFFFFFF).ToString("X6", CultureInfo.InvariantCulture));
+            }
+        foreach (string key in MenuDefaults.Keys) {
+            config["MNX.Display.MWin.Menus"].Set(key, "#" + (this["Menu" + key] & 0xFFFFFF).ToString("X6", CultureInfo.InvariantCulture));
             }
         return config.ToText("MNX MWin colors: #RRGGBB or red,green,blue (0..255).\nEdit colors and restart MNX. Delete this file to recapture desktop colors.\nOptions > General > Interface can disable this palette.");
         }

@@ -98,7 +98,7 @@ namespace MashWin {
                 base.OnRenderToolStripBackground(arguments);
                 return;
                 }
-            Color color = arguments.ToolStrip is ToolStripDropDown ? settings.MenuBackgroundColor : settings.BackgroundColor;
+            Color color = arguments.ToolStrip is MenuDropDown ? settings.MenuBackgroundColor : settings.BackgroundColor;
             using (SolidBrush brush = new SolidBrush(color)) {
                 arguments.Graphics.FillRectangle(brush, arguments.AffectedBounds);
                 }
@@ -163,13 +163,15 @@ namespace MashWin {
                 isChecked = true;
                 }
             // A disabled toggle still needs to communicate its checked state.
-            bool active = isChecked || (item.Enabled && (item.Pressed || item.Selected));
+            bool active = isChecked || (item.Enabled && (item.Pressed || item.Selected || item.IsDropDownOpened));
             if (!active && !drawNormalBorder) {
+                // Leave the custom menu surface visible for unselected rows.
+                arguments.Handled = true;
                 return;
                 }
-            Color color = arguments.ToolStrip is ToolStripDropDown ? settings.MenuBackgroundColor : settings.BackgroundColor;
+            Color color = arguments.ToolStrip is MenuDropDown ? settings.MenuBackgroundColor : settings.BackgroundColor;
             if (active) {
-                if (item.Enabled && item.Pressed) {
+                if (item.Enabled && (item.Pressed || item.IsDropDownOpened)) {
                     color = settings.PressedColor;
                     }
                 else if (item.Enabled && item.Selected) {
@@ -241,8 +243,14 @@ namespace MashWin {
             if (!item.Enabled) {
                 return settings.DisabledTextColor;
                 }
-            if (item.Pressed) {
+            if (item.Pressed || item.IsDropDownOpened) {
                 return settings.PressedTextColor;
+                }
+            if (item.Selected) {
+                return settings.HoverTextColor;
+                }
+            if (item is ToolStripMenuItem menuItem && menuItem.Checked || item is ToolStripButton button && button.Checked) {
+                return settings.CheckedTextColor;
                 }
             return settings.TextColor;
             }
@@ -266,7 +274,7 @@ namespace MashWin {
                 base.OnRenderImageMargin(arguments);
                 return;
                 }
-            using (SolidBrush brush = new SolidBrush(settings.MenuBackgroundColor)) {
+            using (SolidBrush brush = new SolidBrush(settings.ImageMarginColor)) {
                 arguments.Graphics.FillRectangle(brush, arguments.AffectedBounds);
                 }
             }
@@ -294,18 +302,19 @@ namespace MashWin {
                 return;
                 }
             float thickness = settings.BorderThickness * (strip.DeviceDpi / 96f);
+            Rectangle paintBounds = arguments.AffectedBounds;
             // Draw inward so the full configured border stays inside the strip's
             // clipping region; a wide pen centered on the edge would lose half.
             using (SolidBrush brush = new SolidBrush(settings.BorderColor)) {
-                if (strip is ToolStripDropDown) {
-                    arguments.Graphics.FillRectangle(brush, 0, 0, strip.Width, thickness);
-                    arguments.Graphics.FillRectangle(brush, 0, 0, thickness, strip.Height);
+                if (strip is MenuDropDown) {
+                    arguments.Graphics.FillRectangle(brush, paintBounds.Left, paintBounds.Top, paintBounds.Width, thickness);
+                    arguments.Graphics.FillRectangle(brush, paintBounds.Left, paintBounds.Top, thickness, paintBounds.Height);
                     }
-                if (strip is ToolStripDropDown || strip.Orientation == Orientation.Vertical) {
-                    arguments.Graphics.FillRectangle(brush, strip.Width - thickness, 0, thickness, strip.Height);
+                if (strip is MenuDropDown || strip.Orientation == Orientation.Vertical) {
+                    arguments.Graphics.FillRectangle(brush, paintBounds.Right - thickness, paintBounds.Top, thickness, paintBounds.Height);
                     }
-                if (strip is ToolStripDropDown || strip.Orientation == Orientation.Horizontal) {
-                    arguments.Graphics.FillRectangle(brush, 0, strip.Height - thickness, strip.Width, thickness);
+                if (strip is MenuDropDown || strip.Orientation == Orientation.Horizontal) {
+                    arguments.Graphics.FillRectangle(brush, paintBounds.Left, paintBounds.Bottom - thickness, paintBounds.Width, thickness);
                     }
                 }
             }
@@ -315,7 +324,9 @@ namespace MashWin {
                 base.OnRenderSeparator(arguments);
                 return;
                 }
-            using (Pen pen = new Pen(settings.BorderColor)) {
+            using (Pen pen = new Pen(settings.SeparatorColor)) {
+                GraphicsState state = arguments.Graphics.Save();
+                arguments.Graphics.TranslateTransform(arguments.Item.Bounds.X, arguments.Item.Bounds.Y);
                 if (arguments.Vertical) {
                     int middle = arguments.Item.Width / 2;
                     arguments.Graphics.DrawLine(pen, middle, 3, middle, Math.Max(3, arguments.Item.Height - 4));
@@ -324,7 +335,9 @@ namespace MashWin {
                     int middle = arguments.Item.Height / 2;
                     arguments.Graphics.DrawLine(pen, 4, middle, Math.Max(4, arguments.Item.Width - 5), middle);
                     }
+                arguments.Graphics.Restore(state);
                 }
+            arguments.Handled = true;
             }
         }
     }

@@ -75,6 +75,7 @@ else
     fi
 if $mnx_test; then
     dotnet run --project "$mnx_root/tests/BackendChecks/BackendChecks.csproj" -c Release -p:UseSharedCompilation=false
+    dotnet run --project "$mnx_root/tests/MenuRenderingChecks/MenuRenderingChecks.csproj" -c Release "${mnx_properties[@]}" -- "$MNXBuildRoot/evidence/menu-colors-$MNXBuildNumber"
     "$mnx_output/mnx-gui" --list-backends
     if "$mnx_output/mnx-gui" --probe-backend mwin >/dev/null 2>&1; then
         "$mnx_output/mnx-gui" --backend=mwin --headless-smoke "$MNXBuildRoot/evidence/$mnx_rid-$mnx_kind-$MNXBuildNumber"

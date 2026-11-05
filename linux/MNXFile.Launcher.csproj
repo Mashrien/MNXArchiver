@@ -10,6 +10,8 @@
     <PublishAot Condition="'$(MNXNativeAot)' == 'true'">true</PublishAot>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Portable user installs keep the engine and drawing libraries beside the executable. -->
+    <LinkerArg Include="-Wl,-rpath,'$ORIGIN'" />
     <Compile Include="Launcher/*.cs" />
     <ProjectReference Include="Backends/MNXFile.Backends.csproj" />
     <ProjectReference Include="MNXFile.MWinFrontend.csproj" />

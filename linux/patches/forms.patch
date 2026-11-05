@@ -270,10 +270,9 @@ index 75ef3bb..f8a456e 100644
      <PackageReference Include="System.Resources.Extensions" />
    </ItemGroup>
 diff --git a/src/Majorsilence.Forms/Renderers/MenuRenderer.cs b/src/Majorsilence.Forms/Renderers/MenuRenderer.cs
-index afb509a..33ce62d 100644
 --- a/src/Majorsilence.Forms/Renderers/MenuRenderer.cs
 +++ b/src/Majorsilence.Forms/Renderers/MenuRenderer.cs
-@@ -16,6 +16,8 @@ protected override void Render (Menu control, PaintEventArgs e)
+@@ -16,6 +16,8 @@
                  MenuUpstreamLook.FillGradient (e, new Rectangle (0, 0, control.ScaledWidth, control.ScaledHeight), horizontal: true,
                      MenuUpstreamLook.BarBegin, MenuUpstreamLook.BarEnd);
  
@@ -282,7 +281,17 @@ index afb509a..33ce62d 100644
              foreach (var item in control.Items) {
                  if (!item.Visible)
                      continue;
-@@ -32,6 +34,7 @@ protected override void Render (Menu control, PaintEventArgs e)
+@@ -25,13 +27,15 @@
+                 else if (item is ToolStripSeparator tss) {
+                     // See ToolBarRenderer.Render: a ToolStripSeparator on a MenuStrip was a blank
+                     // item that highlighted on hover (TSM-23).
+-                    StripRendererBridge.Separator (control, tss, vertical: true, e);
+-                    RenderMenuSeparatorItem (control, tss, e);
++                    if (!StripRendererBridge.Separator (control, tss, vertical: true, e)) {
++                        RenderMenuSeparatorItem (control, tss, e);
++                        }
+                 } else if (item is MdiControlItem mdi)
+                     RenderMdiControlItem (control, mdi, e);
                  else
                      RenderItem (control, item, e);
              }
@@ -290,6 +299,36 @@ index afb509a..33ce62d 100644
          }
  
          // A maximized MDI child's icon or caption button, merged into the menu bar. The glyphs are drawn
+@@ -139,7 +143,8 @@
+             // Background
+             var item_style = item.Hovered || item.IsDropDownOpened ? Menu.DefaultItemHoverStyle : Menu.DefaultItemStyle;
+ 
+-            if (MenuUpstreamLook.Applies) {
++            bool backgroundHandled = StripRendererBridge.ItemBackground(control, item, e);
++            if (!backgroundHandled && MenuUpstreamLook.Applies) {
+                 // Upstream's open item is a near-white box, shaded down, in the grey line its drop-down carries on; a
+                 // hovered one the selection blue inside the accent; any other shows the bar.
+                 if (item.IsDropDownOpened) {
+@@ -150,7 +155,7 @@
+                 }
+ 
+                 item_style = Menu.DefaultItemStyle;
+-            } else {
++            } else if (!backgroundHandled) {
+                 var background_color = item_style.TryGetBackgroundColor () ?? control.GetEffectiveBackgroundColor ();
+                 e.Canvas.FillRectangle (item.DeviceBounds, background_color);
+             }
+@@ -160,7 +165,9 @@
+                 : MenuUpstreamLook.Applies ? MenuUpstreamLook.DisabledText : Theme.ForegroundDisabledColor;
+             var font_size = e.LogicalToDeviceUnits (control.ItemFontSize);
+ 
+-            e.Canvas.DrawMnemonicText (item.Text, control.ItemTypeface, font_size, item.DeviceBounds, font_color, ContentAlignment.MiddleCenter, maxLines: null, ellipsis: false, underline: control.ShowKeyboardCues);
++            if (StripRendererBridge.Text(control, item, item.Text, item.DeviceBounds, font_color, e) is { } text) {
++                e.Canvas.DrawMnemonicText (text.text, control.ItemTypeface, font_size, text.rect, text.colour, ContentAlignment.MiddleCenter, maxLines: null, ellipsis: false, underline: control.ShowKeyboardCues);
++                }
+         }
+ 
+         /// <summary>
 diff --git a/src/Majorsilence.Forms/ToolBar.cs b/src/Majorsilence.Forms/ToolBar.cs
 index abb099a..0a67a9c 100644
 --- a/src/Majorsilence.Forms/ToolBar.cs
@@ -909,6 +948,7 @@ index 02f38ae..077a510 100644
          /// <summary>Gets the local user-specific application data path, creating it if it does not exist.</summary>
          /// <remarks><c>&lt;local data&gt;/&lt;CompanyName&gt;/&lt;ProductName&gt;/&lt;ProductVersion&gt;</c>, as upstream's GetDataPath.</remarks>
 
+diff --git a/src/Majorsilence.Forms/WinFormsCompat.cs b/src/Majorsilence.Forms/WinFormsCompat.cs
 --- a/src/Majorsilence.Forms/WinFormsCompat.cs
 +++ b/src/Majorsilence.Forms/WinFormsCompat.cs
 @@ -997,6 +997,9 @@
@@ -921,7 +961,25 @@ index 02f38ae..077a510 100644
              form.FitWithin (parent);
  
              return (parent, form);
-
+@@ -2779,7 +2782,17 @@
+         /// run, which is where a custom renderer sets the colours and padding that a theme depends on.
+         /// </summary>
+         public ToolStripRenderer? Renderer {
+-            get => renderer;
++            // Generated popups are separate controls. Resolve through the opener
++            // so nested menus keep the form renderer without a global override.
++            get {
++                if (renderer != null) {
++                    return renderer;
++                    }
++                if (this is MenuDropDown popup && popup.DropDownOwnerItem?.OwnerControl is ToolStrip owner) {
++                    return owner.Renderer;
++                    }
++                return null;
++                }
+             set {
+                 if (ReferenceEquals (renderer, value))
+                     return;
 --- a/src/Majorsilence.Forms/ListView.cs
 +++ b/src/Majorsilence.Forms/ListView.cs
 @@ -31,7 +31,7 @@
@@ -1467,3 +1525,99 @@ index 02f38ae..077a510 100644
 +        private static extern int XSync(IntPtr display, int discard);
 +        }
 +    }
+diff --git a/src/Majorsilence.Forms/Renderers/MenuDropDownRenderer.cs b/src/Majorsilence.Forms/Renderers/MenuDropDownRenderer.cs
+--- a/src/Majorsilence.Forms/Renderers/MenuDropDownRenderer.cs
++++ b/src/Majorsilence.Forms/Renderers/MenuDropDownRenderer.cs
+@@ -60,23 +60,24 @@
+             // TSM-48: the drop-down's parts go through its ToolStripRenderer too. Only a
+             // ToolStripSeparator can be offered to DrawSeparator -- its args require that type, and a
+             // MenuSeparatorItem is not one.
+-            StripRendererBridge.Background (control, e);
+-
+             var full = new Rectangle (0, 0, control.ScaledWidth, control.ScaledHeight);
+ 
+             // Under the upstream look, the professional renderer's near-white drop-down.
+             if (MenuUpstreamLook.Applies)
+                 e.Canvas.FillRectangle (full, MenuUpstreamLook.DropDownBackground);
+ 
++            // Custom surfaces are painted last; otherwise the compatibility
++            // near-white background overwrites the application's dark palette.
++            StripRendererBridge.Background (control, e);
++
+             // The icon gutter, offered once for the whole drop-down as upstream does.
+             if (ShowsImageMargin (control)) {
+                 var margin = new Rectangle (0, 0, e.LogicalToDeviceUnits (ImageMarginWidth), control.DeviceClientRectangle.Height);
+-                StripRendererBridge.ImageMargin (control, margin, e);
+-
+                 // Upstream's margin is shaded left to right, from near-white to Control.
+                 if (MenuUpstreamLook.Applies)
+                     MenuUpstreamLook.FillGradient (e, new Rectangle (0, 0, margin.Width, full.Height), horizontal: true,
+                         MenuUpstreamLook.MarginBegin, MenuUpstreamLook.MarginMiddle, MenuUpstreamLook.MarginEnd);
++                StripRendererBridge.ImageMargin (control, margin, e);
+             }
+ 
+             foreach (var item in control.Items) {
+@@ -86,8 +87,9 @@
+                 if (item is MenuSeparatorItem msi)
+                     RenderMenuSeparatorItem (control, msi, e);
+                 else if (item is ToolStripSeparator tss) {
+-                    StripRendererBridge.Separator (control, tss, vertical: false, e);
+-                    RenderMenuSeparatorItem (control, tss, e);
++                    if (!StripRendererBridge.Separator (control, tss, vertical: false, e)) {
++                        RenderMenuSeparatorItem (control, tss, e);
++                        }
+                 } else
+                     RenderItem (control, item, e);
+             }
+@@ -98,10 +100,9 @@
+                 e.Canvas.DrawLine (x, e.LogicalToDeviceUnits (2), x, control.DeviceClientRectangle.Height - e.LogicalToDeviceUnits (2), Theme.BorderMidColor);
+             }
+ 
+-            StripRendererBridge.Border (control, e);
+-
+             if (MenuUpstreamLook.Applies)
+                 DrawUpstreamBorder (control, full, e);
++            StripRendererBridge.Border (control, e);
+         }
+ 
+         // Upstream's grey line round the drop-down, left open along the top under a menu bar item it hangs from, so the
+@@ -133,7 +134,8 @@
+             var item_style = highlighted ? MenuDropDown.DefaultItemHoverStyle : MenuDropDown.DefaultItemStyle;
+             var background_color = item_style.GetBackgroundColor ();
+ 
+-            if (!StripRendererBridge.ItemBackground (control, item, e) && MenuUpstreamLook.Applies) {
++            bool backgroundHandled = StripRendererBridge.ItemBackground (control, item, e);
++            if (!backgroundHandled && MenuUpstreamLook.Applies) {
+                 // Upstream's selected item: the selection blue inside the accent, 2px in from the left and 3px from the
+                 // right (ToolStripProfessionalRenderer.OnRenderMenuItemBackground); the drop-down shows through the rest.
+                 if (highlighted && item.Enabled) {
+@@ -141,7 +143,7 @@
+                     var left = e.LogicalToDeviceUnits (2);
+                     MenuUpstreamLook.Selection (e, new Rectangle (cell.Left + left, cell.Top, cell.Width - e.LogicalToDeviceUnits (3), cell.Height));
+                 }
+-            } else if (!StripRendererBridge.ItemBackground (control, item, e)) {
++            } else if (!backgroundHandled) {
+                 e.Canvas.FillRectangle (item.DeviceBounds, background_color);
+ 
+                 // Under the upstream look, upstream's professional renderer's selection: Highlight at about a third
+diff --git a/src/Majorsilence.Forms/Renderers/StripRendererBridge.cs b/src/Majorsilence.Forms/Renderers/StripRendererBridge.cs
+--- a/src/Majorsilence.Forms/Renderers/StripRendererBridge.cs
++++ b/src/Majorsilence.Forms/Renderers/StripRendererBridge.cs
+@@ -89,7 +89,7 @@
+                 case ToolStripOverflowButton: r.DrawOverflowButtonBackground (args); break;
+                 case ToolStripSplitButton: r.DrawSplitButton (args); break;
+                 case ToolStripDropDownButton: r.DrawDropDownButtonBackground (args); break;
+-                case ToolStripMenuItem when control is MenuDropDown: r.DrawMenuItemBackground (args); break;
++                case ToolStripMenuItem: r.DrawMenuItemBackground (args); break;
+                 case ToolStripStatusLabel: r.DrawToolStripStatusLabelBackground (args); break;
+                 case ToolStripLabel: r.DrawLabelBackground (args); break;
+                 case ToolStripButton: r.DrawButtonBackground (args); break;
+@@ -171,7 +171,7 @@
+ 
+             var args = new ToolStripSeparatorRenderEventArgs (e.Graphics, separator, vertical);
+             r.DrawSeparator (args);
+-            return false; // separator args carry no Handled
++            return args.Handled;
+         }
+     }
+ }
