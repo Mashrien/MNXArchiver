@@ -2,12 +2,12 @@ namespace Mash.UI.MNXFile.GUI.Plugins;
 
 /// <summary>Map selected archive paths to explicit local outputs; the module copies the bytes.</summary>
 internal sealed class PluginExtraction {
-    private readonly ArchivePlugin _module;
+    private readonly NativeArchiveModule _module;
     private readonly string _archivePath;
     private readonly PluginOutput[] _outputs;
     internal IReadOnlyList<string> RootPaths { get; }
 
-    internal PluginExtraction(ArchivePlugin module, PluginArchive archive, Guid[] ids, string destination, bool singleFile) {
+    internal PluginExtraction(NativeArchiveModule module, OpenedModuleArchive archive, Guid[] ids, string destination, bool singleFile) {
         _module = module;
         _archivePath = archive.Path;
         ArchiveBrowser browser = archive.Browser;

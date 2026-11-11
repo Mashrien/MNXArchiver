@@ -29,7 +29,7 @@ installed .NET runtime. See [packaging instructions](packaging/README.md).
 ## Optional archive formats
 
 MNXArchiver 2.0 supports native archive modules. The first module adds Ren’Py
-RPA 3.0 browsing, extraction, add, replace, delete, and creation to the same GUI.
+RPA 3.0 browsing, text and image previews, extraction, add, replace, delete, and creation to the same GUI.
 See the [module installation and ABI guide](docs/ARCHIVE-PLUGINS.md).
 
 ## Features

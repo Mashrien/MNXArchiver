@@ -10,6 +10,7 @@ internal enum PluginActions : uint {
     Replace = 1 << 2,
     Create = 1 << 3,
     Delete = 1 << 4,
+    ReadEntry = 1 << 5,
     }
 
 internal sealed record PluginFormatVersion(string Version, string MagicHex, PluginActions Actions);
@@ -27,6 +28,8 @@ internal sealed record PluginRequest {
     public string? Folder { get; init; }
     public string[]? Sources { get; init; }
     public string? EntryPath { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? EntrySize { get; init; }
     public string[]? EntryPaths { get; init; }
     public PluginOutput[]? Outputs { get; init; }
     public bool Overwrite { get; init; }
@@ -35,6 +38,8 @@ internal sealed record PluginRequest {
 internal sealed record PluginResponse {
     public string? Error { get; init; }
     public bool Cancelled { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? BytesRead { get; init; }
     public PluginFormat? Format { get; init; }
     public PluginEntry[]? Entries { get; init; }
     }
@@ -47,6 +52,7 @@ internal partial class PluginJson : JsonSerializerContext { }
 internal static class PluginProtocol {
     internal const uint AbiVersion = 1;
     internal const int MaxMessageBytes = 64 * 1024 * 1024;
+    internal const int MaxPreviewBytes = 512 * 1024 * 1024;
     internal const int MaxEntries = 250_000;
     internal const int MaxPathCharacters = 4096;
     internal const int MaxPathDepth = 128;
@@ -56,7 +62,15 @@ internal static class PluginProtocol {
     internal const string MaxPluginVersion = "1.0.999";
 
     internal static bool Supports(string value, string minimum, string maximum) {
-        return Version.TryParse(value, out Version? version) && Version.TryParse(minimum, out Version? first)
-            && Version.TryParse(maximum, out Version? last) && version >= first && version <= last;
+        if (!Version.TryParse(value, out Version? version)) {
+            return false;
+            }
+        if (!Version.TryParse(minimum, out Version? first)) {
+            return false;
+            }
+        if (!Version.TryParse(maximum, out Version? last)) {
+            return false;
+            }
+        return version >= first && version <= last;
         }
     }

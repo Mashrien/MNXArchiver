@@ -13,7 +13,7 @@ if (args.Length != 2) {
     }
 PluginCatalog catalog = PluginCatalog.Discover(args[0]);
 Require(catalog.Modules.Count == 1, string.Join("\n", catalog.Issues));
-ArchivePlugin module = catalog.Modules.Single();
+NativeArchiveModule module = catalog.Modules.Single();
 Require(module.Format.Id == "renpy.rpa" && module.Format.CurrentVersion == "3.0", "The RPA descriptor did not survive discovery.");
 foreach ((string file, string reason) in new (string, string)[] {
     ("bad-magic.so", "bad-magic.so:"), ("bad-abi.so", "Plugin ABI 2"),
@@ -29,12 +29,18 @@ DirectoryInfo work = Directory.CreateTempSubdirectory("mnx-plugin-checks-");
 try {
     string path = Path.Combine(work.FullName, "renamed.dat");
     File.Copy(args[1], path);
-    PluginArchive archive = PluginArchive.Open(catalog.Match(path)!, path);
+    OpenedModuleArchive archive = OpenedModuleArchive.Open(catalog.Match(path)!, path);
     Guid folder = archive.Browser.Resolve("/folder");
     Guid hello = archive.Browser.Children(folder).Single().Id;
     Require(archive.Browser.Get(hello).Name == "hello.txt", "The folder tree did not preserve the archived path.");
     Require(archive.Supports(PluginActions.Extract | PluginActions.Add | PluginActions.Replace | PluginActions.Create | PluginActions.Delete),
         "The RPA actions were lost.");
+    Require(archive.Supports(PluginActions.ReadEntry), "The RPA format did not advertise bounded entry reads for previews.");
+    byte[] preview = new byte[5];
+    archive.ReadEntry(hello, preview, CancellationToken.None);
+    Require(preview.AsSpan().SequenceEqual("hello"u8), "The preview read did not return the requested prefix.");
+    Reject(() => archive.ReadEntry(hello, new byte[32], CancellationToken.None));
+
     string extracted = Path.Combine(work.FullName, "hello.txt");
     archive.PlanExtraction([hello], extracted, true).Extract(false);
     Require(File.ReadAllText(extracted) == "hello from Ren'Py", "Independent fixture extraction changed file bytes.");
@@ -61,7 +67,7 @@ try {
         "Deleting selected folder members did not leave a valid empty archive.");
 
     string createdPath = Path.Combine(work.FullName, "new.rpa");
-    PluginArchive created = PluginArchive.Create(module, createdPath, [addition], false);
+    OpenedModuleArchive created = OpenedModuleArchive.Create(module, createdPath, [addition], false);
     Require(created.Browser.Children(created.Browser.Root).Single().Name == "new.txt", "Create did not return its listing.");
     using CancellationTokenSource cancelled = new();
     cancelled.Cancel();

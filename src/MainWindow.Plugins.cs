@@ -8,11 +8,11 @@ public sealed partial class MainWindow {
     // GtkFileChooserDialog reserves Accept, OK, Yes and Apply for the current selection.
     internal const ResponseType ChooseFoldersResponse = (ResponseType)1;
     private readonly List<MenuItem> _pluginCreateItems = [];
-    private PluginArchive? _pluginArchive;
+    private OpenedModuleArchive? _pluginArchive;
 
     private void ConfigurePluginMenu() {
         Menu menu = Widget<Menu>("file_submenu");
-        foreach (ArchivePlugin module in PluginCatalog.Installed.Modules) {
+        foreach (NativeArchiveModule module in PluginCatalog.Installed.Modules) {
             if ((module.Current.Actions & PluginActions.Create) == 0) {
                 continue;
                 }
@@ -25,7 +25,7 @@ public sealed partial class MainWindow {
             }
         }
 
-    private static void AddPluginFilter(FileChooserDialog chooser, ArchivePlugin plugin) {
+    private static void AddPluginFilter(FileChooserDialog chooser, NativeArchiveModule plugin) {
         string[] extensions = plugin.Format.Extensions;
         FileFilter filter = new FileFilter {
             Name = $"{plugin.Format.Name} archives ({string.Join(", ", extensions.Select(extension => "*" + extension))})"
@@ -37,7 +37,7 @@ public sealed partial class MainWindow {
         chooser.AddFilter(filter);
         }
 
-    private void LoadPluginArchive(PluginArchive archive, string folder = "/") {
+    private void LoadPluginArchive(OpenedModuleArchive archive, string folder = "/") {
         Guid location = archive.Browser.Root;
         while (folder != "/") {
             try {
@@ -59,7 +59,7 @@ public sealed partial class MainWindow {
         }
 
     private void DispatchPluginAction(ArchiveAction action) {
-        PluginArchive archive = _pluginArchive!;
+        OpenedModuleArchive archive = _pluginArchive!;
         switch (action) {
             case ArchiveAction.Add when archive.Supports(PluginActions.Add):
                 string[] sources = ChoosePluginSources("Add to archive");
@@ -108,7 +108,7 @@ public sealed partial class MainWindow {
         return selected;
         }
 
-    private void CreatePluginArchive(ArchivePlugin module) {
+    private void CreatePluginArchive(NativeArchiveModule module) {
         if (_operationActive) {
             return;
             }
@@ -140,7 +140,7 @@ public sealed partial class MainWindow {
                 return;
                 }
 
-            PluginArchive archive = RunPluginOperation("Creating archive", token => PluginArchive.Create(module, destination, sources, overwrite, token));
+            OpenedModuleArchive archive = RunPluginOperation("Creating archive", token => OpenedModuleArchive.Create(module, destination, sources, overwrite, token));
             LoadPluginArchive(archive);
             _status.Text = $"Created archive from {sources.Length:N0} input item(s).";
             }
@@ -152,7 +152,7 @@ public sealed partial class MainWindow {
             }
         }
 
-    private void ImportPluginFiles(PluginArchive archive, string[] sources, Guid folder) {
+    private void ImportPluginFiles(OpenedModuleArchive archive, string[] sources, Guid folder) {
         if (_operationActive || !archive.Supports(PluginActions.Add)) {
             return;
             }
@@ -164,7 +164,7 @@ public sealed partial class MainWindow {
                 }
 
             string destination = archive.Browser.PathOf(folder);
-            PluginArchive updated = RunPluginOperation("Adding files", token => archive.Add(sources, destination, token));
+            OpenedModuleArchive updated = RunPluginOperation("Adding files", token => archive.Add(sources, destination, token));
             LoadPluginArchive(updated, destination);
             _status.Text = $"Added {sources.Length:N0} item(s).";
             }
@@ -186,7 +186,7 @@ public sealed partial class MainWindow {
             return;
             }
 
-        PluginArchive archive = _pluginArchive!;
+        OpenedModuleArchive archive = _pluginArchive!;
         ArchiveBrowser.Entry entry = archive.Browser.Get(ids[0]);
         string folder = archive.Browser.PathOf(_current);
         using FileChooserDialog chooser = new FileChooserDialog($"Replace {entry.Name}", _window,
@@ -199,7 +199,7 @@ public sealed partial class MainWindow {
             }
 
         try {
-            PluginArchive updated = RunPluginOperation("Replacing file", token => archive.Replace(source, entry.Id, token));
+            OpenedModuleArchive updated = RunPluginOperation("Replacing file", token => archive.Replace(source, entry.Id, token));
             LoadPluginArchive(updated, folder);
             _status.Text = $"Replaced {entry.Name}.";
             }
@@ -211,9 +211,9 @@ public sealed partial class MainWindow {
             }
         }
 
-    private void DeletePluginEntries(PluginArchive archive, Guid[] ids, string folder) {
+    private void DeletePluginEntries(OpenedModuleArchive archive, Guid[] ids, string folder) {
         try {
-            PluginArchive updated = RunPluginOperation("Deleting archive entries", token => archive.Delete(ids, token));
+            OpenedModuleArchive updated = RunPluginOperation("Deleting archive entries", token => archive.Delete(ids, token));
             LoadPluginArchive(updated, folder);
             _status.Text = "Selected archive entries deleted.";
             }

@@ -1,3 +1,4 @@
+using Mash.UI.MNXFile.GUI.Plugins;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
@@ -28,7 +29,7 @@ internal sealed class PreviewData : IDisposable {
     internal static PreviewKind Classify(string name, AppSettings settings) {
         string extension = Path.GetExtension(name).TrimStart('.').ToLowerInvariant();
         string plain = "txt,ini,conf,config,cfg,md,markdown,readme,nfo,log,csv,tsv,json,xml,yaml,yml,toml,properties,srt,sub,env";
-        string source = "cs,csx,c,cc,cpp,cxx,h,hpp,m,mm,pl,pm,py,pyw,js,jsx,ts,tsx,java,kt,kts,rs,go,rb,php,phtml,sh,bash,zsh,fish,ps1,psm1,bat,cmd,lua,r,sql,html,htm,css,scss,sass,less,vue,svelte,swift,dart,vb,fs,fsx,ex,exs,erl,hrl,clj,cljs,scala,groovy,asm,s,pas,pp,d,zig,nim,cmake,make,gradle,proto";
+        string source = "cs,csx,c,cc,cpp,cxx,h,hpp,m,mm,pl,pm,py,pyw,rpy,js,jsx,ts,tsx,java,kt,kts,rs,go,rb,php,phtml,sh,bash,zsh,fish,ps1,psm1,bat,cmd,lua,r,sql,html,htm,css,scss,sass,less,vue,svelte,swift,dart,vb,fs,fsx,ex,exs,erl,hrl,clj,cljs,scala,groovy,asm,s,pas,pp,d,zig,nim,cmake,make,gradle,proto";
         if (settings.Flag("Text", "Plain", true) && (HasType(extension, plain, settings.Get("Text", "PlainTypes", "")) || name.Equals("readme", StringComparison.OrdinalIgnoreCase) || name.Equals("license", StringComparison.OrdinalIgnoreCase) || name.Equals("changelog", StringComparison.OrdinalIgnoreCase))) {
             return PreviewKind.Text;
             }
@@ -48,32 +49,50 @@ internal sealed class PreviewData : IDisposable {
         return extension.Length > 0 && (defaults + "," + additional).Split(',').Contains(extension, StringComparer.OrdinalIgnoreCase);
         }
 
-    internal static PreviewData Read(ArchiveFile archive, Guid id, PreviewKind kind, CancellationToken cancellation, int bufferLimit = InputLimit) {
+    internal static PreviewData Read(ArchiveFile archive, Guid id, PreviewKind kind, CancellationToken cancellation,
+        int bufferLimit = InputLimit) {
         ulong size = archive.GetFile(id)?.SizeOriginal ?? throw new FileNotFoundException("The archived entry no longer exists.");
+        return ReadIntoBuffer(size, kind, cancellation, bufferLimit, buffer => {
+            using Stream stream = archive.OpenRead(id);
+            ReadStream(stream, buffer, cancellation);
+            });
+        }
+
+    internal static PreviewData Read(OpenedModuleArchive archive, Guid id, PreviewKind kind, CancellationToken cancellation,
+        int bufferLimit = InputLimit) {
+        ulong size = archive.Browser.Get(id).Bytes;
+        return ReadIntoBuffer(size, kind, cancellation, bufferLimit, buffer => archive.ReadEntry(id, buffer, cancellation));
+        }
+
+    private static PreviewData ReadIntoBuffer(ulong size, PreviewKind kind, CancellationToken cancellation,
+        int bufferLimit, Action<byte[]> fill) {
         bufferLimit = Math.Clamp(bufferLimit, 16 * 1024 * 1024, AppSettings.MaximumPreviewBufferMiB * 1024 * 1024);
         if (size > (ulong)bufferLimit) {
             throw new IOException("Preview skipped: this file exceeds the configured input-buffer limit.");
             }
-        int length = checked((int)Math.Min(size, kind == PreviewKind.Text ? (ulong)TextLimit : (ulong)bufferLimit));
+
+        int readLimit = kind == PreviewKind.Text ? TextLimit : bufferLimit;
+        int length = (int)Math.Min(size, (ulong)readLimit);
+        cancellation.ThrowIfCancellationRequested();
         byte[] data = new byte[length];
         try {
-            cancellation.ThrowIfCancellationRequested();
-            using Stream stream = archive.OpenRead(id);
-            int position = 0;
-            while (position < data.Length) {
-                cancellation.ThrowIfCancellationRequested();
-                int count = stream.Read(data, position, Math.Min(65536, data.Length - position));
-                if (count == 0) {
-                    throw new EndOfStreamException("The preview ended before its indexed length.");
-                    }
-                position += count;
-                }
+            fill(data);
             cancellation.ThrowIfCancellationRequested();
             return new PreviewData(data, kind, size > (ulong)length);
             }
         catch {
             CryptographicOperations.ZeroMemory(data);
             throw;
+            }
+        }
+
+    private static void ReadStream(Stream stream, byte[] destination, CancellationToken cancellation) {
+        int position = 0;
+        while (position < destination.Length) {
+            cancellation.ThrowIfCancellationRequested();
+            int length = Math.Min(65536, destination.Length - position);
+            stream.ReadExactly(destination.AsSpan(position, length));
+            position += length;
             }
         }
 

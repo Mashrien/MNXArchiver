@@ -9,12 +9,12 @@ namespace Mash.UI.MNXFile.GUI.Plugins;
 internal sealed class PluginCatalog {
     private static readonly Lazy<PluginCatalog> _installed = new(DiscoverInstalled);
     internal static PluginCatalog Installed => _installed.Value;
-    internal IReadOnlyList<ArchivePlugin> Modules { get; }
+    internal IReadOnlyList<NativeArchiveModule> Modules { get; }
     internal IReadOnlyList<string> Issues { get; }
     internal string DirectoryPath { get; }
     private readonly int _headerLength;
 
-    private PluginCatalog(string directory, List<ArchivePlugin> modules, List<string> issues) {
+    private PluginCatalog(string directory, List<NativeArchiveModule> modules, List<string> issues) {
         DirectoryPath = directory;
         Modules = modules.AsReadOnly();
         Issues = issues.AsReadOnly();
@@ -39,7 +39,7 @@ internal sealed class PluginCatalog {
 
     internal static PluginCatalog Discover(string directory) {
         directory = Path.GetFullPath(directory);
-        List<ArchivePlugin> modules = new();
+        List<NativeArchiveModule> modules = new();
         List<string> issues = new();
         HashSet<string> ids = new(StringComparer.Ordinal);
         try {
@@ -51,7 +51,7 @@ internal sealed class PluginCatalog {
                         }
                     try {
                         CheckNativeLibrary(path);
-                        ArchivePlugin module = new(path);
+                        NativeArchiveModule module = new(path);
                         if (!ids.Add(module.Format.Id)) {
                             throw new InvalidDataException("A module with the same ID is already installed.");
                             }
@@ -71,7 +71,7 @@ internal sealed class PluginCatalog {
 
     internal string AboutSummary() {
         List<string> lines = new() { $"Archive modules loaded: {Modules.Count}" };
-        foreach (ArchivePlugin module in Modules) {
+        foreach (NativeArchiveModule module in Modules) {
             PluginFormat format = module.Format;
             string extensions = string.Join(", ", format.Extensions);
             string versions = string.Join(", ", format.Versions.Select(version => version.Version));
@@ -181,7 +181,7 @@ internal sealed class PluginCatalog {
 
         PluginMatch? best = null;
         bool ambiguous = false;
-        foreach (ArchivePlugin module in Modules) {
+        foreach (NativeArchiveModule module in Modules) {
             PluginMatch? match = module.Match(header[..length]);
             if (match is null) {
                 continue;

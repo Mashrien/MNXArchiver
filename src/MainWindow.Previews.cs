@@ -1,3 +1,4 @@
+using Mash.UI.MNXFile.GUI.Plugins;
 using Gtk;
 using Mash.UI.MNXFile.GUI.Previews;
 using Mash.UI.MNXFile.GUI.Settings;
@@ -167,11 +168,18 @@ public sealed partial class MainWindow {
         }
 
     private bool CanPreview(Guid id) {
-        if (!_settings.Previews || _operationActive || _archive is null || _browser is null || id == Guid.Empty) {
+        if (!_settings.Previews || _operationActive || _browser is null || id == Guid.Empty) {
             return false;
             }
+        if (_archive is null && _pluginArchive?.Supports(PluginActions.ReadEntry) != true) {
+            return false;
+            }
+
         ArchiveBrowser.Entry entry = _browser.Get(id);
-        return !entry.IsDirectory && entry.Bytes <= (ulong)_settings.PreviewBufferBytes && PreviewData.Classify(entry.Name, _settings) != PreviewKind.Unsupported;
+        if (entry.IsDirectory || entry.Bytes > (ulong)_settings.PreviewBufferBytes) {
+            return false;
+            }
+        return PreviewData.Classify(entry.Name, _settings) != PreviewKind.Unsupported;
         }
 
     internal void PreviewEntry(Guid id, Gdk.Rectangle anchor = default, int cursorX = 0, int cursorY = 0, bool hoverRequest = false) {
@@ -202,7 +210,8 @@ public sealed partial class MainWindow {
             cursorX = originX + pointerX;
             cursorY = originY + pointerY;
             }
-        ArchiveFile archive = _archive!;
+        ArchiveFile? archive = _archive;
+        OpenedModuleArchive? moduleArchive = _pluginArchive;
         ArchiveBrowser.Entry entry = _browser!.Get(id);
         AppSettings settings = _settings.Copy();
         PreviewKind kind = PreviewData.Classify(entry.Name, settings);
@@ -210,7 +219,12 @@ public sealed partial class MainWindow {
         _previewForHover = hoverRequest;
         _previewCancellation = new CancellationTokenSource();
         CancellationToken cancellation = _previewCancellation.Token;
-        _previewRead = Task.Run(() => PreviewData.Read(archive, id, kind, cancellation, settings.PreviewBufferBytes));
+        _previewRead = Task.Run(() => {
+            if (moduleArchive is not null) {
+                return PreviewData.Read(moduleArchive, id, kind, cancellation, settings.PreviewBufferBytes);
+                }
+            return PreviewData.Read(archive!, id, kind, cancellation, settings.PreviewBufferBytes);
+            });
         _status.Text = "Reading preview: " + entry.Name;
         _previewPoll = GLib.Timeout.Add(25, () => {
             if (_previewRead is null) {

@@ -40,7 +40,17 @@ internal static class PluginSmoke {
             Check(host.TestEntryMenu.Visible && host.TestExtractEntry.Sensitive, "Plugin files have a normal Extract context action");
             MenuItem replace = FindItem(host.TestEntryMenu, "Replace");
             Check(replace.Sensitive, "Plugin files have an enabled Replace context action");
-            Check(!FindItem(host.TestEntryMenu, "Preview").Sensitive, "Plugin file preview is disabled");
+            host.TestEntryMenu.Popdown();
+            host.TestSettings.Set("Previews", "Enabled", true);
+            using (TreePath row = new TreePath("0")) {
+                TransferSmoke.RightClick(list, row);
+                }
+            MenuItem preview = FindItem(host.TestEntryMenu, "Preview");
+            Check(preview.Sensitive, "Plugin text preview is enabled");
+            host.TestEntryMenu.Popdown();
+            preview.Activate();
+            CheckTextPreview(host);
+            host.TestSettings.Set("Previews", "Enabled", false);
             Check(FindItem(host.TestEntryMenu, "Delete").Sensitive, "Plugin files have an enabled Delete context action");
             host.TestEntryMenu.Popdown();
             foreach (string action in new[] { "test", "compact" }) {
@@ -259,6 +269,18 @@ internal static class PluginSmoke {
             GLib.Source.Remove(monitor);
             }
         Check(dialogType == MessageType.Warning && error is null, "Delete requests confirmation and succeeds: " + error);
+        }
+
+    private static void CheckTextPreview(MainWindow host) {
+        Stopwatch wait = Stopwatch.StartNew();
+        while (host.TestPreviewCount == 0 && wait.ElapsedMilliseconds < 5000) {
+            while (Application.EventsPending()) {
+                Application.RunIteration(false);
+                }
+            Thread.Sleep(10);
+            }
+        Check(host.TestPreviewCount == 1, "The RPA text preview opened");
+        host.TestPreviews[0].Dispose();
         }
 
     private static void Check(bool condition, string description) {

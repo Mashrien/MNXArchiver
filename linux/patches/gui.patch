@@ -18,8 +18,8 @@
          try {
              bool smoke = args.Length > 0 && args[0] == "--smoke-test";
              if (smoke && args.Length != 2) {
---- a/MainForm.PreviewsAndDrag.cs
-+++ b/MainForm.PreviewsAndDrag.cs
+--- a/MainForm.DragAndDrop.cs
++++ b/MainForm.DragAndDrop.cs
 @@ -264,5 +264,3 @@
 -    private static async Task<DragDropEffects> StartFileDrag(Control source, Func<CancellationToken, Task<string[]>> prepareFiles) {
 -        string[] paths = await prepareFiles(CancellationToken.None);

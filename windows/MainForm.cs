@@ -344,8 +344,8 @@ public sealed partial class MainForm : MashWin.MWindow {
         try {
             PluginMatch? match = PluginCatalog.Installed.Match(path);
             if (match is not null) {
-                PluginArchive result = await RunPluginOperation("Opening archive", path, match.Module.Format.Name,
-                    token => PluginArchive.Open(match, path, token));
+                OpenedModuleArchive result = await RunPluginOperation("Opening archive", path, match.Module.Format.Name,
+                    token => OpenedModuleArchive.Open(match, path, token));
                 CloseArchive();
                 SetPluginArchive(result);
                 return true;

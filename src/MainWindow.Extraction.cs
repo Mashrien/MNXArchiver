@@ -105,7 +105,7 @@ public sealed partial class MainWindow {
         return replace;
         }
 
-    private void ExtractPluginSelection(PluginArchive archive, Guid[] ids, string destination, bool singleFile, bool replacementConfirmed) {
+    private void ExtractPluginSelection(OpenedModuleArchive archive, Guid[] ids, string destination, bool singleFile, bool replacementConfirmed) {
         if (ids.Length == 0) {
             _status.Text = "The archive has no entries to extract.";
             return;

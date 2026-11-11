@@ -234,7 +234,7 @@ internal static class PreviewSmokeTests {
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr SendMessage(IntPtr window, uint message, IntPtr first, IntPtr second);
 
-    private static byte[] Png() {
+    internal static byte[] Png() {
         using Bitmap bitmap = new Bitmap(4, 3);
         bitmap.SetPixel(0, 0, Color.Red);
         using MemoryStream stream = new MemoryStream();

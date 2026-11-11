@@ -4,9 +4,10 @@ using System.Text.Json;
 
 namespace Mash.UI.MNXFile.GUI.Plugins;
 
-/// <summary>One trusted native archive module. The library stays loaded until process exit.</summary>
-internal sealed unsafe class ArchivePlugin {
+/// <summary>A loaded native library and its declared archive formats and capabilities.</summary>
+internal sealed unsafe class NativeArchiveModule {
     private readonly delegate* unmanaged[Cdecl]<byte*, int, nint, nint, byte**, int*, int> _request;
+    private readonly delegate* unmanaged[Cdecl]<byte*, int, nint, nint, byte*, int, byte**, int*, int> _readEntry;
     private readonly delegate* unmanaged[Cdecl]<byte*, void> _release;
     private readonly (PluginFormatVersion Version, byte[] Magic)[] _signatures;
     internal string LibraryName { get; }
@@ -14,9 +15,9 @@ internal sealed unsafe class ArchivePlugin {
     internal PluginFormatVersion Current { get; }
     internal int SignatureLength { get; }
 
-    internal ArchivePlugin(string path) {
+    internal NativeArchiveModule(string path) {
         LibraryName = Path.GetFileName(path);
-        nint library = NativeLibrary.Load(path, typeof(ArchivePlugin).Assembly,
+        nint library = NativeLibrary.Load(path, typeof(NativeArchiveModule).Assembly,
             DllImportSearchPath.SafeDirectories | DllImportSearchPath.UseDllDirectoryForDependencies);
         delegate* unmanaged[Cdecl]<uint> abi = (delegate* unmanaged[Cdecl]<uint>)NativeLibrary.GetExport(library, "mnx_plugin_abi_version");
         uint version = abi();
@@ -26,9 +27,16 @@ internal sealed unsafe class ArchivePlugin {
 
         _request = (delegate* unmanaged[Cdecl]<byte*, int, nint, nint, byte**, int*, int>)NativeLibrary.GetExport(library, "mnx_plugin_request");
         _release = (delegate* unmanaged[Cdecl]<byte*, void>)NativeLibrary.GetExport(library, "mnx_plugin_release");
+        if (NativeLibrary.TryGetExport(library, "mnx_plugin_read_entry", out nint readEntry)) {
+            _readEntry = (delegate* unmanaged[Cdecl]<byte*, int, nint, nint, byte*, int, byte**, int*, int>)readEntry;
+            }
+
         Format = Invoke(new PluginRequest { Operation = "describe" }).Format
             ?? throw new InvalidDataException("The plugin returned no format descriptor.");
-        ValidateFormat(Format);
+        ArchiveModuleDescriptor.Validate(Format);
+        if (_readEntry == null && Format.Versions.Any(entry => entry.Actions.HasFlag(PluginActions.ReadEntry))) {
+            throw new InvalidDataException("The module advertises entry reads but does not export mnx_plugin_read_entry.");
+            }
         Current = Format.Versions.Single(entry => entry.Version == Format.CurrentVersion);
         _signatures = Format.Versions.Select(entry => (entry, Convert.FromHexString(entry.MagicHex))).ToArray();
         SignatureLength = _signatures.Max(entry => entry.Magic.Length);
@@ -38,55 +46,38 @@ internal sealed unsafe class ArchivePlugin {
         Invoke(new PluginRequest { Operation = "negotiate" });
         }
 
-    private static void ValidateFormat(PluginFormat format) {
-        if (!PluginProtocol.Supports(format.Version, PluginProtocol.MinPluginVersion, PluginProtocol.MaxPluginVersion)) {
-            throw new NotSupportedException($"Module release {format.Version} is outside {PluginProtocol.MinPluginVersion}–{PluginProtocol.MaxPluginVersion}.");
-            }
-        if (!PluginProtocol.Supports(PluginProtocol.HostVersion, format.MinHostVersion, format.MaxHostVersion)) {
-            throw new NotSupportedException($"Module requires MNXArchiver {format.MinHostVersion}–{format.MaxHostVersion}; this host is {PluginProtocol.HostVersion}.");
-            }
-        if (string.IsNullOrWhiteSpace(format.Id) || format.Id.Length > 80
-            || format.Id.Any(character => !char.IsAsciiLetterOrDigit(character) && character is not '.' and not '-')
-            || string.IsNullOrWhiteSpace(format.Name) || format.Name.Length > 80 || format.Name.Any(character => char.IsControl(character) || character == '|')
-            || format.Extensions is not { Length: > 0 and <= 16 }
-            || format.Versions is not { Length: > 0 and <= 32 }) {
-            throw new InvalidDataException("Invalid archive plugin descriptor.");
-            }
-        foreach (string extension in format.Extensions) {
-            if (extension is null || extension.Length is < 2 or > 16 || extension[0] != '.' || !extension.Skip(1).All(char.IsAsciiLetterOrDigit)
-                || extension.Equals(".mnx", StringComparison.OrdinalIgnoreCase) || extension.Equals(".mnq", StringComparison.OrdinalIgnoreCase)) {
-                throw new InvalidDataException("The plugin declared an invalid file extension.");
-                }
-            }
-        HashSet<string> versions = new(StringComparer.Ordinal);
-        HashSet<string> signatures = new(StringComparer.OrdinalIgnoreCase);
-        foreach (PluginFormatVersion entry in format.Versions) {
-            if (entry is null || !Version.TryParse(entry.Version, out _) || !versions.Add(entry.Version)
-                || entry.MagicHex is null || entry.MagicHex.Length is < 2 or > 128 || entry.MagicHex.Length % 2 != 0
-                || !entry.MagicHex.All(Uri.IsHexDigit) || !signatures.Add(entry.MagicHex)) {
-                throw new InvalidDataException("The plugin declared an invalid or duplicate archive signature.");
-                }
-            ReadOnlySpan<byte> signature = Convert.FromHexString(entry.MagicHex);
-            if (signature.StartsWith("MNX"u8) || "MNX"u8.StartsWith(signature)) {
-                throw new InvalidDataException("MNX archive signatures are reserved for the built-in engine.");
-                }
-            }
-        if (!versions.Contains(format.CurrentVersion)) {
-            throw new InvalidDataException("The plugin's current archive version is not declared.");
-            }
-        }
-
     internal PluginMatch? Match(ReadOnlySpan<byte> header) {
         PluginMatch? result = null;
         foreach ((PluginFormatVersion version, byte[] magic) in _signatures) {
-            if (header.StartsWith(magic) && (result is null || magic.Length > result.SignatureLength)) {
+            if (!header.StartsWith(magic)) {
+                continue;
+                }
+            if (result is null || magic.Length > result.SignatureLength) {
                 result = new PluginMatch(this, version, magic.Length);
                 }
             }
         return result;
         }
 
+    internal void ReadEntry(PluginRequest request, byte[] destination, CancellationToken cancellation) {
+        if (_readEntry == null) {
+            throw new NotSupportedException("This module does not support in-memory entry reads.");
+            }
+        if (destination.Length > PluginProtocol.MaxPreviewBytes) {
+            throw new IOException("The entry read exceeds the plugin buffer limit.");
+            }
+
+        PluginResponse response = Invoke(request, cancellation, destination);
+        if (response.BytesRead != destination.Length) {
+            throw new EndOfStreamException("The module did not fill the requested entry buffer.");
+            }
+        }
+
     internal PluginResponse Invoke(PluginRequest input, CancellationToken cancellation = default) {
+        return Invoke(input, cancellation, null);
+        }
+
+    private PluginResponse Invoke(PluginRequest input, CancellationToken cancellation, byte[]? entryBuffer) {
         cancellation.ThrowIfCancellationRequested();
         PluginRequest request = input with {
             HostVersion = PluginProtocol.HostVersion,
@@ -108,11 +99,22 @@ internal sealed unsafe class ArchivePlugin {
                 cancel = (nint)(delegate* unmanaged[Cdecl]<nint, int>)&IsCancelled;
                 }
 
-            fixed (byte* bytes = json) {
-                int status = _request(bytes, json.Length, cancel, state.IsAllocated ? GCHandle.ToIntPtr(state) : 0, &response, &length);
-                if (status != 0 || response == null || length <= 0 || length > PluginProtocol.MaxMessageBytes) {
-                    throw new IOException($"Invalid archive plugin response (status {status}, length {length}).");
+            nint cancelState = state.IsAllocated ? GCHandle.ToIntPtr(state) : 0;
+            int status;
+            fixed (byte* bytes = json, destination = entryBuffer) {
+                if (entryBuffer is null) {
+                    status = _request(bytes, json.Length, cancel, cancelState, &response, &length);
                     }
+                else {
+                    status = _readEntry(bytes, json.Length, cancel, cancelState, destination, entryBuffer.Length,
+                        &response, &length);
+                    }
+                }
+            if (status != 0 || response == null) {
+                throw new IOException($"The archive module returned transport status {status} with no usable response.");
+                }
+            if (length <= 0 || length > PluginProtocol.MaxMessageBytes) {
+                throw new IOException($"Invalid archive module response length ({length}).");
                 }
             PluginResponse result = JsonSerializer.Deserialize(new ReadOnlySpan<byte>(response, length), PluginJson.Default.PluginResponse)
                 ?? throw new IOException("The archive plugin returned an empty response.");
@@ -145,4 +147,4 @@ internal sealed unsafe class ArchivePlugin {
         }
     }
 
-internal sealed record PluginMatch(ArchivePlugin Module, PluginFormatVersion Version, int SignatureLength);
+internal sealed record PluginMatch(NativeArchiveModule Module, PluginFormatVersion Version, int SignatureLength);

@@ -212,7 +212,7 @@ public sealed partial class MainWindow : IDisposable {
         try {
             PluginMatch? match = PluginCatalog.Installed.Match(fileName);
             if (match is not null) {
-                PluginArchive archive = RunPluginOperation("Opening archive", token => PluginArchive.Open(match, fileName, token));
+                OpenedModuleArchive archive = RunPluginOperation("Opening archive", token => OpenedModuleArchive.Open(match, fileName, token));
                 LoadPluginArchive(archive);
                 return true;
                 }
@@ -476,8 +476,8 @@ public sealed partial class MainWindow : IDisposable {
             );
         GtkWindowAppearance.Apply(chooser);
         AddArchiveFilter(chooser);
-        IReadOnlyList<ArchivePlugin> plugins = PluginCatalog.Installed.Modules;
-        foreach (ArchivePlugin plugin in plugins) {
+        IReadOnlyList<NativeArchiveModule> plugins = PluginCatalog.Installed.Modules;
+        foreach (NativeArchiveModule plugin in plugins) {
             AddPluginFilter(chooser, plugin);
             }
         FileFilter all = new FileFilter {

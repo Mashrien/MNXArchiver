@@ -82,6 +82,25 @@ class RpaModuleTests(unittest.TestCase):
             if response.value:
                 module.mnx_plugin_release(response)
 
+    def read_entry(self, entry_path, entry_size, capacity, *, callback=None):
+        request = dict(NEGOTIATION, operation="read", archivePath=str(self.archive),
+                       entryPath=entry_path, entrySize=entry_size)
+        payload = json.dumps(request).encode("utf-8")
+        destination = ctypes.create_string_buffer(capacity)
+        response = ctypes.c_void_p()
+        length = ctypes.c_int()
+        cancel = CANCEL(callback) if callback is not None else None
+        status = module.mnx_plugin_read_entry(
+            payload, len(payload), ctypes.cast(cancel, ctypes.c_void_p), None,
+            destination if capacity else None, capacity, ctypes.byref(response), ctypes.byref(length))
+        try:
+            self.assertEqual(status, 0)
+            self.assertTrue(response.value)
+            return json.loads(ctypes.string_at(response, length.value)), destination.raw
+        finally:
+            if response.value:
+                module.mnx_plugin_release(response)
+
     def assert_success(self, response):
         self.assertIsNone(response["error"])
         self.assertFalse(response["cancelled"])
@@ -97,19 +116,19 @@ class RpaModuleTests(unittest.TestCase):
         self.assertEqual(module.mnx_plugin_abi_version(), 1)
         description = self.assert_success(self.send(b'{"operation":"describe"}'))["format"]
         self.assertEqual(description, {
-            "id": "renpy.rpa", "name": "Ren'Py RPA", "version": "1.0.0",
+            "id": "renpy.rpa", "name": "Ren'Py RPA", "version": "1.0.1",
             "minHostVersion": "2.0.0", "maxHostVersion": "2.0.999",
             "extensions": [".rpa"], "versions": [{
-                "version": "3.0", "magicHex": "5250412D332E3020", "actions": 31,
+                "version": "3.0", "magicHex": "5250412D332E3020", "actions": 63,
             }], "currentVersion": "3.0",
         })
         for host_version in ["2.0.0", "2.0.999"]:
             self.assert_success(self.request("negotiate", hostVersion=host_version))
-        for field, value in [("hostVersion", "2.1.0"), ("minPluginVersion", "1.0.1"),
+        for field, value in [("hostVersion", "2.1.0"), ("minPluginVersion", "1.0.2"),
                              ("maxPluginVersion", "0.9.999"), ("hostVersion", None)]:
             for operation in ["negotiate", "open", "create", "add", "replace", "delete", "extract"]:
                 response = self.request(operation, **{field: value})
-                self.assertIn("compatib", response["error"].lower())
+                self.assertIn("range", response["error"].lower())
         self.assertFalse(self.archive.exists())
         self.assertTrue(self.send(b"null")["error"])
         self.assertTrue(self.send(b"{")["error"])
@@ -132,6 +151,16 @@ class RpaModuleTests(unittest.TestCase):
                     "entryPath": "images/café.txt", "destination": str(destination),
                 }]))
                 self.assertEqual(destination.read_bytes(), b"\x00\x80\xffABC!xyz")
+                expected = destination.read_bytes()
+                for capacity in [0, 2, 6, 8, len(expected)]:
+                    response, preview = self.read_entry("images/café.txt", len(expected), capacity)
+                    self.assertEqual(self.assert_success(response)["bytesRead"], capacity)
+                    self.assertEqual(preview, expected[:capacity])
+                changed, _ = self.read_entry("images/café.txt", 9, 2)
+                self.assertIn("size changed", changed["error"])
+                cancelled, _ = self.read_entry("images/café.txt", len(expected), 2, callback=lambda _: 1)
+                self.assertTrue(cancelled["cancelled"])
+
 
     def test_python_two_byte_strings(self):
         # Protocol 2 opcodes emitted for Python 2 str filenames and byte prefixes.
@@ -423,6 +452,12 @@ if __name__ == "__main__":
         ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(ctypes.c_int),
     ]
     module.mnx_plugin_request.restype = ctypes.c_int
+    module.mnx_plugin_read_entry.argtypes = [
+        ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p,
+        ctypes.c_void_p, ctypes.c_int,
+        ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(ctypes.c_int),
+    ]
+    module.mnx_plugin_read_entry.restype = ctypes.c_int
     module.mnx_plugin_release.argtypes = [ctypes.c_void_p]
     module.mnx_plugin_release.restype = None
     unittest.main()

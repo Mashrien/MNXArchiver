@@ -1,4 +1,5 @@
 using Mash.UI.MNXFile.GUI.Plugins;
+using Mash.UI.MNXFile.GUI.Settings;
 using DiskFile = System.IO.File;
 
 namespace Mash.UI.MNXFile.GUI;
@@ -25,8 +26,9 @@ public sealed partial class MainForm {
         Guid folder = browser.Resolve("/folder");
         Navigate(folder);
         Guid hello = browser.Children(folder).Single().Id;
-        Require(!CanPreview(hello) && CanReplacePluginEntry([hello]) && !CanReplacePluginEntry([folder]),
-            "Preview or Replace was enabled for the wrong entry or format.");
+        Require(CanReplacePluginEntry([hello]) && !CanReplacePluginEntry([folder]),
+            "Replace was enabled for the wrong entry or format.");
+        await CheckPluginPreviews(work, folder, hello);
 
         string output = Path.Combine(work, "plugin-extracted.txt");
         await ExtractSelection([hello], output, singleFile: true);
@@ -44,7 +46,7 @@ public sealed partial class MainForm {
         await DeleteEntries([folder], confirmed: true);
         Require(_browser!.Children(_browser.Root).Count == 0 && _current == _browser.Root, "Deleting a virtual folder left entries or an invalid location.");
 
-        ArchivePlugin module = PluginCatalog.Installed.Modules.Single(plugin => plugin.Format.Id == "renpy.rpa");
+        NativeArchiveModule module = PluginCatalog.Installed.Modules.Single(plugin => plugin.Format.Id == "renpy.rpa");
         string created = Path.Combine(work, "created.rpa");
         await CreatePluginArchive(module, created, [source], overwrite: false);
         Require(_pluginArchive!.Path == created && _browser!.Children(_browser.Root).Single().Name == Path.GetFileName(source),
@@ -60,6 +62,36 @@ public sealed partial class MainForm {
             }
         Require(refused && _pluginArchive?.Path == created, "An unsupported RPA replaced the current archive view.");
         CloseArchive();
-        evidence.Add("PASS: native RPA discovery, magic routing, GUI extraction/add/replace/delete/create, feature gating and failed-open preservation");
+        evidence.Add("PASS: native RPA discovery, magic routing, text/image previews, GUI extraction/add/replace/delete/create, feature gating and failed-open preservation");
+        }
+    private async Task CheckPluginPreviews(string work, Guid folder, Guid hello) {
+        AppSettings original = _settings;
+        try {
+            _settings = original.Copy();
+            _settings.Set("Previews", "Enabled", true);
+            ResetPreviews();
+            Require(CanPreview(hello) && !CanPreview(folder), "RPA text preview eligibility is incorrect.");
+            await PreviewEntry(hello, false);
+            using (Form textWindow = _previews.Windows.Single()) {
+                RichTextBox text = textWindow.Controls.OfType<RichTextBox>().Single();
+                Require(text.ReadOnly && text.Text == "hello from Ren'Py", "RPA text preview changed the entry bytes.");
+                textWindow.Close();
+                }
+
+            string imagePath = Path.Combine(work, "plugin-preview.png");
+            DiskFile.WriteAllBytes(imagePath, PreviewSmokeTests.Png());
+            await ImportFiles([imagePath], folder);
+            Guid imageId = _browser!.Children(folder).Single(entry => entry.Name == "plugin-preview.png").Id;
+            await PreviewEntry(imageId, false);
+            using (PreviewForm image = (PreviewForm)_previews.Windows.Single()) {
+                Require(image.ImageSize == new Size(4, 3), "RPA image preview did not decode the archived PNG.");
+                image.Close();
+                }
+            await DeleteEntries([imageId], confirmed: true);
+            }
+        finally {
+            _settings = original;
+            ResetPreviews();
+            }
         }
     }

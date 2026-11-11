@@ -4,7 +4,7 @@ using Mash.UI.MNXFile.GUI.Plugins;
 namespace Mash.UI.MNXFile.GUI;
 
 public sealed partial class MainForm {
-    private PluginArchive? _pluginArchive;
+    private OpenedModuleArchive? _pluginArchive;
     private readonly ToolStripMenuItem _replacePluginEntry = new ToolStripMenuItem("Replace file…");
 
     internal static bool ShouldOpenArchive(string input) {
@@ -27,7 +27,7 @@ public sealed partial class MainForm {
     private static string PluginOpenFilter() {
         List<string> supportedPatterns = new List<string> { "*.mnx" };
         List<string> filters = new List<string> { "MNX archives (*.mnx)|*.mnx" };
-        foreach (ArchivePlugin module in PluginCatalog.Installed.Modules) {
+        foreach (NativeArchiveModule module in PluginCatalog.Installed.Modules) {
             string[] patterns = module.Format.Extensions.Select(extension => "*" + extension).ToArray();
             supportedPatterns.AddRange(patterns);
             filters.Add(module.Format.Name + " archives|" + string.Join(";", patterns));
@@ -39,7 +39,7 @@ public sealed partial class MainForm {
 
     private void ConfigurePluginActions() {
         int index = 1;
-        foreach (ArchivePlugin module in PluginCatalog.Installed.Modules) {
+        foreach (NativeArchiveModule module in PluginCatalog.Installed.Modules) {
             if ((module.Current.Actions & PluginActions.Create) == 0) {
                 continue;
                 }
@@ -59,12 +59,12 @@ public sealed partial class MainForm {
             pluginCancellation: cancellation, pluginFormat: formatName);
         }
 
-    private void SetPluginArchive(PluginArchive archive, Guid? location = null) {
+    private void SetPluginArchive(OpenedModuleArchive archive, Guid? location = null) {
         _pluginArchive = archive;
         LoadBrowser(archive.Browser, location);
         }
 
-    private async Task ChoosePluginCreation(ArchivePlugin module) {
+    private async Task ChoosePluginCreation(NativeArchiveModule module) {
         using InputSelectionForm input = new InputSelectionForm("Create " + module.Format.Name + " archive");
         if (input.ShowDialog(this) != DialogResult.OK) {
             return;
@@ -92,18 +92,18 @@ public sealed partial class MainForm {
         await CreatePluginArchive(module, chooser.FileName, sources, overwrite);
         }
 
-    private async Task CreatePluginArchive(ArchivePlugin module, string path, string[] sources, bool overwrite) {
-        PluginArchive result = await RunPluginOperation("Creating archive", path, module.Format.Name,
-            token => PluginArchive.Create(module, path, sources, overwrite, token));
+    private async Task CreatePluginArchive(NativeArchiveModule module, string path, string[] sources, bool overwrite) {
+        OpenedModuleArchive result = await RunPluginOperation("Creating archive", path, module.Format.Name,
+            token => OpenedModuleArchive.Create(module, path, sources, overwrite, token));
         CloseArchive();
         SetPluginArchive(result);
         statusMessage.Text = "Created " + module.Format.Name + " archive.";
         }
 
     private async Task AddPluginFiles(string[] sources, Guid folder) {
-        PluginArchive archive = _pluginArchive!;
+        OpenedModuleArchive archive = _pluginArchive!;
         string target = archive.Browser.PathOf(folder);
-        PluginArchive result = await RunPluginOperation("Adding files", archive.Path, archive.Format.Name,
+        OpenedModuleArchive result = await RunPluginOperation("Adding files", archive.Path, archive.Format.Name,
             token => archive.Add(sources, target, token));
         SetPluginArchive(result, folder);
         statusMessage.Text = "Files added.";
@@ -133,16 +133,16 @@ public sealed partial class MainForm {
         }
 
     private async Task ReplacePluginFile(string source, Guid id) {
-        PluginArchive archive = _pluginArchive!;
+        OpenedModuleArchive archive = _pluginArchive!;
         Guid folder = _current;
-        PluginArchive result = await RunPluginOperation("Replacing file", archive.Path, archive.Format.Name,
+        OpenedModuleArchive result = await RunPluginOperation("Replacing file", archive.Path, archive.Format.Name,
             token => archive.Replace(source, id, token));
         SetPluginArchive(result, folder);
         statusMessage.Text = "Archived file replaced.";
         }
 
     private async Task ExtractPluginEntries(Guid[] ids, string destination, bool singleFile, bool overwrite) {
-        PluginArchive archive = _pluginArchive!;
+        OpenedModuleArchive archive = _pluginArchive!;
         PluginExtraction plan = archive.PlanExtraction(ids, destination, singleFile);
         string[] existing = plan.ExistingFiles();
         if (existing.Length > 0 && !overwrite) {
@@ -160,15 +160,15 @@ public sealed partial class MainForm {
         }
 
     private async Task DeletePluginEntries(Guid[] ids, Guid location) {
-        PluginArchive archive = _pluginArchive!;
-        PluginArchive result = await RunPluginOperation("Deleting entries", archive.Path, archive.Format.Name,
+        OpenedModuleArchive archive = _pluginArchive!;
+        OpenedModuleArchive result = await RunPluginOperation("Deleting entries", archive.Path, archive.Format.Name,
             token => archive.Delete(ids, token));
         SetPluginArchive(result, location);
         statusMessage.Text = "Entries deleted.";
         }
 
     private void ShowPluginProperties(Guid[] ids) {
-        PluginArchive archive = _pluginArchive!;
+        OpenedModuleArchive archive = _pluginArchive!;
         string details = archive.Path + "\n\nFormat: " + archive.Format.Name + " " + archive.FormatVersion;
         if (ids.Length == 1) {
             ArchiveBrowser.Entry entry = archive.Browser.Get(ids[0]);

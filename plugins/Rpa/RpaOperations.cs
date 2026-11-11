@@ -4,9 +4,7 @@ internal static class RpaOperations {
     private static readonly object OperationGate = new();
 
     internal static PluginResponse Run(PluginRequest request, RpaCancellation cancellation) {
-        while (!Monitor.TryEnter(OperationGate, millisecondsTimeout: 50))
-            cancellation.Check();
-
+        EnterOperation(cancellation);
         try {
             cancellation.Check();
             string archivePath = RpaPaths.FullFilePath(request.ArchivePath, "archive path");
@@ -16,6 +14,41 @@ internal static class RpaOperations {
                 "create" or "add" or "replace" or "delete" => Edit(archivePath, request, cancellation),
                 _ => throw new InvalidDataException($"Unknown RPA operation '{request.Operation}'."),
                 };
+            }
+        finally {
+            Monitor.Exit(OperationGate);
+            }
+        }
+
+    private static void EnterOperation(RpaCancellation cancellation) {
+        while (!Monitor.TryEnter(OperationGate, millisecondsTimeout: 50)) {
+            cancellation.Check();
+            }
+        }
+
+    internal static void ReadEntry(PluginRequest request, Stream destination, int length, RpaCancellation cancellation) {
+        EnterOperation(cancellation);
+        try {
+            cancellation.Check();
+            string archivePath = RpaPaths.FullFilePath(request.ArchivePath, "archive path");
+            string entryPath = request.EntryPath ?? throw new InvalidDataException("An entry path is required.");
+            RpaPaths.ValidateEntryPath(entryPath);
+
+            using FileStream archive = OpenArchive(archivePath);
+            RpaIndex index = RpaIndex.Read(archive, cancellation);
+            if (!index.Entries.TryGetValue(entryPath, out RpaEntry? entry)) {
+                throw new FileNotFoundException("The RPA entry no longer exists.", entryPath);
+                }
+            if (entry.Size != request.EntrySize) {
+                throw new IOException("The RPA entry size changed. Reopen the archive to refresh its contents.");
+                }
+            if (length > entry.Size) {
+                throw new EndOfStreamException("The requested read is longer than the RPA entry.");
+                }
+
+            byte[] buffer = new byte[RpaIndex.BufferSize];
+            CopyEntry(entry, archive, destination, buffer, cancellation, length);
+            cancellation.Check();
             }
         finally {
             Monitor.Exit(OperationGate);
@@ -274,23 +307,37 @@ internal static class RpaOperations {
             throw new InvalidDataException("An extraction destination cannot overwrite the RPA archive.");
         }
 
-    private static void CopyEntry(RpaEntry entry, FileStream archive, FileStream destination,
-        byte[] buffer, RpaCancellation cancellation) {
+    private static void CopyEntry(RpaEntry entry, FileStream archive, Stream destination,
+        byte[] buffer, RpaCancellation cancellation, long? readLength = null) {
+        long remaining = readLength ?? entry.Size;
         foreach (RpaSegment segment in entry.Segments) {
-            cancellation.Check();
-            for (int offset = 0; offset < segment.Prefix.Length;) {
+            if (remaining == 0) {
+                break;
+                }
+
+            int prefixLength = (int)Math.Min(remaining, segment.Prefix.Length);
+            int offset = 0;
+            while (offset < prefixLength) {
                 cancellation.Check();
-                int count = Math.Min(segment.Prefix.Length - offset, buffer.Length);
+                int count = Math.Min(prefixLength - offset, buffer.Length);
                 destination.Write(segment.Prefix, offset, count);
                 offset += count;
                 }
+            remaining -= prefixLength;
 
-            archive.Position = segment.Offset;
-            CopyBytes(archive, destination, segment.Length, buffer, cancellation);
+            long segmentLength = Math.Min(remaining, segment.Length);
+            if (segmentLength > 0) {
+                archive.Position = segment.Offset;
+                CopyBytes(archive, destination, segmentLength, buffer, cancellation);
+                remaining -= segmentLength;
+                }
+            }
+        if (remaining != 0) {
+            throw new EndOfStreamException("The RPA segments ended before the requested entry length.");
             }
         }
 
-    private static void CopyBytes(FileStream source, FileStream destination, long remaining,
+    private static void CopyBytes(FileStream source, Stream destination, long remaining,
         byte[] buffer, RpaCancellation cancellation) {
         while (remaining > 0) {
             cancellation.Check();
