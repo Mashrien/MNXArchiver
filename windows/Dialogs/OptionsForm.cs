@@ -1,7 +1,7 @@
 using System.Globalization;
-using Mash.UI.MNXFile.GUI.Settings;
+using Mash.GUI.MNXArchiver.Settings;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 /// <summary>Edits a settings copy; all editable controls live in OptionsForm.Designer.cs.</summary>
 public sealed partial class OptionsForm : MnxDialog {

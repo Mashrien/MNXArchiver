@@ -1,4 +1,4 @@
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainForm {
     private async Task CheckArchiveDrops(string currentPath, string directory) {

@@ -1,5 +1,5 @@
-using Mash.UI.MNXFile.GUI.Backends;
-using Mash.UI.MNXFile.GUI.Settings;
+using Mash.GUI.MNXArchiver.Backends;
+using Mash.GUI.MNXArchiver.Settings;
 
 if (args.Length == 2 && args[0] == "--probe-backend") {
     return BackendProbe.RunChild(args[1]);

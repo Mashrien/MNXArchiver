@@ -8,6 +8,9 @@
 #ifndef MIN_HOST
 #define MIN_HOST "2.0.0"
 #endif
+#ifndef MAX_HOST
+#define MAX_HOST "2.9.999"
+#endif
 #ifndef ABI
 #define ABI MNX_PLUGIN_ABI_VERSION
 #endif
@@ -21,7 +24,7 @@ int32_t mnx_plugin_request(const uint8_t *request, int32_t length,
     (void)cancel;
     (void)state;
     const char *description = "{\"format\":{\"id\":\"test.rejected\",\"name\":\"Test module\","
-        "\"version\":\"" RELEASE "\",\"minHostVersion\":\"" MIN_HOST "\",\"maxHostVersion\":\"2.9.999\","
+        "\"version\":\"" RELEASE "\",\"minHostVersion\":\"" MIN_HOST "\",\"maxHostVersion\":\"" MAX_HOST "\","
         "\"extensions\":[\".test\"],\"versions\":[{\"version\":\"1.0\",\"magicHex\":\"74657374\",\"actions\":0}],"
         "\"currentVersion\":\"1.0\"}}";
     const char *json = "{\"error\":\"Fixture refused negotiation\"}";

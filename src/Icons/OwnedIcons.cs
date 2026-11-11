@@ -1,6 +1,6 @@
 using Gtk;
 
-namespace Mash.UI.MNXFile.GUI.Icons;
+namespace Mash.GUI.MNXArchiver.Icons;
 
 /// <summary>Application-owned PNGs. No icon-theme lookup or runtime SVG loader.</summary>
 internal static class OwnedIcons {
@@ -20,9 +20,9 @@ internal static class OwnedIcons {
         if (Pixels.TryGetValue((name, size), out Gdk.Pixbuf? existing)) {
             return existing;
             }
-        string resource = $"Mash.UI.MNXFile.GUI.Icons.{size}.{name}.png";
+        string resource = $"Mash.GUI.MNXArchiver.Icons.{size}.{name}.png";
         if (name == "archive") {
-            using Stream original = typeof(OwnedIcons).Assembly.GetManifestResourceStream("Mash.UI.MNXFile.GUI.archive.png")
+            using Stream original = typeof(OwnedIcons).Assembly.GetManifestResourceStream("Mash.GUI.MNXArchiver.archive.png")
                 ?? throw new InvalidDataException("Missing embedded application icon.");
             using Gdk.Pixbuf archive = new Gdk.Pixbuf(original);
             Gdk.Pixbuf scaled = archive.ScaleSimple(size, size, Gdk.InterpType.Bilinear);

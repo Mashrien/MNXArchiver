@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 
-namespace Mash.UI.MNXFile.GUI.Plugins.Rpa;
+namespace Mash.GUI.MNXArchiver.Plugins.Rpa;
 
 internal sealed class RpaPickleReader(byte[] data, int length, RpaCancellation cancellation) {
     private static readonly UTF8Encoding Utf8 = new(false, true);

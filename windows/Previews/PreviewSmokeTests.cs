@@ -2,13 +2,12 @@ using System.Buffers.Binary;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Text;
-using Mash.UI.MNXFile.GUI.Plugins;
-using Mash.UI.MNXFile.GUI.Previews;
-using Mash.UI.MNXFile.GUI.Settings;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
-using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
+using Mash.GUI.MNXArchiver.Plugins;
+using Mash.GUI.MNXArchiver.Previews;
+using Mash.GUI.MNXArchiver.Settings;
+using MNX;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 /// <summary>Windows-only smoke hooks. Call on the STA UI thread with an existing visible owner.</summary>
 internal static class PreviewSmokeTests {
@@ -220,11 +219,11 @@ internal static class PreviewSmokeTests {
             source.SetLength(129L * 1024 * 1024 + 1);
             source.WriteByte(65);
             }
-        using ArchiveFile archive = new ArchiveFile();
-        archive.Options.Compression = Mash.IO.Format.MNX.Archive.Codecs.ArchiveCompression.Snappy;
+        using Archive archive = new Archive();
+        archive.Options.Compression = ArchiveCompression.Snappy;
         archive.Create(new FileInfo(Path.Combine(directory, "large-preview.mnx")));
         archive.AddFileNow(new FileInfo(input));
-        VirtualFile entry = archive.Files.Single(file => !file.IsDirectory);
+        VFile entry = archive.Files.Single(file => !file.IsDirectory);
         using PreviewData data = PreviewData.Read(archive, entry.FileID, PreviewKind.Text, CancellationToken.None, 512 * 1024 * 1024);
         // Text still reads only its normal 2 MiB excerpt. This catches a hidden
         // 128 MiB input clamp without allocating a huge image or decoded frames.
@@ -356,14 +355,14 @@ internal static class PreviewSmokeTests {
         AppSettings settings = defaults.Copy();
         settings.Set("Images", "Animated", true);
         settings.Set("Presentation", "Mode", "Window");
-        using ArchiveFile archive = new ArchiveFile().Open(path);
-        VirtualFile[] candidates = archive.Files.Where(file => file.Name.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)
+        using Archive archive = new Archive().Open(path);
+        VFile[] candidates = archive.Files.Where(file => file.Name.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)
             && file.SizeOriginal >= 8_000_000 && file.SizeOriginal <= 20_000_000).ToArray();
         Require(candidates.Length > 0, "The large-GIF test archive contained no matching samples.");
         List<string> evidence = new List<string>();
         using PreviewManager previews = new PreviewManager(owner, settings);
         foreach (long target in new long[] { 9_000_000, 15_000_000 }) {
-            VirtualFile sample = candidates.OrderBy(file => Math.Abs((long)file.SizeOriginal - target)).First();
+            VFile sample = candidates.OrderBy(file => Math.Abs((long)file.SizeOriginal - target)).First();
             PreviewData data = PreviewData.Read(archive, sample.FileID, PreviewKind.Image, CancellationToken.None, settings.PreviewBufferBytes);
             byte[] bytes = data.Bytes;
             ImagePreflight.ImageInfo info = ImagePreflight.Inspect(bytes, true);

@@ -1,10 +1,7 @@
-using Mash.IO.Format.MNX;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.UI.MNXFile.GUI.Settings;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX;
+using Mash.GUI.MNXArchiver.Settings;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class CreationForm : MnxDialog {
     private readonly string[] _inputs = Array.Empty<string>();
@@ -84,7 +81,7 @@ public sealed partial class CreationForm : MnxDialog {
         if (!Directory.Exists(Path.GetDirectoryName(path))) {
             throw new DirectoryNotFoundException("The destination folder does not exist.");
             }
-        ArchiveFile.ValidateDestinationName(Path.GetFileName(path));
+        Archive.ValidateDestinationName(Path.GetFileName(path));
         if (Directory.Exists(path)) {
             throw new IOException("The archive destination is a directory.");
             }

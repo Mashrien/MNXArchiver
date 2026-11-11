@@ -116,15 +116,15 @@ class RpaModuleTests(unittest.TestCase):
         self.assertEqual(module.mnx_plugin_abi_version(), 1)
         description = self.assert_success(self.send(b'{"operation":"describe"}'))["format"]
         self.assertEqual(description, {
-            "id": "renpy.rpa", "name": "Ren'Py RPA", "version": "1.0.1",
-            "minHostVersion": "2.0.0", "maxHostVersion": "2.0.999",
+            "id": "renpy.rpa", "name": "Ren'Py RPA", "version": "1.0.2",
+            "minHostVersion": "2.0.0", "maxHostVersion": "2.1.999",
             "extensions": [".rpa"], "versions": [{
                 "version": "3.0", "magicHex": "5250412D332E3020", "actions": 63,
             }], "currentVersion": "3.0",
         })
-        for host_version in ["2.0.0", "2.0.999"]:
+        for host_version in ["2.0.0", "2.0.999", "2.1.0", "2.1.999"]:
             self.assert_success(self.request("negotiate", hostVersion=host_version))
-        for field, value in [("hostVersion", "2.1.0"), ("minPluginVersion", "1.0.2"),
+        for field, value in [("hostVersion", "2.2.0"), ("minPluginVersion", "1.0.3"),
                              ("maxPluginVersion", "0.9.999"), ("hostVersion", None)]:
             for operation in ["negotiate", "open", "create", "add", "replace", "delete", "extract"]:
                 response = self.request(operation, **{field: value})

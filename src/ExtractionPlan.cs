@@ -1,11 +1,8 @@
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using static MNX.Archive;
+using MNX;
 using DiskFile = System.IO.File;
-using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 internal sealed record ExtractionItem(Guid Id, string RelativePath, string Destination, bool IsDirectory, long Length);
 /// <summary>Metadata for a single extraction batch; file bytes stay inside MNX.</summary>
@@ -18,20 +15,20 @@ internal sealed class ExtractionPlan {
         RootPaths = rootPaths;
         }
 
-    internal static ExtractionPlan Create(ArchiveFile archive, IEnumerable<Guid> selection, string directory, string? singleFileDestination = null) {
+    internal static ExtractionPlan Create(Archive archive, IEnumerable<Guid> selection, string directory, string? singleFileDestination = null) {
         directory = Path.GetFullPath(directory);
-        Dictionary<Guid, VirtualFile>? entries = archive.Files.ToDictionary(entry => entry.FileID);
-        Dictionary<Guid, VirtualFile[]>? children = entries.Values.GroupBy(entry => entry.OwnerID).ToDictionary(group => group.Key, group => group.ToArray());
+        Dictionary<Guid, VFile>? entries = archive.Files.ToDictionary(entry => entry.FileID);
+        Dictionary<Guid, VFile[]>? children = entries.Values.GroupBy(entry => entry.OwnerID).ToDictionary(group => group.Key, group => group.ToArray());
         HashSet<Guid>? selected = selection.ToHashSet();
         List<ExtractionItem> items = new List<ExtractionItem>();
         List<string> rootPaths = new List<string>();
         StringComparer? comparison = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         HashSet<string> outputPaths = new HashSet<string>(comparison);
         foreach (Guid id in selected) {
-            VirtualFile entry = entries[id];
+            VFile entry = entries[id];
             Guid ancestor = entry.OwnerID;
             bool coveredByParent = false;
-            while (entries.TryGetValue(ancestor, out VirtualFile? parent)) {
+            while (entries.TryGetValue(ancestor, out VFile? parent)) {
                 if (selected.Contains(ancestor)) {
                     coveredByParent = true;
                     break;
@@ -46,12 +43,12 @@ internal sealed class ExtractionPlan {
 
             string rootPath = singleFileDestination ?? Path.Combine(directory, entry.Name);
             rootPaths.Add(Path.GetFullPath(rootPath));
-            Stack<(VirtualFile Entry, string Path, string Relative)> pending = new Stack<(VirtualFile Entry, string Path, string Relative)>();
+            Stack<(VFile Entry, string Path, string Relative)> pending = new Stack<(VFile Entry, string Path, string Relative)>();
             pending.Push((entry, rootPath, entry.Name));
             while (pending.Count > 0) {
-                (VirtualFile Entry, string Path, string Relative) current = pending.Pop();
+                (VFile Entry, string Path, string Relative) current = pending.Pop();
                 string path = Path.GetFullPath(current.Path);
-                ArchiveFile.ValidateDestinationName(Path.GetFileName(path));
+                Archive.ValidateDestinationName(Path.GetFileName(path));
                 if (!outputPaths.Add(path)) {
                     throw new IOException("Selected entries share an extraction destination: " + path);
                     }
@@ -67,9 +64,9 @@ internal sealed class ExtractionPlan {
                     current.Entry.IsDirectory,
                     checked((long)current.Entry.SizeOriginal)
                     ));
-                if (current.Entry.IsDirectory && children.TryGetValue(current.Entry.FileID, out VirtualFile[]? descendants)) {
+                if (current.Entry.IsDirectory && children.TryGetValue(current.Entry.FileID, out VFile[]? descendants)) {
                     for (int index = descendants.Length - 1; index >= 0; index--) {
-                        VirtualFile? child = descendants[index];
+                        VFile? child = descendants[index];
                         pending.Push((child, Path.Combine(path, child.Name), Path.Combine(current.Relative, child.Name)));
                         }
                     }
@@ -102,7 +99,7 @@ internal sealed class ExtractionPlan {
         return existing.ToArray();
         }
 
-    internal string[] Extract(ArchiveFile archive, TransferTracker tracker, TransferCancellation cancellation, bool overwrite = false) {
+    internal string[] Extract(Archive archive, TransferTracker tracker, TransferCancellation cancellation, bool overwrite = false) {
         tracker.Configure(Items);
         foreach (ExtractionItem item in Items) {
             cancellation.CheckBoundary();
@@ -112,8 +109,8 @@ internal sealed class ExtractionPlan {
                 }
             else {
                 Directory.CreateDirectory(Path.GetDirectoryName(item.Destination)!);
-                ArchiveFile.ReturnCode result = archive.ExtractFile(item.Id, new FileInfo(item.Destination), overwrite);
-                if (result != ArchiveFile.ReturnCode.Success) {
+                ReturnCode result = archive.ExtractFile(item.Id, new FileInfo(item.Destination), overwrite);
+                if (result != ReturnCode.Success) {
                     throw new IOException("Extraction failed: " + result);
                     }
                 }

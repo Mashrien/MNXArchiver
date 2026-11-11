@@ -1,12 +1,9 @@
 using System.Runtime.InteropServices;
 using Gtk;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX;
 using DiskFile = System.IO.File;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 /// <summary>Exercise the real URI-list drag protocol on a disposable Xvfb desktop.</summary>
 internal static class TransferSmoke {
     public static void Run(MainWindow host, string directory, string archivePath) {
@@ -169,7 +166,7 @@ internal static class TransferSmoke {
             DiskFile.ReadAllText(Path.Combine(output, "nested.txt")) == "A distinct nested file." && Directory.Exists(Path.Combine(output, "empty")),
             "Folder drag preserves descendants and empty directories"
             );
-        using (ArchiveFile archive = new ArchiveFile()) {
+        using (Archive archive = new Archive()) {
             archive.Open(archivePath, "test-passphrase");
             bool rejected = false;
             try {

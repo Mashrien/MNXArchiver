@@ -1,7 +1,6 @@
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
+using MNX;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 /// <summary>Pause between files while the user chooses a cancellation outcome.</summary>
 internal sealed class TransferCancellation : IDisposable {
     private enum Choice {

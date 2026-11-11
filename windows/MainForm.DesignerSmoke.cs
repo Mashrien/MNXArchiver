@@ -1,6 +1,6 @@
 using System.ComponentModel;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainForm {
     private static void RunDesignerConstructionChecks(string directory) {

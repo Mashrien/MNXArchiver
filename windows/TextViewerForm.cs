@@ -1,4 +1,4 @@
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public partial class TextViewerForm : MnxDialog {
     public TextViewerForm() {

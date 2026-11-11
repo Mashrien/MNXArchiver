@@ -1,12 +1,10 @@
-using Mash.UI.MNXFile.GUI.Icons;
+using Mash.GUI.MNXArchiver.Icons;
 using Gtk;
-using Mash.UI.MNXFile.GUI.Settings;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
+using Mash.GUI.MNXArchiver.Settings;
+using MNX;
 using DiskFile = System.IO.File;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 internal sealed record ArchiveCreationSettings(string Path, ArchiveCompression Compression, int Level, string? Password, bool Overwrite);
 /// <summary>The small setup form used by file-manager creation and the New action.</summary>

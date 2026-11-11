@@ -1,11 +1,7 @@
 using Gtk;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive.Resume;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainWindow {
     private void ChooseResumeQueue() {
@@ -42,7 +38,7 @@ public sealed partial class MainWindow {
             }
 
         FileInfo queueFile = new FileInfo(path);
-        ArchiveFile? archive = null;
+        Archive? archive = null;
         string? archivePath = null;
         bool overwrite = false;
         using TransferCancellation cancellation = new TransferCancellation();

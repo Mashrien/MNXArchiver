@@ -1,4 +1,4 @@
-namespace Mash.UI.MNXFile.GUI.Plugins.Rpa;
+namespace Mash.GUI.MNXArchiver.Plugins.Rpa;
 
 internal static class RpaOperations {
     private static readonly object OperationGate = new();

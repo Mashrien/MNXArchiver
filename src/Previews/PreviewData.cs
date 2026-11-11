@@ -1,11 +1,11 @@
-using Mash.UI.MNXFile.GUI.Plugins;
+using Mash.GUI.MNXArchiver.Plugins;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
-using Mash.UI.MNXFile.GUI.Settings;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using Mash.GUI.MNXArchiver.Settings;
+using MNX;
 
-namespace Mash.UI.MNXFile.GUI.Previews;
+namespace Mash.GUI.MNXArchiver.Previews;
 
 internal enum PreviewKind {
     Unsupported,
@@ -52,7 +52,7 @@ internal sealed class PreviewData : IDisposable {
         return extension.Length > 0 && (defaults + "," + additional).Split(',').Contains(extension, StringComparer.OrdinalIgnoreCase);
         }
 
-    internal static PreviewData Read(ArchiveFile archive, Guid id, PreviewKind kind, CancellationToken cancellation,
+    internal static PreviewData Read(Archive archive, Guid id, PreviewKind kind, CancellationToken cancellation,
         int bufferLimit = InputLimit) {
         ulong size = archive.GetFile(id)?.SizeOriginal ?? throw new FileNotFoundException("The archived entry no longer exists.");
         return ReadIntoBuffer(size, kind, cancellation, bufferLimit, buffer => {

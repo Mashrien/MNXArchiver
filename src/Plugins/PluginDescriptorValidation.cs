@@ -1,4 +1,4 @@
-namespace Mash.UI.MNXFile.GUI.Plugins;
+namespace Mash.GUI.MNXArchiver.Plugins;
 
 internal static class PluginDescriptorValidation {
     internal static void Validate(PluginFormat format) {

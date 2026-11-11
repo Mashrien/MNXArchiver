@@ -41,7 +41,7 @@
          int initialFolderPaneWidth = browserSplit.SplitterDistance;
 @@ -136,8 +137,9 @@
          Require(rejected && _archive is not null, "Corrupt archive input was not rejected while preserving the previous view.");
-         string diagnostic = ArchiveOpenError(bad, new InvalidDataException("Invalid MNX archive format"), ArchiveFile.ReturnCode.NotValidMNXFile);
+         string diagnostic = ArchiveOpenError(bad, new InvalidDataException("Invalid MNX archive format"), Archive.ReturnCode.NotValidMNXFile);
          Require(diagnostic.Contains("Error code:", StringComparison.Ordinal), "Archive diagnostics omitted the error code.");
 -        await CheckInvalidCommandLine(bad);
 -        evidence.Add("PASS: corrupt .mnx preserves current archive interactively; command-line invalid archive shows format/error-code dialog and exits with code 1");

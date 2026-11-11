@@ -1,14 +1,10 @@
 using Gtk;
-using Mash.UI.MNXFile.GUI.Icons;
-using Mash.UI.MNXFile.GUI.Plugins;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive.Resume;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using Mash.GUI.MNXArchiver.Icons;
+using Mash.GUI.MNXArchiver.Plugins;
+using MNX;
 using DiskFile = System.IO.File;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainWindow {
     private static readonly TargetEntry[] FileTargets = [new("text/uri-list", 0, 1)];
@@ -247,7 +243,7 @@ public sealed partial class MainWindow {
             return;
             }
 
-        ArchiveFile? archive = _archive!;
+        Archive? archive = _archive!;
         string archivePath = archive.ArchivePath!;
         using TransferCancellation cancellation = new TransferCancellation();
         try {

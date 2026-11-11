@@ -1,4 +1,4 @@
-namespace Mash.UI.MNXFile.GUI.Plugins.Rpa;
+namespace Mash.GUI.MNXArchiver.Plugins.Rpa;
 
 internal sealed class StagedFile(string destination) : IDisposable {
     private bool created;

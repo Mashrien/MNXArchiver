@@ -1,10 +1,10 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Gtk;
-using Mash.UI.MNXFile.GUI.Plugins;
-using Mash.UI.MNXFile.GUI.Settings;
+using Mash.GUI.MNXArchiver.Plugins;
+using Mash.GUI.MNXArchiver.Settings;
 
-namespace Mash.UI.MNXFile.GUI.Previews;
+namespace Mash.GUI.MNXArchiver.Previews;
 
 /// <summary>Owns the preview buffer, native decoder and animation timer until its window closes.</summary>
 internal sealed class PreviewWindow : IDisposable {

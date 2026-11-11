@@ -1,10 +1,7 @@
-using Mash.IO.Format.MNX;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.UI.MNXFile.GUI.Settings;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX;
+using Mash.GUI.MNXArchiver.Settings;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class ProgressForm : MnxDialog {
     private readonly TransferTracker? _tracker;

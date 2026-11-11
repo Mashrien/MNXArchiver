@@ -1,5 +1,5 @@
-using Mash.UI.MNXFile.GUI;
-using Mash.UI.MNXFile.GUI.Plugins;
+using Mash.GUI.MNXArchiver;
+using Mash.GUI.MNXArchiver.Plugins;
 
 if (args.Length == 1 && args[0] == "--check-plugin-path") {
     string expected = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "mnxarchiver", "plugins");
@@ -17,9 +17,10 @@ Require(catalog.Modules.Count == 1, string.Join("\n", catalog.Issues));
 NativeArchiveModule module = catalog.Modules.Single();
 Require(module.Format.Id == "renpy.rpa" && module.Format.CurrentVersion == "3.0", "The RPA descriptor did not survive discovery.");
 foreach ((string file, string reason) in new (string, string)[] {
-    ("bad-magic.so", "bad-magic.so:"), ("bad-abi.so", "Plugin ABI 2"),
+    ("bad-magic.mnxp", "bad-magic.mnxp:"), ("bad-abi.so", "Plugin ABI 2"),
     ("new-module.so", "Module release 1.1.0"), ("old-module.so", "Module release 0.9.9"),
-    ("new-host-required.so", "requires MNXArchiver 2.1.0"), ("reject-negotiation.so", "refused negotiation"),
+    ("new-host-required.so", "requires MNXArchiver 2.2.0"), ("reject-negotiation.so", "refused negotiation"),
+    ("old-host-only.so", "requires MNXArchiver 2.0.0–2.0.999"),
     }) {
     Require(catalog.Issues.Any(issue => issue.StartsWith(file + ":", StringComparison.Ordinal) && issue.Contains(reason, StringComparison.Ordinal)),
         "Expected rejection did not occur: " + file + "\n" + string.Join("\n", catalog.Issues));

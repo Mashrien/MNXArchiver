@@ -1,9 +1,9 @@
-using Mash.UI.MNXFile.GUI.Previews;
-using Mash.UI.MNXFile.GUI.Plugins;
-using Mash.UI.MNXFile.GUI.Settings;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using Mash.GUI.MNXArchiver.Previews;
+using Mash.GUI.MNXArchiver.Plugins;
+using Mash.GUI.MNXArchiver.Settings;
+using MNX;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainForm {
     private void ShowOptions() {
@@ -78,7 +78,7 @@ public sealed partial class MainForm {
             }
         ArchiveBrowser.Entry entry = _browser!.Get(id);
         PreviewKind kind = PreviewData.Classify(entry.Name, _settings);
-        ArchiveFile? archive = _archive;
+        Archive? archive = _archive;
         OpenedModuleArchive? moduleArchive = _pluginArchive;
         int bufferLimit = _settings.PreviewBufferBytes;
         ListViewItem? row = fileList.Items.Cast<ListViewItem>().FirstOrDefault(item => item.Tag is Guid rowId && rowId == id);

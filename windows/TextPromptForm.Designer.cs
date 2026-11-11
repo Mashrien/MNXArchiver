@@ -1,5 +1,5 @@
 #nullable enable
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 partial class TextPromptForm {
     private System.ComponentModel.IContainer? components;

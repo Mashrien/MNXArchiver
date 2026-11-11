@@ -1,9 +1,9 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
-using Mash.UI.MNXFile.GUI.Plugins;
-using Mash.UI.MNXFile.GUI.Previews;
+using Mash.GUI.MNXArchiver.Plugins;
+using Mash.GUI.MNXArchiver.Previews;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 /// <summary>Reads dimensions and reserves preview memory before decoding pixels.</summary>
 internal readonly struct ImagePreflight {

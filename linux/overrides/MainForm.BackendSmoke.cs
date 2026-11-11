@@ -1,4 +1,4 @@
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainForm {
     private static ComboBox? FindBackendChoice(Control control) {
@@ -46,7 +46,7 @@ public sealed partial class MainForm {
             return;
             }
         string config = Path.Combine(directory, "interface-preference-check");
-        global::Mash.UI.MNXFile.GUI.Settings.AppSettings original = new global::Mash.UI.MNXFile.GUI.Settings.AppSettings(config);
+        global::Mash.GUI.MNXArchiver.Settings.AppSettings original = new global::Mash.GUI.MNXArchiver.Settings.AppSettings(config);
         original.Set("Interface", "Backend", "auto");
         original.Set("Interface", "OpacityPercent", 100);
         original.Set("Future", "Preserve", "あいう");
@@ -65,9 +65,9 @@ public sealed partial class MainForm {
             }
         Require(Backends.BackendRuntime.LoadPreference(config) == Backends.GuiBackend.Automatic,
             "Cancelling options saved the backend preference.");
-        Require(global::Mash.UI.MNXFile.GUI.Settings.AppSettings.Load(config).OpacityPercent == 100,
+        Require(global::Mash.GUI.MNXArchiver.Settings.AppSettings.Load(config).OpacityPercent == 100,
             "Cancelling options persisted opacity changes.");
-        Require(global::Mash.UI.MNXFile.GUI.Settings.AppSettings.Load(config).Flag("Interface", "UseDesktopColors", true),
+        Require(global::Mash.GUI.MNXArchiver.Settings.AppSettings.Load(config).Flag("Interface", "UseDesktopColors", true),
             "Cancelling Options must preserve the colors switch.");
         if (available.MWinAvailable && available.Gtk3Available) {
             using OptionsForm saved = new OptionsForm(original);
@@ -76,14 +76,14 @@ public sealed partial class MainForm {
             FindOpacityControl(saved.Controls.Owner)!.Value = 65;
             FindColorsChoice(saved.Controls.Owner)!.Checked = false;
             saved.SaveSettings();
-            Require(global::Mash.UI.MNXFile.GUI.Settings.AppSettings.Load(config).OpacityPercent == 65,
+            Require(global::Mash.GUI.MNXArchiver.Settings.AppSettings.Load(config).OpacityPercent == 65,
                 "Options did not persist the chosen opacity.");
-            Require(!global::Mash.UI.MNXFile.GUI.Settings.AppSettings.Load(config).Flag("Interface", "UseDesktopColors", true),
+            Require(!global::Mash.GUI.MNXArchiver.Settings.AppSettings.Load(config).Flag("Interface", "UseDesktopColors", true),
                 "Options must save the colors off switch.");
             Require(saved.DialogResult == DialogResult.OK, "Saving interface options did not succeed.");
             Require(Backends.BackendRuntime.LoadPreference(config) == Backends.GuiBackend.Gtk3,
                 "MWin options did not persist the selected backend.");
-            Require(global::Mash.UI.MNXFile.GUI.Settings.AppSettings.Load(config).Get("Future", "Preserve", "") == "あいう",
+            Require(global::Mash.GUI.MNXArchiver.Settings.AppSettings.Load(config).Get("Future", "Preserve", "") == "あいう",
                 "Interface options discarded an unrelated INI value.");
             }
         }
@@ -108,7 +108,7 @@ public sealed partial class MainForm {
         string toolkitSettings = Application.UserAppDataPath;
         Require(Path.IsPathFullyQualified(toolkitSettings) && Directory.Exists(toolkitSettings),
             "Portable menu settings did not resolve to an absolute user directory.");
-        global::Mash.UI.MNXFile.GUI.Settings.AppSettings expanded = new global::Mash.UI.MNXFile.GUI.Settings.AppSettings(Path.Combine(directory, "options-tab-check"));
+        global::Mash.GUI.MNXArchiver.Settings.AppSettings expanded = new global::Mash.GUI.MNXArchiver.Settings.AppSettings(Path.Combine(directory, "options-tab-check"));
         expanded.Set("Previews", "Enabled", true);
         expanded.Set("Presentation", "Customize", true);
         expanded.Set("Presentation", "LimitSize", true);

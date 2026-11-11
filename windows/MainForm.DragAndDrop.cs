@@ -1,7 +1,7 @@
-using Mash.UI.MNXFile.GUI.Plugins;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using Mash.GUI.MNXArchiver.Plugins;
+using MNX;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainForm {
     private bool _draggingOut;
@@ -170,7 +170,7 @@ public sealed partial class MainForm {
 
     private Task<string[]> StageDraggedFiles(Guid[] selection, string destination, CancellationToken cancellation) {
         OpenedModuleArchive? plugin = _pluginArchive;
-        ArchiveFile? archive = _archive;
+        Archive? archive = _archive;
         statusMessage.Text = "Preparing files to copy.";
         return Task.Run(() => {
             if (plugin is not null) {

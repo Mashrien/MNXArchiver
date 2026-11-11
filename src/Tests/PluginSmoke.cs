@@ -1,10 +1,10 @@
 using System.Diagnostics;
 using Gtk;
-using Mash.UI.MNXFile.GUI.Plugins;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using Mash.GUI.MNXArchiver.Plugins;
+using MNX;
 using DiskFile = System.IO.File;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 internal static class PluginSmoke {
     internal static void Run(MainWindow host, string fixture) {
@@ -121,7 +121,7 @@ internal static class PluginSmoke {
             CheckWebpPreview(host, work);
 
             string mnx = Path.Combine(work, "mnx with plugin extension.rpa");
-            using (ArchiveFile native = new ArchiveFile()) {
+            using (Archive native = new Archive()) {
                 native.Create(new FileInfo(mnx));
                 }
             Check(host.OpenArchive(mnx, showErrors: false) && host.TestArchive is not null, "MNX magic takes precedence over plugin extension");

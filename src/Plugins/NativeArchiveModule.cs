@@ -2,7 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
-namespace Mash.UI.MNXFile.GUI.Plugins;
+namespace Mash.GUI.MNXArchiver.Plugins;
 
 /// <summary>A loaded native library and its declared archive formats and capabilities.</summary>
 internal sealed unsafe class NativeArchiveModule {

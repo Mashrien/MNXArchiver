@@ -1,6 +1,6 @@
-using Mash.UI.MNXFile.GUI.Settings;
+using Mash.GUI.MNXArchiver.Settings;
 
-namespace Mash.UI.MNXFile.GUI.Backends;
+namespace Mash.GUI.MNXArchiver.Backends;
 
 /// <summary>Toolkit-free startup state shared with both options windows.</summary>
 public static class BackendRuntime {

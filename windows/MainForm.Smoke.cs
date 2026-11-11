@@ -2,12 +2,10 @@ using System.Drawing.Imaging;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive.Resume;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX;
 using DiskFile = System.IO.File;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainForm {
     internal async Task RunSmokeTest(string directory) {
@@ -27,7 +25,7 @@ public sealed partial class MainForm {
         int initialFolderPaneWidth = browserSplit.SplitterDistance;
         Require(Math.Abs(initialFolderPaneWidth - browserSplit.Width * 0.225) <= 2,
             "The folder pane must start at 22.5% of the usable form width.");
-        using ArchiveFile formatProbe = new ArchiveFile();
+        using Archive formatProbe = new Archive();
         Require(BuiltInArchiveFormat().Contains("version " + formatProbe.FormatVersion, StringComparison.Ordinal),
             "About must show the installed MNX engine's archive format version.");
         Require(ReferenceEquals(statusBar.Parent, StatusBarControls) && ReferenceEquals(statusMessage, StatusText),
@@ -172,7 +170,7 @@ public sealed partial class MainForm {
             rejected = true;
             }
         Require(rejected && _archive is not null, "Corrupt archive input was not rejected while preserving the previous view.");
-        string diagnostic = ArchiveOpenError(bad, new InvalidDataException("Invalid MNX archive format"), ArchiveFile.ReturnCode.NotValidMNXFile);
+        string diagnostic = ArchiveOpenError(bad, new InvalidDataException("Invalid MNX archive format"), Archive.ReturnCode.NotValidMNXFile);
         Require(diagnostic.Contains("Error code:", StringComparison.Ordinal), "Archive diagnostics omitted the error code.");
         await CheckInvalidCommandLine(bad);
         evidence.Add("PASS: corrupt .mnx preserves current archive interactively; command-line invalid archive shows format/error-code dialog and exits with code 1");

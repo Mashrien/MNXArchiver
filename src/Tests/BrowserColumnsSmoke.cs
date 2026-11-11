@@ -1,15 +1,15 @@
 using Gtk;
-using Mash.UI.MNXFile.GUI.Settings;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using Mash.GUI.MNXArchiver.Settings;
+using MNX;
 using DiskFile = System.IO.File;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 /// <summary>Exercise popup visibility and real header clicks against disposable archive entries.</summary>
 internal static class BrowserColumnsSmoke {
     internal static void Run(MainWindow host, string screenshots) {
         Gtk.Window fixtureWindow = host.TestWidget<Gtk.Window>("main_window");
-        if (Mash.UI.MNXFile.GUI.Previews.PreviewWindow.IsWaylandDisplay(fixtureWindow.Display)) {
+        if (Mash.GUI.MNXArchiver.Previews.PreviewWindow.IsWaylandDisplay(fixtureWindow.Display)) {
             // The preceding resize can extend below the work area. Wayland then
             // slides popups away from the requested corner. Keep this exact-anchor
             // fixture inside the work area instead of testing compositor placement.
@@ -29,7 +29,7 @@ internal static class BrowserColumnsSmoke {
         using (FileStream large = DiskFile.Create(Path.Combine(directory, "large.bin"))) {
             large.SetLength(42_000_000);
             }
-        using (ArchiveFile archive = new ArchiveFile()) {
+        using (Archive archive = new Archive()) {
             archive.Create(new FileInfo(archivePath));
             archive.AddDirectoryNow(Directory.CreateDirectory(Path.Combine(directory, "Folder")));
             archive.AddFileNow(new FileInfo(imagePath));
@@ -48,7 +48,7 @@ internal static class BrowserColumnsSmoke {
         TreeView list = host.TestWidget<TreeView>("file_list");
         using (TreePath imageRow = new TreePath("3")) {
             list.Selection.SelectPath(imageRow);
-            if (!Mash.UI.MNXFile.GUI.Previews.PreviewWindow.IsWaylandDisplay(list.Display)) {
+            if (!Mash.GUI.MNXArchiver.Previews.PreviewWindow.IsWaylandDisplay(list.Display)) {
                 Gdk.Rectangle cell = list.GetCellArea(imageRow, list.Columns[0]);
                 list.ConvertBinWindowToWidgetCoords(cell.X + 200, cell.Y + cell.Height / 2, out int pointerX, out int pointerY);
                 TransferSmoke.MoveMouse(list, pointerX, pointerY);
@@ -58,7 +58,7 @@ internal static class BrowserColumnsSmoke {
         WaitFor(() => host.TestPreviewCount == 1, "Image tooltip opens after row activation");
         Pump(50);
         Check(host.TestPreviewCount == 1, "Bottom-right image tooltip survives display/focus events");
-        if (!Mash.UI.MNXFile.GUI.Previews.PreviewWindow.IsWaylandDisplay(list.Display)) {
+        if (!Mash.GUI.MNXArchiver.Previews.PreviewWindow.IsWaylandDisplay(list.Display)) {
             TransferSmoke.MoveMouse(host.TestWidget<Gtk.Window>("main_window"), 20, 20);
             Check(host.TestPreviewCount == 1, "Click-triggered tooltip survives the pointer leaving the file list");
             }
@@ -122,7 +122,7 @@ internal static class BrowserColumnsSmoke {
         string? realArchive = Environment.GetEnvironmentVariable("MNX_GUI_PREVIEW_ARCHIVE");
         if (!string.IsNullOrEmpty(realArchive)) {
             host.OpenArchive(realArchive, showErrors: false);
-            Mash.IO.Format.MNX.VFile.VFile file = host.TestArchive!.Files.First(entry => !entry.IsDirectory && entry.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase));
+            MNX.VFile file = host.TestArchive!.Files.First(entry => !entry.IsDirectory && entry.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase));
             host.TestWidget<Entry>("current_path").Text = "/JOYREACTOR";
             host.TestWidget<Entry>("current_path").Activate();
             host.PreviewEntry(file.FileID);
@@ -142,7 +142,7 @@ internal static class BrowserColumnsSmoke {
     private static void Capture(Gtk.Window window, string path) {
         // Native Wayland forbids reading arbitrary window pixels; use Spectacle
         // for compositor captures in that session. The Xvfb suite captures directly.
-        if (!Mash.UI.MNXFile.GUI.Previews.PreviewWindow.IsWaylandDisplay(window.Display)) {
+        if (!Mash.GUI.MNXArchiver.Previews.PreviewWindow.IsWaylandDisplay(window.Display)) {
             CreationProgressSmoke.Screenshot(window, path);
             }
         }

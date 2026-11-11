@@ -1,5 +1,5 @@
 using System.Runtime.InteropServices;
-using Mash.UI.MNXFile.GUI.Plugins;
+using Mash.GUI.MNXArchiver.Plugins;
 
 internal static class ImageProviderChecks {
     internal static void Run(PluginCatalog catalog) {

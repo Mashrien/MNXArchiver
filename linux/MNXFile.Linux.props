@@ -2,7 +2,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
-    <RootNamespace>Mash.UI.MNXFile.GUI</RootNamespace>
+    <RootNamespace>Mash.GUI.MNXArchiver</RootNamespace>
     <AssemblyName>mnx-gui</AssemblyName>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -23,12 +23,12 @@
     <ProjectReference Include="$(MNXPortableRoot)/vendor/Majorsilence.Forms/src/Majorsilence.Forms.Gtk4/Majorsilence.Forms.Gtk4.csproj" />
     <ProjectReference Include="$(MNXPortableRoot)/vendor/Majorsilence.Forms/src/Majorsilence.Forms.Headless/Majorsilence.Forms.Headless.csproj" />
     <Compile Include="../src/Plugins/*.cs" Link="Shared/Plugins/%(Filename)%(Extension)" />
-    <PackageReference Include="Mash.MNXFile.Client" Version="1.2.0-alpha.3" />
+    <PackageReference Include="Mash.MNXFile.Client" Version="1.3.0-alpha.6" />
     <!-- Keep raw XML; compiling .resx images creates Windows resource type descriptors. -->
-    <EmbeddedResource Include="$(MNXPortableRoot)/gui/**/*.resx.raw" LogicalName="Mash.UI.MNXFile.GUI.%(Filename)" />
-    <EmbeddedResource Include="../src/Icons/Rendered/32/*.png" LogicalName="Mash.UI.MNXFile.GUI.Icons.32.%(Filename)%(Extension)" />
-    <EmbeddedResource Include="../src/Icons/Rendered/16/*.png" LogicalName="Mash.UI.MNXFile.GUI.Icons.16.%(Filename)%(Extension)" />
-    <EmbeddedResource Include="../src/archive.ico" LogicalName="Mash.UI.MNXFile.GUI.archive.ico" />
+    <EmbeddedResource Include="$(MNXPortableRoot)/gui/**/*.resx.raw" LogicalName="Mash.GUI.MNXArchiver.%(Filename)" />
+    <EmbeddedResource Include="../src/Icons/Rendered/32/*.png" LogicalName="Mash.GUI.MNXArchiver.Icons.32.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../src/Icons/Rendered/16/*.png" LogicalName="Mash.GUI.MNXArchiver.Icons.16.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../src/archive.ico" LogicalName="Mash.GUI.MNXArchiver.archive.ico" />
     <!-- The designer property converters and resource lookup inspect these types at runtime. -->
     <TrimmerRootAssembly Include="$(AssemblyName)" />
     <TrimmerRootAssembly Include="MWindow" />

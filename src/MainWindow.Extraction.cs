@@ -1,13 +1,10 @@
-using Mash.UI.MNXFile.GUI.Icons;
-using Mash.UI.MNXFile.GUI.Plugins;
+using Mash.GUI.MNXArchiver.Icons;
+using Mash.GUI.MNXArchiver.Plugins;
 using Gtk;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX;
 using DiskFile = System.IO.File;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainWindow {
     /// <summary>Open a signature-checked archive and extract its root contents from a file-manager action.</summary>
@@ -73,7 +70,7 @@ public sealed partial class MainWindow {
             return;
             }
 
-        ArchiveFile? archive = _archive!;
+        Archive? archive = _archive!;
         string directory = singleFile ? Path.GetDirectoryName(destination)! : destination;
         ExtractionPlan? plan = ExtractionPlan.Create(archive, ids, directory, singleFile ? destination : null);
         string[] existing = plan.ExistingFiles();
@@ -131,7 +128,7 @@ public sealed partial class MainWindow {
         }
 
     private bool RunExtraction(ExtractionPlan plan, bool overwrite = false) {
-        ArchiveFile? archive = _archive!;
+        Archive? archive = _archive!;
         TransferTracker tracker = new TransferTracker(archive.ChunkSize);
         tracker.Configure(plan.Items);
         using TransferCancellation cancellation = new TransferCancellation();

@@ -1,6 +1,6 @@
-using Mash.UI.MNXFile.GUI.Settings;
+using Mash.GUI.MNXArchiver.Settings;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainForm {
     private static T FindOption<T>(Control parent, string name) where T : Control {

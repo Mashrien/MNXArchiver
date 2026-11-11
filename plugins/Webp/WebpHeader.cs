@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 
-namespace Mash.UI.MNXFile.GUI.Plugins.Webp;
+namespace Mash.GUI.MNXArchiver.Plugins.Webp;
 
 internal static class WebpHeader {
     internal static ImageProviderStatus Inspect(ReadOnlySpan<byte> encoded, out int width, out int height) {

@@ -1,12 +1,9 @@
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive.Resume;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX.Tools;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using static MNX.Tools.FileSystem;
+using static MNX.Archive;
+using MNX;
 using DiskFile = System.IO.File;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 /// <summary>Translate file-manager URIs and perform disk transfers through MNX.</summary>
 internal static class FileTransfer {
     internal static bool IsArchiveDrop(string[] paths) {
@@ -43,7 +40,7 @@ internal static class FileTransfer {
                 }
 
             string path = LocalPath(value);
-            if (FileSystemTools.IsLink(new FileInfo(path))) {
+            if (IsLink(new FileInfo(path))) {
                 continue;
                 }
 
@@ -64,16 +61,16 @@ internal static class FileTransfer {
         }
 
     public static bool IsArchive(string path) {
-        return ArchiveFile.IsArchive(new FileInfo(path));
+        return Archive.IsArchive(new FileInfo(path));
         }
 
-    internal static FileQueueItem[] PrepareImport(ArchiveFile archive, IEnumerable<string> paths, Guid parent) {
+    internal static FileQueueItem[] PrepareImport(Archive archive, IEnumerable<string> paths, Guid parent) {
         HashSet<Guid>? before = archive.FileQueue.Select(item => item.ID).ToHashSet();
         try {
             foreach (string path in paths) {
                 archive.Options.CancellationToken.ThrowIfCancellationRequested();
-                ArchiveFile.ReturnCode result = Directory.Exists(path) ? archive.Queue_AddDirectory(new DirectoryInfo(path), parent) : archive.Queue_AddFile(new FileInfo(path), parent);
-                if (result != ArchiveFile.ReturnCode.Success) {
+                ReturnCode result = Directory.Exists(path) ? archive.Queue_AddDirectory(new DirectoryInfo(path), parent) : archive.Queue_AddFile(new FileInfo(path), parent);
+                if (result != ReturnCode.Success) {
                     throw new IOException($"Could not queue {path}: {result}");
                     }
                 }
@@ -102,7 +99,7 @@ internal static class FileTransfer {
         }
 
     public static void Import(
-        ArchiveFile archive,
+        Archive archive,
         IEnumerable<string> paths,
         Guid parent,
         TransferTracker? tracker = null,
@@ -134,7 +131,7 @@ internal static class FileTransfer {
         }
 
     internal static void ProcessPreparedImport(
-        ArchiveFile archive,
+        Archive archive,
         FileQueueItem[] pending,
         string baseDirectory,
         TransferTracker? tracker,
@@ -146,7 +143,7 @@ internal static class FileTransfer {
             throw new InvalidOperationException("Finish the existing archive queue before importing another batch.");
             }
 
-        ArchiveFile.ReturnCode result = archive.ProcessAddQueue((_, _, completed, _) => {
+        ReturnCode result = archive.ProcessAddQueue((_, _, completed, _) => {
             if (completed == 0) {
                 cancellation?.CheckBoundary();
                 tracker?.Start(pending[index], baseDirectory);
@@ -160,12 +157,12 @@ internal static class FileTransfer {
             return false;
             });
         cancellation?.CheckBoundary();
-        if (result != ArchiveFile.ReturnCode.Success) {
+        if (result != ReturnCode.Success) {
             throw new IOException("Archive import failed: " + result);
             }
         }
 
-    private static void ClearImportQueue(ArchiveFile archive, HashSet<Guid> keep) {
+    private static void ClearImportQueue(Archive archive, HashSet<Guid> keep) {
         foreach (FileQueueItem item in archive.FileQueue) {
             if (!keep.Contains(item.ID)) {
                 archive.Queue_RemoveFromQueue(item.ID);
@@ -173,7 +170,7 @@ internal static class FileTransfer {
             }
         }
 
-    public static string[] Export(ArchiveFile archive, IReadOnlyCollection<Guid> ids, string directory) {
+    public static string[] Export(Archive archive, IReadOnlyCollection<Guid> ids, string directory) {
         ExtractionPlan? plan = ExtractionPlan.Create(archive, ids, directory);
         string[] existing = plan.ExistingFiles();
         if (existing.Length > 0) {

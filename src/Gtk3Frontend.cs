@@ -1,4 +1,4 @@
-namespace Mash.UI.MNXFile.GUI.EntryPoints;
+namespace Mash.GUI.MNXArchiver.EntryPoints;
 
 /// <summary>Entry point used by the single-binary Linux launcher.</summary>
 public static class Gtk3Frontend {

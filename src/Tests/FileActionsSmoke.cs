@@ -1,13 +1,9 @@
 using System.Diagnostics;
 using Gtk;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX;
 using DiskFile = System.IO.File;
-using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 /// <summary>Exercise the real save/folder dialogs and context menu on disposable data.</summary>
 internal static class FileActionsSmoke {
     public static void Run(MainWindow host, string directory) {
@@ -33,10 +29,10 @@ internal static class FileActionsSmoke {
             host.TestBrowser!.Title == Path.GetFileName(destination) && host.TestListCount == 2,
             "Multiple startup inputs create a new archive through the configuration dialog"
             );
-        using (ArchiveFile archive = new ArchiveFile()) {
+        using (Archive archive = new Archive()) {
             archive.Open(destination);
             Check(archive.Compression == ArchiveCompression.Snappy, "New context archive uses Snappy");
-            VirtualFile? file = archive.Files.Single(item => item.Name == "ordinary.mnx");
+            VFile? file = archive.Files.Single(item => item.Name == "ordinary.mnx");
             using Stream input = archive.OpenRead(file.FileID);
             using MemoryStream buffer = new MemoryStream();
             input.CopyTo(buffer);

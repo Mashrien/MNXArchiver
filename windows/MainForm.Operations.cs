@@ -1,13 +1,9 @@
-using Mash.IO.Format.MNX;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive.Resume;
-using Mash.UI.MNXFile.GUI.Settings;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using static MNX.Archive;
+using MNX;
+using Mash.GUI.MNXArchiver.Settings;
 using DiskFile = System.IO.File;
-using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainForm {
     private bool _transferConcealed;
@@ -16,14 +12,14 @@ public sealed partial class MainForm {
     partial void ReadPlatformWindowPosition(ref Point position);
     partial void RestorePlatformWindowPosition(Point position);
 
-    private async Task<T> RunOperation<T>(string title, Func<T> operation, ArchiveFile? target = null, TransferTracker? tracker = null, TransferCancellation? cancellation = null, bool extraction = false, string? displayPath = null, bool showProgress = true, bool encrypted = false, CancellationTokenSource? pluginCancellation = null, string? pluginFormat = null) {
+    private async Task<T> RunOperation<T>(string title, Func<T> operation, Archive? target = null, TransferTracker? tracker = null, TransferCancellation? cancellation = null, bool extraction = false, string? displayPath = null, bool showProgress = true, bool encrypted = false, CancellationTokenSource? pluginCancellation = null, string? pluginFormat = null) {
         if (_busy) {
             throw new InvalidOperationException("An archive operation is already running.");
             }
         _busy = true;
         CancelHover();
         UpdateActions();
-        ArchiveFile? archive = pluginCancellation is null ? target ?? _archive : null;
+        Archive? archive = pluginCancellation is null ? target ?? _archive : null;
         CancellationToken previous = archive?.Options.CancellationToken ?? CancellationToken.None;
         OperationProgressArgs? progress = null;
         void Report(object? sender, OperationProgressArgs args) {
@@ -153,9 +149,9 @@ public sealed partial class MainForm {
         await CreateArchive(paths, dialog.SelectedSettings!);
         }
 
-    internal async Task CreateArchive(string[] paths, CreationSettings settings, Action<TransferCancellation, ArchiveFile>? onCancellationReady = null) {
+    internal async Task CreateArchive(string[] paths, CreationSettings settings, Action<TransferCancellation, Archive>? onCancellationReady = null) {
         string staging = Path.Combine(Path.GetDirectoryName(settings.Path)!, ".mnx-pending-" + Guid.NewGuid().ToString("N"));
-        using ArchiveFile next = new ArchiveFile();
+        using Archive next = new Archive();
         next.Options.ProgressReportFrequency = 50;
         next.Options.Compression = settings.Compression;
         next.Options.CompressionLevel = settings.Level;
@@ -197,7 +193,7 @@ public sealed partial class MainForm {
             await AddPluginFiles(paths, parent);
             return;
             }
-        ArchiveFile archive = _archive!;
+        Archive archive = _archive!;
         string archivePath = archive.ArchivePath!;
         using TransferCancellation cancellation = new TransferCancellation();
         TransferTracker tracker = new TransferTracker(archive.ChunkSize);
@@ -274,7 +270,7 @@ public sealed partial class MainForm {
         }
 
     private async Task<bool> RunExtraction(ExtractionPlan plan, bool overwrite = false) {
-        ArchiveFile archive = _archive!;
+        Archive archive = _archive!;
         TransferTracker tracker = new TransferTracker(archive.ChunkSize);
         using TransferCancellation cancellation = new TransferCancellation();
         try {
@@ -306,7 +302,7 @@ public sealed partial class MainForm {
             await DeletePluginEntries(ids, location);
             return;
             }
-        ArchiveFile archive = _archive!;
+        Archive archive = _archive!;
         try {
             await RunOperation("Deleting archive entries", () => {
                 foreach (Guid id in ids) {
@@ -324,21 +320,21 @@ public sealed partial class MainForm {
         }
 
     private async Task VerifyArchive() {
-        ArchiveFile archive = _archive!;
+        Archive archive = _archive!;
         await RunOperation("Verifying archive", () => { RequireSuccess(archive.VerifyArchive(), "Verification"); return true; });
         statusMessage.Text = "Archive verified successfully.";
         }
 
     private async Task CompactArchive() {
-        ArchiveFile archive = _archive!;
+        Archive archive = _archive!;
         Guid location = _current;
         await RunOperation("Compacting archive", () => { RequireSuccess(archive.CompactArchive(), "Compaction"); return true; });
         RefreshArchive(location);
         statusMessage.Text = "Archive compacted.";
         }
 
-    private static void RequireSuccess(ArchiveFile.ReturnCode result, string action) {
-        if (result != ArchiveFile.ReturnCode.Success) {
+    private static void RequireSuccess(ReturnCode result, string action) {
+        if (result != ReturnCode.Success) {
             throw new IOException(action + " failed: " + result);
             }
         }
@@ -359,7 +355,7 @@ public sealed partial class MainForm {
         if (!alreadyOpen && !await OpenArchive(archivePath, password)) {
             return;
             }
-        ArchiveFile archive = _archive!;
+        Archive archive = _archive!;
         bool previousOverwrite = archive.Options.OverrideByDefault;
         archive.Options.OverrideByDefault = false;
         using TransferCancellation cancellation = new TransferCancellation();
@@ -417,7 +413,7 @@ public sealed partial class MainForm {
             }
         string text;
         if (ids.Length == 1) {
-            VirtualFile entry = _archive.GetFile(ids[0])!;
+            VFile entry = _archive.GetFile(ids[0])!;
             text = $"{_browser!.PathOf(entry.FileID)}\n\nType: {(entry.IsDirectory ? "Directory" : "File")}\nSize: {entry.SizeOriginal:N0} bytes\nCreated: {entry.CreationDateUtc.ToLocalTime():G}\nModified: {entry.ModificationDateUtc.ToLocalTime():G}\nAccessed: {entry.AccessDateUtc.ToLocalTime():G}\nAttributes: {entry.Attributes}\nID: {entry.FileID}\nChunks: {entry.ChunkCount:N0}\nPhysical extents: {entry.ExtentCount:N0}";
             }
         else {

@@ -1,4 +1,4 @@
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 internal static class Program {
     [STAThread]

@@ -1,14 +1,10 @@
 using Gtk;
-using Mash.UI.MNXFile.GUI.Icons;
-using Mash.UI.MNXFile.GUI.Plugins;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive.Resume;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using Mash.GUI.MNXArchiver.Icons;
+using Mash.GUI.MNXArchiver.Plugins;
+using MNX;
 using DiskFile = System.IO.File;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainWindow {
     private readonly Menu _entryMenu = new();
@@ -66,7 +62,7 @@ public sealed partial class MainWindow {
             }
 
         string staging = Path.Combine(Path.GetDirectoryName(settings.Path)!, ".mnx-pending-" + Guid.NewGuid().ToString("N"));
-        using ArchiveFile next = new ArchiveFile();
+        using Archive next = new Archive();
         next.Options.Compression = settings.Compression;
         next.Options.CompressionLevel = settings.Level;
         next.Options.OverrideByDefault = false;

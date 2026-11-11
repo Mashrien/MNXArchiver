@@ -1,9 +1,7 @@
 using System.Globalization;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
+using MNX;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 internal sealed class TransferSnapshot {
     internal string File { get; set; } = "Scanning input files…";

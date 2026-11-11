@@ -1,4 +1,4 @@
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 /// <summary>Ask whether a dropped archive should be opened or stored as an ordinary file.</summary>
 public partial class ArchiveDropForm : MnxDialog {

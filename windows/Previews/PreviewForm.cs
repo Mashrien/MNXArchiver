@@ -1,9 +1,9 @@
 using System.Drawing.Drawing2D;
 using System.Globalization;
-using Mash.UI.MNXFile.GUI.Previews;
-using Mash.UI.MNXFile.GUI.Settings;
+using Mash.GUI.MNXArchiver.Previews;
+using Mash.GUI.MNXArchiver.Settings;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 /// <summary>Owns preview windows and their bounded plaintext snapshots.</summary>
 public sealed partial class PreviewForm : MnxDialog {

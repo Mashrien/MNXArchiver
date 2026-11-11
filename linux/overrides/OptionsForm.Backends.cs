@@ -1,6 +1,6 @@
-using Mash.UI.MNXFile.GUI.Backends;
+using Mash.GUI.MNXArchiver.Backends;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class OptionsForm {
     partial void ConfigurePlatformOptions() {

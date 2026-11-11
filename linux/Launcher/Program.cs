@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
-using Mash.UI.MNXFile.GUI.Backends;
+using Mash.GUI.MNXArchiver.Backends;
 
-namespace Mash.UI.MNXFile.GUI.Linux;
+namespace Mash.GUI.MNXArchiver.Linux;
 
 internal static class Program {
     [STAThread]

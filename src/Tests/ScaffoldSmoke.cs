@@ -1,13 +1,10 @@
 using System.Runtime.InteropServices;
 using Gtk;
-using Mash.UI.MNXFile.GUI.Icons;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using Mash.GUI.MNXArchiver.Icons;
+using MNX;
 using DiskFile = System.IO.File;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 /// <summary>Optional integration probe: real GTK signals and a disposable tiny archive.</summary>
 internal static class ScaffoldSmoke {
     public static void Run(MainWindow host, string screenshots) {
@@ -108,7 +105,7 @@ internal static class ScaffoldSmoke {
             Directory.CreateDirectory(source);
             DiskFile.WriteAllText(Path.Combine(source, "hello.txt"), "Hello from the MNX GUI smoke test.");
             string archivePath = Path.Combine(temp, "test.mnx");
-            using (ArchiveFile archive = new ArchiveFile()) {
+            using (Archive archive = new Archive()) {
                 archive.Options.Compression = ArchiveCompression.Snappy;
                 archive.Create(new FileInfo(archivePath), "test-passphrase");
                 archive.AddDirectoryNow(new DirectoryInfo(source));

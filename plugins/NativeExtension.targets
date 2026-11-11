@@ -1,0 +1,13 @@
+<Project>
+  <Target Name="PublishMnxPlugin" AfterTargets="CopyNativeBinary"
+          Condition="'$(PublishAot)' == 'true' and '$(NativeLib)' == 'Shared'">
+    <PropertyGroup>
+      <_NativeSuffix Condition="$(RuntimeIdentifier.StartsWith('linux-'))">.so</_NativeSuffix>
+      <_NativeSuffix Condition="$(RuntimeIdentifier.StartsWith('win-'))">.dll</_NativeSuffix>
+    </PropertyGroup>
+    <Error Condition="'$(_NativeSuffix)' == ''"
+           Text="MNX native extensions are published for Linux or Windows." />
+    <Move SourceFiles="$(PublishDir)$(AssemblyName)$(_NativeSuffix)"
+          DestinationFiles="$(PublishDir)$(AssemblyName).mnxp" />
+  </Target>
+</Project>

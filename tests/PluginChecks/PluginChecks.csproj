@@ -9,6 +9,6 @@
   <ItemGroup>
     <Compile Include="../../src/Plugins/*.cs" />
     <Compile Include="../../src/ArchiveBrowser.cs" />
-    <PackageReference Include="Mash.MNXFile.Client" Version="1.2.0-alpha.3" />
+    <PackageReference Include="Mash.MNXFile.Client" Version="1.3.0-alpha.6" />
   </ItemGroup>
 </Project>

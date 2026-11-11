@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
-namespace Mash.UI.MNXFile.GUI.Backends;
+namespace Mash.GUI.MNXArchiver.Backends;
 
 /// <summary>Probe in short-lived copies of this executable, never mixing GTK major versions.</summary>
 public static class BackendProbe {

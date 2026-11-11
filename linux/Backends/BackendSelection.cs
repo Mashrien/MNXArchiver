@@ -1,4 +1,4 @@
-namespace Mash.UI.MNXFile.GUI.Backends;
+namespace Mash.GUI.MNXArchiver.Backends;
 
 public enum GuiBackend {
     Automatic,

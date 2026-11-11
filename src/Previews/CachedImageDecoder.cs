@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using SkiaSharp;
 
-namespace Mash.UI.MNXFile.GUI.Previews;
+namespace Mash.GUI.MNXArchiver.Previews;
 
 /// <summary>Decodes once into bounded pixel buffers. Playback never reopens a codec.</summary>
 internal sealed class CachedImageDecoder : IDisposable {

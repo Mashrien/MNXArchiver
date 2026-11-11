@@ -1,8 +1,8 @@
 using System.Runtime.InteropServices;
-using Mash.UI.MNXFile.GUI.Settings;
+using Mash.GUI.MNXArchiver.Settings;
 using SkiaSharp;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 /// <summary>Linux-only desktop import and MWin palette application; no theme package dependency.</summary>
 internal static class MWinAppearance {

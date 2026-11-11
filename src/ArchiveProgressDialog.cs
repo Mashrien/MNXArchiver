@@ -1,10 +1,8 @@
-using Mash.UI.MNXFile.GUI.Icons;
+using Mash.GUI.MNXArchiver.Icons;
 using Gtk;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
+using MNX;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 /// <summary>A modal, parent-owned transfer window. No archive getters run on the UI thread.</summary>
 internal sealed class ArchiveProgressDialog : IDisposable {
     internal Dialog Window { get; }

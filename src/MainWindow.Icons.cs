@@ -1,7 +1,7 @@
 using Gtk;
-using Mash.UI.MNXFile.GUI.Icons;
+using Mash.GUI.MNXArchiver.Icons;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainWindow {
     private void ConfigureOwnedIcons() {

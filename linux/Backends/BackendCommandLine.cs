@@ -1,4 +1,4 @@
-namespace Mash.UI.MNXFile.GUI.Backends;
+namespace Mash.GUI.MNXArchiver.Backends;
 
 public sealed class BackendCommandLine {
     public GuiBackend Preference { get; private set; }

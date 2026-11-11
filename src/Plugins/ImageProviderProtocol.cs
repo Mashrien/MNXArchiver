@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text.Json.Serialization;
 
-namespace Mash.UI.MNXFile.GUI.Plugins;
+namespace Mash.GUI.MNXArchiver.Plugins;
 
 internal enum ImageProviderStatus : int {
     Success = 0,

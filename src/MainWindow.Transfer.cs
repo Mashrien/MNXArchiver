@@ -1,18 +1,15 @@
 using System.Diagnostics;
 using Gtk;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainWindow {
     private T RunTransfer<T>(
         string description,
         Func<T> action,
         TransferTracker? tracker = null,
-        ArchiveFile? targetArchive = null,
+        Archive? targetArchive = null,
         string? displayPath = null,
         bool creatingEncrypted = false,
         TransferCancellation? cancellation = null,
@@ -36,7 +33,7 @@ public sealed partial class MainWindow {
             Volatile.Write(ref _transferProgress, args);
             }
 
-        ArchiveFile? archive = targetArchive ?? _archive!;
+        Archive? archive = targetArchive ?? _archive!;
         string compression = (archive.IsOpen ? archive.Compression : archive.Options.Compression).ToString();
         int level = archive.IsOpen ? archive.CompressionLevel : archive.Options.CompressionLevel;
         if (compression == "Brotli") {

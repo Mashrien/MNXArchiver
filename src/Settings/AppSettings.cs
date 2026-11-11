@@ -1,7 +1,7 @@
 using System.Globalization;
 using DiskFile = System.IO.File;
 
-namespace Mash.UI.MNXFile.GUI.Settings;
+namespace Mash.GUI.MNXArchiver.Settings;
 
 [Flags]
 internal enum PreviewDebugFlags : byte {

@@ -1,9 +1,6 @@
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 /// <summary>Metadata only. Browsing never opens file payload streams.</summary>
 internal sealed class ArchiveBrowser {
     public sealed record Entry(Guid Id, Guid Parent, string Name, bool IsDirectory, ulong Bytes, DateTime CreatedUtc, uint Chunks = 0);
@@ -26,7 +23,7 @@ internal sealed class ArchiveBrowser {
             );
         }
 
-    public static ArchiveBrowser FromArchive(ArchiveFile archive) => new(
+    public static ArchiveBrowser FromArchive(Archive archive) => new(
         archive.RootDirectoryId,
         Path.GetFileName(archive.ArchivePath!),
         archive.Files.Select(f => new Entry(f.FileID, f.OwnerID, f.Name, f.IsDirectory, f.SizeOriginal, f.CreationDateUtc, f.ChunkCount)),

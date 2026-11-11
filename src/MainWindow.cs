@@ -1,15 +1,13 @@
+using static MNX.Archive;
 using System.Globalization;
 using System.Security.Cryptography;
 using Gtk;
-using Mash.UI.MNXFile.GUI.Icons;
-using Mash.UI.MNXFile.GUI.Plugins;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using Mash.GUI.MNXArchiver.Icons;
+using Mash.GUI.MNXArchiver.Plugins;
+using MNX;
 using DiskFile = System.IO.File;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public enum ArchiveAction {
     New    ,
@@ -54,7 +52,7 @@ public sealed partial class MainWindow : IDisposable {
     private readonly Label _status, _summary;
     private readonly Dictionary<Guid, TreeIter> _folderRows = new();
     private readonly HashSet<Guid> _populated = [];
-    private ArchiveFile? _archive;
+    private Archive? _archive;
     private ArchiveBrowser? _browser;
     private Guid _current;
     private bool _syncingTree, _initialSplitSet, _disposed;
@@ -65,7 +63,7 @@ public sealed partial class MainWindow : IDisposable {
     internal MainWindow(Settings.AppSettings? initialSettings) {
         _builder.AddFromString(ReadAsset("MainWindow.ui"));
         _window = Widget<Window>("main_window");
-        using (Stream? stream = typeof(MainWindow).Assembly.GetManifestResourceStream("Mash.UI.MNXFile.GUI.archive.png") ?? throw new InvalidDataException("Missing embedded archive icon.")) {
+        using (Stream? stream = typeof(MainWindow).Assembly.GetManifestResourceStream("Mash.GUI.MNXArchiver.archive.png") ?? throw new InvalidDataException("Missing embedded archive icon.")) {
             using Gdk.Pixbuf icon = new Gdk.Pixbuf(stream);
             Window.DefaultIcon = icon;
             _window.Icon = icon;
@@ -144,7 +142,7 @@ public sealed partial class MainWindow : IDisposable {
             return DiskFile.ReadAllText(sidecar);
             }
 
-        using Stream stream = typeof(MainWindow).Assembly.GetManifestResourceStream("Mash.UI.MNXFile.GUI." + name) ?? throw new InvalidDataException($"Missing embedded UI asset: {name}");
+        using Stream stream = typeof(MainWindow).Assembly.GetManifestResourceStream("Mash.GUI.MNXArchiver." + name) ?? throw new InvalidDataException($"Missing embedded UI asset: {name}");
         using StreamReader reader = new StreamReader(stream);
         return reader.ReadToEnd();
         }
@@ -230,7 +228,7 @@ public sealed partial class MainWindow : IDisposable {
         }
 
     private bool OpenMnxArchive(string fileName, string? password, bool showErrors) {
-        ArchiveFile next = new ArchiveFile();
+        Archive next = new Archive();
         try {
             next.Open(fileName, password);
             ArchiveBrowser? browser = ArchiveBrowser.FromArchive(next);
@@ -247,7 +245,7 @@ public sealed partial class MainWindow : IDisposable {
             return entered is not null && OpenMnxArchive(fileName, entered, showErrors);
             }
         catch (Exception ex) {
-            ArchiveFile.ReturnCode errorCode = next.ErrorStatus;
+            ReturnCode errorCode = next.ErrorStatus;
             next.Dispose();
             if (!showErrors) {
                 throw;
@@ -258,9 +256,9 @@ public sealed partial class MainWindow : IDisposable {
             }
         }
 
-    internal static string ArchiveOpenError(string path, Exception error, ArchiveFile.ReturnCode code) {
+    internal static string ArchiveOpenError(string path, Exception error, ReturnCode code) {
         string description = path + "\n\n" + error.Message;
-        if (code != 0 && code != ArchiveFile.ReturnCode.None && code != ArchiveFile.ReturnCode.Success) {
+        if (code != 0 && code != ReturnCode.None && code != ReturnCode.Success) {
             description += "\n\nError code: " + code;
             }
         return description;
@@ -606,5 +604,5 @@ public sealed partial class MainWindow : IDisposable {
     internal string TestCurrentPath => _path.Text;
     internal int TestListCount => _files.IterNChildren();
     internal ArchiveBrowser? TestBrowser => _browser;
-    internal ArchiveFile? TestArchive => _archive;
+    internal Archive? TestArchive => _archive;
     }

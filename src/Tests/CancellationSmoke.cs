@@ -1,17 +1,14 @@
+using static MNX.Archive;
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text;
 using Gtk;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive.Resume;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX;
 using DiskFile = System.IO.File;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 internal static class CancellationSmoke {
     internal static void Run(MainWindow host, string work, string screenshots) {
@@ -27,13 +24,13 @@ internal static class CancellationSmoke {
         string output = Path.Combine(work, "cancel.keep.mnx");
         DriveChoice(host, [current, later, waiting], output, keep: true, creating: true, screenshots);
         Check(DiskFile.Exists(output), "Keep publishes the partial archive");
-        using (ArchiveFile archive = new ArchiveFile().Open(output)) {
+        using (Archive archive = new Archive().Open(output)) {
             Check(
                 archive.Files.Count == 1 && archive.Files.Single().Name == Path.GetFileName(current),
                 "Keep finishes the current file and never starts the next one"
                 );
             Check(
-                archive.ReadFileRange(archive.Files.Single().FileID, 0, contents.Length).SequenceEqual(contents) && archive.VerifyArchive() == ArchiveFile.ReturnCode.Success,
+                archive.ReadFileRange(archive.Files.Single().FileID, 0, contents.Length).SequenceEqual(contents) && archive.VerifyArchive() == ReturnCode.Success,
                 "Kept archive has complete exact contents"
                 );
             }
@@ -45,9 +42,9 @@ internal static class CancellationSmoke {
             !DiskFile.Exists(resumeQueue) && Directory.EnumerateFiles(work, "cancel.keep.mnq.completed-*").Any(),
             "Opening a queue resumes work and marks it completed"
             );
-        using (ArchiveFile archive = new ArchiveFile().Open(output)) {
+        using (Archive archive = new Archive().Open(output)) {
             Check(
-                archive.Files.Count == 4 && archive.Files.Any(file => file.Name == Path.GetFileName(later)) && archive.Files.Any(file => file.Name == new string ('é', 100) + ".notes") && archive.VerifyArchive() == ArchiveFile.ReturnCode.Success,
+                archive.Files.Count == 4 && archive.Files.Any(file => file.Name == Path.GetFileName(later)) && archive.Files.Any(file => file.Name == new string ('é', 100) + ".notes") && archive.VerifyArchive() == ReturnCode.Success,
                 "GUI resume adds the entire remaining queue with long Unicode names"
                 );
             }
@@ -66,16 +63,16 @@ internal static class CancellationSmoke {
             );
         host.OpenArchive(existing);
         DriveChoice(host, [current, later, waiting], existing, keep: true, creating: false, screenshots);
-        using (ArchiveFile archive = new ArchiveFile().Open(existing)) {
+        using (Archive archive = new Archive().Open(existing)) {
             Check(
-                archive.Files.Count == 2 && archive.Files.Any(file => file.Name == "original.txt") && archive.Files.Any(file => file.Name == Path.GetFileName(current)) && archive.VerifyArchive() == ArchiveFile.ReturnCode.Success,
+                archive.Files.Count == 2 && archive.Files.Any(file => file.Name == "original.txt") && archive.Files.Any(file => file.Name == Path.GetFileName(current)) && archive.VerifyArchive() == ReturnCode.Success,
                 "Keep during add preserves original and current complete files"
                 );
             }
 
         CheckQueue(existing, [later, waiting, Path.Combine(waiting, new string ('é', 100) + ".notes")]);
         byte[] savedQueue = DiskFile.ReadAllBytes(Path.ChangeExtension(existing, ".mnq"));
-        using (ArchiveFile archive = new ArchiveFile().Open(existing)) {
+        using (Archive archive = new Archive().Open(existing)) {
             archive.Queue_AddFile(new FileInfo(later));
             RemainingQueue.Save(existing, archive.FileQueue);
             }
@@ -136,9 +133,9 @@ internal static class CancellationSmoke {
             !DiskFile.Exists(encryptedKey) && !DiskFile.Exists(encryptedQueue),
             "GUI resume opens via temporary key and consumes it"
             );
-        using (ArchiveFile archive = new ArchiveFile().Open(encrypted, password)) {
+        using (Archive archive = new Archive().Open(encrypted, password)) {
             Check(
-                archive.Files.Count == 3 && archive.IsEncrypted && archive.Compression == ArchiveCompression.Brotli && archive.VerifyArchive() == ArchiveFile.ReturnCode.Success,
+                archive.Files.Count == 3 && archive.IsEncrypted && archive.Compression == ArchiveCompression.Brotli && archive.VerifyArchive() == ReturnCode.Success,
                 "Encrypted GUI resume preserves archive contents and settings"
                 );
             }
@@ -192,7 +189,7 @@ internal static class CancellationSmoke {
             entries.Select(entry => entry.GetProperty("SourcePath").GetString()).SequenceEqual(pending),
             "Sidecar contains every remaining file and directory, and no completed file"
             );
-        using ArchiveFile archive = new ArchiveFile().Open(archivePath);
+        using Archive archive = new Archive().Open(archivePath);
         JsonElement identity = payload.GetProperty("Archive");
         Check(
             identity.GetProperty("Name").GetString() == Path.GetFileName(archivePath) && identity.GetProperty("ArchiveId").GetGuid() == archive.ArchiveGuid && identity.GetProperty("RootDirectoryId").GetGuid() == archive.RootDirectoryId,
@@ -222,7 +219,7 @@ internal static class CancellationSmoke {
         }
 
     private static void CreateExisting(string path) {
-        using ArchiveFile archive = new ArchiveFile();
+        using Archive archive = new Archive();
         archive.Options.Compression = ArchiveCompression.Brotli;
         archive.Options.CompressionLevel = 9;
         archive.Create(new FileInfo(path));

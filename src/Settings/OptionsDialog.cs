@@ -1,10 +1,10 @@
-using Mash.UI.MNXFile.GUI.Icons;
+using Mash.GUI.MNXArchiver.Icons;
 using System.Globalization;
 using Gtk;
-using Mash.UI.MNXFile.GUI.Backends;
+using Mash.GUI.MNXArchiver.Backends;
 using Action = System.Action;
 
-namespace Mash.UI.MNXFile.GUI.Settings;
+namespace Mash.GUI.MNXArchiver.Settings;
 
 /// <summary>Expandable settings editor. Ordinary changes are committed only by Save.</summary>
 internal sealed class OptionsDialog : IDisposable {

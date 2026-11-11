@@ -1,7 +1,7 @@
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
-using Mash.UI.MNXFile.GUI.Plugins;
+using MNX;
+using Mash.GUI.MNXArchiver.Plugins;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainForm {
     private OpenedModuleArchive? _pluginArchive;
@@ -16,7 +16,7 @@ public sealed partial class MainForm {
 
     private static string BuiltInArchiveFormat() {
         try {
-            using ArchiveFile engine = new ArchiveFile();
+            using Archive engine = new Archive();
             return $"Built-in archive format: MNX (.mnx), version {engine.FormatVersion}";
             }
         catch (Exception error) {

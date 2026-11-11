@@ -1,4 +1,4 @@
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 internal static class TextPrompt {
     internal static string? Ask(Form owner, string title, string instruction, bool password = false) {

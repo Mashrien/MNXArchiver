@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Reflection.PortableExecutable;
 using System.Runtime.InteropServices;
 
-namespace Mash.UI.MNXFile.GUI.Plugins;
+namespace Mash.GUI.MNXArchiver.Plugins;
 
 /// <summary>Discovers native extensions and routes archives and previews to their providers.</summary>
 internal sealed class PluginCatalog {
@@ -46,11 +46,7 @@ internal sealed class PluginCatalog {
         List<string> issues = new List<string>();
         try {
             if (Directory.Exists(directory)) {
-                string extension = OperatingSystem.IsWindows() ? ".dll" : ".so";
-                foreach (string path in Directory.EnumerateFiles(directory).Order(StringComparer.Ordinal)) {
-                    if (!Path.GetExtension(path).Equals(extension, StringComparison.OrdinalIgnoreCase)) {
-                        continue;
-                        }
+                foreach (string path in ExtensionFiles(directory)) {
                     try {
                         LoadExtension(path, modules, imageProviders);
                         }
@@ -64,6 +60,18 @@ internal sealed class PluginCatalog {
             issues.Add(error.Message);
             }
         return new PluginCatalog(directory, modules, imageProviders, issues);
+        }
+
+    private static IEnumerable<string> ExtensionFiles(string directory) {
+        string nativeSuffix = OperatingSystem.IsWindows() ? ".dll" : ".so";
+        return Directory.EnumerateFiles(directory)
+            .Where(path => IsMnxPlugin(path) || Path.GetExtension(path).Equals(nativeSuffix, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(IsMnxPlugin)
+            .ThenBy(path => path, StringComparer.Ordinal);
+        }
+
+    private static bool IsMnxPlugin(string path) {
+        return Path.GetExtension(path).Equals(".mnxp", StringComparison.OrdinalIgnoreCase);
         }
 
     private static void LoadExtension(string path, List<NativeArchiveModule> modules, List<NativeImageProvider> imageProviders) {

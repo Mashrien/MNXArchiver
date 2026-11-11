@@ -3,11 +3,11 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using SkiaSharp;
 
-namespace Mash.UI.MNXFile.GUI.Plugins.Webp;
+namespace Mash.GUI.MNXArchiver.Plugins.Webp;
 
 internal static unsafe class NativeExports {
     private static readonly ImageProviderDescription Description =
-        new ImageProviderDescription("webp", "WebP", "1.0.0", "2.0.0", "2.0.999", [".webp"]);
+        new ImageProviderDescription("webp", "WebP", "1.0.1", "2.0.0", "2.1.999", [".webp"]);
 
     [UnmanagedCallersOnly(EntryPoint = "mnx_image_provider_abi_version", CallConvs = [typeof(CallConvCdecl)])]
     public static uint GetAbiVersion() {

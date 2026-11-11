@@ -1,8 +1,8 @@
 using System.Text;
-using Mash.UI.MNXFile.GUI.Settings;
-using Mash.UI.MNXFile.GUI.Previews;
+using Mash.GUI.MNXArchiver.Settings;
+using Mash.GUI.MNXArchiver.Previews;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainForm {
     private void CheckPreviewModes(string directory) {

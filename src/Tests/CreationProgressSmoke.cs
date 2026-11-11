@@ -1,12 +1,9 @@
 using System.Diagnostics;
 using Gtk;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX;
 using DiskFile = System.IO.File;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 internal static class CreationProgressSmoke {
     internal static void Run(MainWindow host, string work, string screenshots) {
@@ -90,7 +87,7 @@ internal static class CreationProgressSmoke {
             error is null && !firstPassword && parent.Visible,
             error ?? "Parent returns after successful transfer"
             );
-        using (ArchiveFile archive = new ArchiveFile().Open(output, "matching-passphrase")) {
+        using (Archive archive = new Archive().Open(output, "matching-passphrase")) {
             Check(
                 archive.Compression == ArchiveCompression.Brotli && archive.CompressionLevel == 2 && archive.IsEncrypted,
                 "Compression level and encryption match setup"
@@ -102,7 +99,7 @@ internal static class CreationProgressSmoke {
         RespondOverwrite(host, [source], output, false);
         Check(DiskFile.ReadAllBytes(output).SequenceEqual(before), "Overwrite No preserves old archive");
         RespondOverwrite(host, [source], output, true);
-        using (ArchiveFile archive = new ArchiveFile().Open(output)) {
+        using (Archive archive = new Archive().Open(output)) {
             Check(
                 archive.Compression == ArchiveCompression.None && !archive.IsEncrypted,
                 "Disable compression and encryption"
@@ -133,7 +130,7 @@ internal static class CreationProgressSmoke {
             TransferTracker.PieceCounts(1300, 12_948_000) == "1.3 / 12,948 K Ch.",
             "Piece counters use common K scale with commas"
             );
-        using (ArchiveFile archive = new ArchiveFile()) {
+        using (Archive archive = new Archive()) {
             archive.Queue_AddFile(new FileInfo(source));
             TransferTracker tracker = new TransferTracker(32768);
             FileQueueItem[]? pending = archive.FileQueue.ToArray();

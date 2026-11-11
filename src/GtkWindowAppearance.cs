@@ -1,6 +1,6 @@
 using Gtk;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 /// <summary>One opacity preference for application windows; errors remain opaque.</summary>
 internal static class GtkWindowAppearance {

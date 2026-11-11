@@ -1,4 +1,4 @@
-using Mash.UI.MNXFile.GUI.Previews;
+using Mash.GUI.MNXArchiver.Previews;
 using SkiaSharp;
 
 string fixtures = Path.Combine(AppContext.BaseDirectory, "Fixtures");

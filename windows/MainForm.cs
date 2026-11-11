@@ -1,16 +1,16 @@
-using Mash.UI.MNXFile.GUI.Plugins;
+using static MNX.Archive;
+using Mash.GUI.MNXArchiver.Plugins;
 using System.Globalization;
 using System.Reflection;
 using System.Security.Cryptography;
-using Mash.UI.MNXFile.GUI.Previews;
-using Mash.UI.MNXFile.GUI.Settings;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
-using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
+using Mash.GUI.MNXArchiver.Previews;
+using Mash.GUI.MNXArchiver.Settings;
+using MNX;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainForm : MashWin.MWindow {
-    private ArchiveFile? _archive;
+    private Archive? _archive;
     private ArchiveBrowser? _browser;
     private Guid _current;
     private AppSettings _settings = null!;
@@ -72,7 +72,7 @@ public sealed partial class MainForm : MashWin.MWindow {
         _settings = settings ?? LoadSettings();
         ApplyWindowAppearance();
         _previews = new PreviewManager(this, _settings);
-        using Stream? iconStream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Mash.UI.MNXFile.GUI.archive.ico");
+        using Stream? iconStream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Mash.GUI.MNXArchiver.archive.ico");
         if (iconStream is not null) {
             using Icon applicationIcon = new Icon(iconStream);
             SetIcon(applicationIcon);
@@ -183,7 +183,7 @@ public sealed partial class MainForm : MashWin.MWindow {
         }
 
     private Image ReadIcon(string name, int size = 32) {
-        using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Mash.UI.MNXFile.GUI.Icons.{size}.{name}.png") ?? throw new InvalidDataException("Missing icon: " + name);
+        using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Mash.GUI.MNXArchiver.Icons.{size}.{name}.png") ?? throw new InvalidDataException("Missing icon: " + name);
         using Image source = Image.FromStream(stream);
         Image image = new Bitmap(source);
         _ownedIcons.Add(image);
@@ -359,7 +359,7 @@ public sealed partial class MainForm : MashWin.MWindow {
             MessageBox.Show(this, error.Message, "Could not open plugin archive", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return false;
             }
-        ArchiveFile next = new ArchiveFile();
+        Archive next = new Archive();
         next.Options.ProgressReportFrequency = 50;
         try {
             await RunOperation("Opening archive", () => next.Open(FileTransfer.LocalPath(path), password), next, showProgress: false);
@@ -375,7 +375,7 @@ public sealed partial class MainForm : MashWin.MWindow {
             return entered is not null && await OpenArchive(path, entered, showErrors);
             }
         catch (Exception error) {
-            ArchiveFile.ReturnCode code = next.ErrorStatus;
+            ReturnCode code = next.ErrorStatus;
             next.Dispose();
             if (!showErrors) {
                 throw;
@@ -385,7 +385,7 @@ public sealed partial class MainForm : MashWin.MWindow {
             }
         }
 
-    internal static string ArchiveOpenError(string path, Exception error, ArchiveFile.ReturnCode code) {
+    internal static string ArchiveOpenError(string path, Exception error, ReturnCode code) {
         return path + "\n\n" + error.Message + "\n\nError code: " + code + " (" + ((ulong)code).ToString(System.Globalization.CultureInfo.InvariantCulture) + ")";
         }
 

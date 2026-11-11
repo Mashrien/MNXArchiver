@@ -1,10 +1,8 @@
 using Gtk;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using Mash.UI.MNXFile.GUI.Plugins;
+using MNX;
+using Mash.GUI.MNXArchiver.Plugins;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 internal static class Program {
     internal static bool IsArchiveOpenRequest(string[] paths) {

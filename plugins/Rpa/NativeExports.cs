@@ -2,11 +2,11 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
-namespace Mash.UI.MNXFile.GUI.Plugins.Rpa;
+namespace Mash.GUI.MNXArchiver.Plugins.Rpa;
 
 internal static unsafe class NativeExports {
     private static readonly PluginFormat Format = new PluginFormat(
-        "renpy.rpa", "Ren'Py RPA", "1.0.1", "2.0.0", "2.0.999",
+        "renpy.rpa", "Ren'Py RPA", "1.0.2", "2.0.0", "2.1.999",
         [".rpa"], [new PluginFormatVersion("3.0", "5250412D332E3020",
             PluginActions.Extract | PluginActions.Add | PluginActions.Replace | PluginActions.Create
                 | PluginActions.Delete | PluginActions.ReadEntry)], "3.0"

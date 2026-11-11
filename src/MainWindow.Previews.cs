@@ -1,10 +1,10 @@
-using Mash.UI.MNXFile.GUI.Plugins;
+using Mash.GUI.MNXArchiver.Plugins;
 using Gtk;
-using Mash.UI.MNXFile.GUI.Previews;
-using Mash.UI.MNXFile.GUI.Settings;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using Mash.GUI.MNXArchiver.Previews;
+using Mash.GUI.MNXArchiver.Settings;
+using MNX;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainWindow {
     internal const int MaxPreviewWindows = 10;
@@ -210,7 +210,7 @@ public sealed partial class MainWindow {
             cursorX = originX + pointerX;
             cursorY = originY + pointerY;
             }
-        ArchiveFile? archive = _archive;
+        Archive? archive = _archive;
         OpenedModuleArchive? moduleArchive = _pluginArchive;
         ArchiveBrowser.Entry entry = _browser!.Get(id);
         AppSettings settings = _settings.Copy();

@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 
-namespace Mash.UI.MNXFile.GUI.Settings;
+namespace Mash.GUI.MNXArchiver.Settings;
 
 /// <summary>Portable UTF-8 INI settings. Section and key names are case-insensitive.</summary>
 public sealed class INI_Config {

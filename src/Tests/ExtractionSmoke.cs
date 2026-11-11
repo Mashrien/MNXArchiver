@@ -1,19 +1,16 @@
 using System.Diagnostics;
 using Gtk;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX;
 using DiskFile = System.IO.File;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 internal static class ExtractionSmoke {
     internal static void Run(MainWindow host, string work, string screenshots) {
         string archivePath = Path.Combine(work, "extraction.progress.mnx");
         byte[] data = new byte[32 * 1024 * 1024];
         new Random(273).NextBytes(data);
-        using (ArchiveFile archive = new ArchiveFile()) {
+        using (Archive archive = new Archive()) {
             archive.Create(new FileInfo(archivePath));
             archive.AddStreamNow(new MemoryStream(data), "first.dots.é.bin", data.Length);
             archive.AddStreamNow(new MemoryStream(data), "second.bin", data.Length);
@@ -121,9 +118,9 @@ internal static class ExtractionSmoke {
             !DiskFile.Exists(Path.Combine(work, "extract-stop", "second.bin")),
             "Stop now deletes the unfinished direct output"
             );
-        using (ArchiveFile archive = new ArchiveFile().Open(archivePath)) {
+        using (Archive archive = new Archive().Open(archivePath)) {
             Check(
-                archive.VerifyArchive() == ArchiveFile.ReturnCode.Success,
+                archive.VerifyArchive() == Archive.ReturnCode.Success,
                 "Extraction cancellation leaves the archive intact"
                 );
             }
@@ -158,7 +155,7 @@ internal static class ExtractionSmoke {
         host.OpenArchive(archivePath);
         host.TestWidget<TreeView>("file_list").Selection.SelectAll();
         Window? parent = host.TestWidget<Window>("main_window");
-        ArchiveFile? archive = host.TestArchive!;
+        Archive? archive = host.TestArchive!;
         // Hold one partial file until the GUI has applied the cancellation choice.
         // Notification cadence is intentionally throttled across the native ABI;
         // sleeping per notification would no longer make this test deterministic.

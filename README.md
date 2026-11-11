@@ -28,10 +28,10 @@ installed .NET runtime. See [packaging instructions](packaging/README.md).
 
 ## Optional archive formats
 
-MNXArchiver 2.0 supports native archive modules. The first module adds Ren’Py
+MNXArchiver 2.1 supports native archive modules. The first module adds Ren’Py
 RPA 3.0 browsing, text and image previews, extraction, add, replace, delete, and creation to the same GUI.
 See the [module installation and ABI guide](docs/ARCHIVE-PLUGINS.md).
-The `ext.image.webp` extension adds static WebP previews through the
+The `ext.image.WEBP.mnxp` extension adds static WebP previews through the
 [image provider interface](docs/IMAGE-PROVIDERS.md).
 
 ## Features
@@ -86,13 +86,13 @@ Install the **.NET 10 SDK**. Linux builds need Python3.12+, Git, `flock`, `clang
 a C/C++ toolchain and zlib development headers. Windows builds need Visual Studio
 C++ build tools and a Windows SDK for the independent engine build.
 
-The client package is pinned to **`Mash.MNXFile.Client` `1.2.0-alpha.3`**, which is
+The client package is pinned to **`Mash.MNXFile.Client` `1.3.0-alpha.6`**, which is
 not yet published on NuGet.org. Build the matching engine/client dependency first:
 
 ```sh
 git clone https://github.com/Mashrien/MNXFile.git
 git clone https://github.com/Mashrien/MNXArchiver.git
-(cd MNXFile && MNXBuildNumber=3 ./build.sh --test)
+(cd MNXFile && MNXBuildNumber=6 ./build.sh --test)
 cd MNXArchiver
 export MNXFILE_NATIVE_LIBRARY="$(realpath ../MNX_Builds/mnxfile/linux-x64/libmnxfile.so.1)"
 ./build.sh --test
@@ -141,7 +141,7 @@ Do not edit generated sources under `mnx_clutter/build/`.
 
 ## Outputs and versions
 
-Current GUI version is **`2.0.0.N`**; `BuildNumber.txt` supplies an automatic build
+Current GUI version is **`2.1.0.N`**; `BuildNumber.txt` supplies an automatic build
 counter. Set `MNXBuildNumber=N` to reproduce a specific counter. Output remains:
 
 - `../MNX_Builds/mnx-gui/linux-x64/` or `win-x64/`: component release.

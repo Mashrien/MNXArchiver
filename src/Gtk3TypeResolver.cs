@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 /// <summary>Keep GtkSharp's native-object wrappers separate from embedded GTK4 bindings.</summary>
 internal static class Gtk3TypeResolver {

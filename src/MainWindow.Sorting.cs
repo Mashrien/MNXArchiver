@@ -1,6 +1,6 @@
 using Gtk;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainWindow {
     private void ConfigureColumnSorting() {

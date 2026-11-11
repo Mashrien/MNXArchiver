@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace Mash.UI.MNXFile.GUI.Previews;
+namespace Mash.GUI.MNXArchiver.Previews;
 
 /// <summary>Wrap private decoder subclasses through their public GTK base types.
 /// GtkSharp's generated casts otherwise return null for GIF/nonanimated subclasses.</summary>

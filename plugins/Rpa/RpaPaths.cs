@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
-namespace Mash.UI.MNXFile.GUI.Plugins.Rpa;
+namespace Mash.GUI.MNXArchiver.Plugins.Rpa;
 
 internal static partial class RpaPaths {
     internal static StringComparer FileSystemComparer { get; } =

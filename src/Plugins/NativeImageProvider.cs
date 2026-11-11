@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
-namespace Mash.UI.MNXFile.GUI.Plugins;
+namespace Mash.GUI.MNXArchiver.Plugins;
 
 /// <summary>A native image provider that writes pixels into buffers owned by the preview.</summary>
 internal sealed unsafe class NativeImageProvider {

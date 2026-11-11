@@ -1,6 +1,6 @@
 # Native archive modules
 
-MNXArchiver 2.0 uses a shared browser and a versioned native interface for optional archive formats. A module supplies metadata and performs archive I/O. The GUI provides the folder tree, search, file picker, operation progress and capability controls.
+MNXArchiver 2.1 uses a shared browser and a versioned native interface for optional archive formats. A module supplies metadata and performs archive I/O. The GUI provides the folder tree, search, file picker, operation progress and capability controls.
 
 ## Install and use the RPA module
 
@@ -8,12 +8,14 @@ Place the library for your platform in the per-user module directory and restart
 
 | Platform | Module | Directory |
 |---|---|---|
-| Linux | `ext.format.rpa.so` | `${XDG_CONFIG_HOME:-$HOME/.config}/mnxarchiver/plugins/` |
-| Windows | `ext.format.rpa.dll` | `%APPDATA%\mnxarchiver\plugins\` |
+| Linux | `ext.format.RPA.mnxp` | `${XDG_CONFIG_HOME:-$HOME/.config}/mnxarchiver/plugins/` |
+| Windows | `ext.format.RPA.mnxp` | `%APPDATA%\mnxarchiver\plugins\` |
 
-If you installed the older `MnxRpa.so` or `MnxRpa.dll`, move it out of the
-plugins directory when installing the renamed module. Both filenames use
-the same archive module ID.
+The `.mnxp` suffix is shared by both platforms. Use the binary built for your
+operating system and architecture. The loader validates its ELF or PE header
+before loading it. MNXArchiver also discovers older platform-suffixed plugins.
+When upgrading RPA, move the old library out of the plugins directory to avoid
+two files declaring the same module ID.
 
 For preview format extensions, see [Image preview providers](IMAGE-PROVIDERS.md).
 
@@ -31,20 +33,20 @@ The module reads a bounded subset of pickle as data and requires no Python insta
 On Linux with the .NET 10 SDK and NativeAOT compiler prerequisites:
 
 ```sh
-dotnet publish plugins/Rpa/ext.format.rpa.csproj -c Release -r linux-x64 -o /tmp/mnx-rpa-module
+dotnet publish plugins/Rpa/ext.format.RPA.csproj -c Release -r linux-x64 -o /tmp/mnx-rpa-module
 ```
 
 Use `linux-arm64` for an ARM64 host. On Windows with the .NET 10 SDK and Visual C++ NativeAOT toolchain:
 
 ```powershell
-dotnet publish plugins/Rpa/ext.format.rpa.csproj -c Release -r win-x64 -o .\rpa-module
+dotnet publish plugins/Rpa/ext.format.RPA.csproj -c Release -r win-x64 -o .\rpa-module
 ```
 
 Copy the resulting shared library to the module directory above. Python is only needed for the independent format checks:
 
 ```sh
-python3 plugins/Rpa/verify_rpa.py /tmp/mnx-rpa-module/ext.format.rpa.so -v
-tests/PluginChecks/run-linux.sh /tmp/mnx-rpa-module/ext.format.rpa.so
+python3 plugins/Rpa/verify_rpa.py /tmp/mnx-rpa-module/ext.format.RPA.mnxp -v
+tests/PluginChecks/run-linux.sh /tmp/mnx-rpa-module/ext.format.RPA.mnxp
 ```
 
 The host checks use a small independently generated protocol 4 fixture under
@@ -60,16 +62,16 @@ The declarations are in [mnx_plugin.h](../plugins/include/mnx_plugin.h). Export 
 2. `describe` returns a `format` object. It does not perform archive I/O and remains available for version diagnostics.
 3. The host checks the module release against its own range, and checks the host release against the module's range. It then calls `negotiate`; the module independently checks both ranges. All archive operations repeat the module-side checks before I/O.
 
-Every request carries `hostVersion`, `minPluginVersion`, and `maxPluginVersion`. The host release is the first three components of its assembly version, excluding the build counter. Ranges are inclusive. The 2.0 host supports module releases **1.0.0–1.0.999**; RPA module 1.0.1 supports host releases **2.0.0–2.0.999**. The archive format versions are independent:
+Every request carries `hostVersion`, `minPluginVersion`, and `maxPluginVersion`. The host release is the first three components of its assembly version, excluding the build counter. Ranges are inclusive. The 2.1 host supports module releases **1.0.0–1.0.999**; RPA module 1.0.2 supports host releases **2.0.0–2.1.999**. The archive format versions are independent:
 
 ```json
 {
   "format": {
     "id": "renpy.rpa",
     "name": "Ren'Py RPA",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "minHostVersion": "2.0.0",
-    "maxHostVersion": "2.0.999",
+    "maxHostVersion": "2.1.999",
     "extensions": [".rpa"],
     "currentVersion": "3.0",
     "versions": [

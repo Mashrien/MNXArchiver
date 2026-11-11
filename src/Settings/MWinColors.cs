@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text;
 using DiskFile = System.IO.File;
 
-namespace Mash.UI.MNXFile.GUI.Settings;
+namespace Mash.GUI.MNXArchiver.Settings;
 
 /// <summary>An editable INI snapshot. Existing user colors always win over desktop changes.</summary>
 internal sealed class MWinColors {

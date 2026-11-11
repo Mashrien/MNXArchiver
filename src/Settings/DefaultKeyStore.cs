@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using DiskFile = System.IO.File;
 
-namespace Mash.UI.MNXFile.GUI.Settings;
+namespace Mash.GUI.MNXArchiver.Settings;
 
 /// <summary>AES-GCM password envelope. The wrapping key lives in the OS credential store.</summary>
 internal sealed class DefaultKeyStore {

@@ -1,5 +1,5 @@
 #nullable enable
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 partial class ProgressForm {
     private System.ComponentModel.IContainer? components;
@@ -23,7 +23,7 @@ partial class ProgressForm {
         filePiecesLabel = new System.Windows.Forms.Label();
         fileProgressBar = new System.Windows.Forms.ProgressBar();
         archiveProgressLabel = new System.Windows.Forms.Label();
-        totalProgressBar = new Mash.UI.MNXFile.GUI.PercentageProgressBar();
+        totalProgressBar = new Mash.GUI.MNXArchiver.PercentageProgressBar();
         buttonPanel = new System.Windows.Forms.FlowLayoutPanel();
         cancelButton = new System.Windows.Forms.Button();
         SuspendLayout();
@@ -283,7 +283,7 @@ partial class ProgressForm {
     private System.Windows.Forms.Label filePiecesLabel = null!;
     private System.Windows.Forms.ProgressBar fileProgressBar = null!;
     private System.Windows.Forms.Label archiveProgressLabel = null!;
-    private Mash.UI.MNXFile.GUI.PercentageProgressBar totalProgressBar = null!;
+    private Mash.GUI.MNXArchiver.PercentageProgressBar totalProgressBar = null!;
     private System.Windows.Forms.FlowLayoutPanel buttonPanel = null!;
     private System.Windows.Forms.Button cancelButton = null!;
     }

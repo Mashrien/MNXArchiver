@@ -1,8 +1,8 @@
-using Mash.UI.MNXFile.GUI.Plugins;
-using Mash.UI.MNXFile.GUI.Settings;
+using Mash.GUI.MNXArchiver.Plugins;
+using Mash.GUI.MNXArchiver.Settings;
 using DiskFile = System.IO.File;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainForm {
     private async Task RunPluginSmoke(string work, List<string> evidence) {

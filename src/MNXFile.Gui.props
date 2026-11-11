@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <RootNamespace>Mash.UI.MNXFile.GUI</RootNamespace>
+    <RootNamespace>Mash.GUI.MNXArchiver</RootNamespace>
     <TargetFramework>net10.0</TargetFramework>
     <!-- Keep Unicode paths and case mapping without an ICU runtime dependency. -->
     <InvariantGlobalization>true</InvariantGlobalization>
@@ -18,16 +18,16 @@
     <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.4" Condition="$([MSBuild]::IsOSPlatform('Linux'))" />
     <Compile Include="../windows/Previews/ImagePreflight.cs" Link="Previews/ImagePreflight.cs" />
     <PackageReference Include="GtkSharp" Version="3.24.24.95" />
-    <PackageReference Include="Mash.MNXFile.Client" Version="1.2.0-alpha.3" />
+    <PackageReference Include="Mash.MNXFile.Client" Version="1.3.0-alpha.6" />
     <!-- Keep editable sidecars in development; published apps load embedded assets. -->
-    <EmbeddedResource Include="MainWindow.ui" LogicalName="Mash.UI.MNXFile.GUI.MainWindow.ui" />
-    <EmbeddedResource Include="style.css" LogicalName="Mash.UI.MNXFile.GUI.style.css" />
-    <EmbeddedResource Include="archive_100x100.png" LogicalName="Mash.UI.MNXFile.GUI.archive.png" />
-    <EmbeddedResource Include="Icons/Rendered/16/*.png" LogicalName="Mash.UI.MNXFile.GUI.Icons.16.%(Filename)%(Extension)" />
-    <EmbeddedResource Include="Icons/Rendered/24/*.png" LogicalName="Mash.UI.MNXFile.GUI.Icons.24.%(Filename)%(Extension)" />
-    <EmbeddedResource Include="Icons/Rendered/32/*.png" LogicalName="Mash.UI.MNXFile.GUI.Icons.32.%(Filename)%(Extension)" />
-    <EmbeddedResource Include="Icons/Rendered/48/*.png" LogicalName="Mash.UI.MNXFile.GUI.Icons.48.%(Filename)%(Extension)" />
-    <EmbeddedResource Include="Icons/LICENSE.txt" LogicalName="Mash.UI.MNXFile.GUI.Icons.LICENSE.txt" />
+    <EmbeddedResource Include="MainWindow.ui" LogicalName="Mash.GUI.MNXArchiver.MainWindow.ui" />
+    <EmbeddedResource Include="style.css" LogicalName="Mash.GUI.MNXArchiver.style.css" />
+    <EmbeddedResource Include="archive_100x100.png" LogicalName="Mash.GUI.MNXArchiver.archive.png" />
+    <EmbeddedResource Include="Icons/Rendered/16/*.png" LogicalName="Mash.GUI.MNXArchiver.Icons.16.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Icons/Rendered/24/*.png" LogicalName="Mash.GUI.MNXArchiver.Icons.24.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Icons/Rendered/32/*.png" LogicalName="Mash.GUI.MNXArchiver.Icons.32.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Icons/Rendered/48/*.png" LogicalName="Mash.GUI.MNXArchiver.Icons.48.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Icons/LICENSE.txt" LogicalName="Mash.GUI.MNXArchiver.Icons.LICENSE.txt" />
     <None Update="MainWindow.ui" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
     <None Update="style.css" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
   </ItemGroup>

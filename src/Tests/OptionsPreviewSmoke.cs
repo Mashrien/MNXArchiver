@@ -1,12 +1,13 @@
+using static MNX.Archive;
 using System.Security.Cryptography;
 using System.Text;
 using Gtk;
-using Mash.UI.MNXFile.GUI.Settings;
-using Mash.UI.MNXFile.GUI.Previews;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using Mash.GUI.MNXArchiver.Settings;
+using Mash.GUI.MNXArchiver.Previews;
+using MNX;
 using DiskFile = System.IO.File;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 internal static class OptionsPreviewSmoke {
     private static T? FindSetting<T>(Widget widget, string name) where T : Widget {
@@ -118,7 +119,7 @@ internal static class OptionsPreviewSmoke {
         Check(Program.IsArchiveOpenRequest([invalidArchive]), "Invalid MNX startup input requests archive parsing rather than creation");
         Check(!Program.IsArchiveOpenRequest([invalidArchive, Path.Combine(directory, "ordinary.txt")]), "Multiple supplied inputs remain an archive-creation request");
         Reject(() => host.OpenArchive(invalidArchive, showErrors: false), "Invalid archive rejected by the actual parser");
-        string parseMessage = MainWindow.ArchiveOpenError(invalidArchive, new InvalidDataException("Invalid header"), ArchiveFile.ReturnCode.Failed | ArchiveFile.ReturnCode.ParseFailed);
+        string parseMessage = MainWindow.ArchiveOpenError(invalidArchive, new InvalidDataException("Invalid header"), ReturnCode.Failed | ReturnCode.ParseFailed);
         Check(parseMessage.Contains("Failed, ParseFailed") && parseMessage.Contains("Invalid header"), "Archive error dialog includes named parser status flags");
         string config = Path.Combine(directory, "private settings");
         AppSettings settings = new AppSettings(config);
@@ -212,7 +213,7 @@ internal static class OptionsPreviewSmoke {
         using (FileStream file = DiskFile.Create(oversized)) {
             file.SetLength(PreviewData.InputLimit + 1L);
             }
-        using (ArchiveFile archive = new ArchiveFile()) {
+        using (Archive archive = new Archive()) {
             archive.Create(new FileInfo(archivePath));
             archive.AddFileNow(new FileInfo(textPath));
             archive.AddFileNow(new FileInfo(imagePath));
@@ -354,7 +355,7 @@ internal static class OptionsPreviewSmoke {
         Check(host.TestArchive.Files.Count == 4, "Declining deletion preserves all entries");
         DeleteWithAnswer(host, ResponseType.Yes);
         Check(host.TestArchive.Files.Count == 3 && host.TestArchive.GetFile(imageEntry) is null, "Confirmed deletion removes only the selected entry");
-        Check(host.TestArchive.VerifyArchive() == ArchiveFile.ReturnCode.Success, "Archive verifies after context deletion");
+        Check(host.TestArchive.VerifyArchive() == ReturnCode.Success, "Archive verifies after context deletion");
         CheckArchiveAnimations(host, screenshots);
         Console.WriteLine("PASS: editable settings, authenticated key envelope, input limits, image geometry, independent windows and cleanup");
         }
@@ -387,12 +388,12 @@ internal static class OptionsPreviewSmoke {
         settings.Set("Presentation", "Mode", "Window");
         settings.Set("Presentation", "WindowType", "Window");
         settings.Set("Presentation", "RelativeTo", "Current Screen");
-        Mash.IO.Format.MNX.VFile.VFile[] samples = host.TestArchive!.Files.Where(file => file.Name.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)
+        MNX.VFile[] samples = host.TestArchive!.Files.Where(file => file.Name.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)
             && file.SizeOriginal >= 8_000_000 && file.SizeOriginal <= 20_000_000).ToArray();
         Check(samples.Length > 0, "The real GIF archive has matching animation samples");
         List<string> evidence = new List<string>();
         foreach (long target in new long[] { 9_000_000, 15_000_000 }) {
-            Mash.IO.Format.MNX.VFile.VFile sample = samples.OrderBy(file => Math.Abs((long)file.SizeOriginal - target)).First();
+            MNX.VFile sample = samples.OrderBy(file => Math.Abs((long)file.SizeOriginal - target)).First();
             host.PreviewEntry(sample.FileID);
             WaitFor(() => host.TestPreviewCount == 1, "Actual archived large GIF opens with the new decoded budget");
             Check(host.TestPreviews[0].IsAnimating, "Actual archived large GIF starts animating");

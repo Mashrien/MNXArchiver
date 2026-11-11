@@ -1,10 +1,9 @@
-using Mash.UI.MNXFile.GUI.Icons;
-using Mash.UI.MNXFile.GUI.Plugins;
+using Mash.GUI.MNXArchiver.Icons;
+using Mash.GUI.MNXArchiver.Plugins;
 using Gtk;
-using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainWindow {
     private readonly MenuItem _previewEntry = new MenuItem("Preview");
@@ -47,7 +46,7 @@ public sealed partial class MainWindow {
                 }
             return;
             }
-        ArchiveFile archive = _archive!;
+        Archive archive = _archive!;
         if (ids.Length > 1) {
             ulong bytes = 0;
             foreach (Guid id in ids) {
@@ -56,7 +55,7 @@ public sealed partial class MainWindow {
             Message("Selection properties", $"{ids.Length:N0} entries selected\nIndexed file bytes: {bytes:N0}\nCompression: {archive.Compression}\nEncrypted: {archive.IsEncrypted}");
             return;
             }
-        VirtualFile? file = archive.GetFile(ids[0]);
+        VFile? file = archive.GetFile(ids[0]);
         if (file is null) {
             return;
             }
@@ -84,11 +83,11 @@ public sealed partial class MainWindow {
             DeletePluginEntries(plugin, ids, _browser.PathOf(location));
             return;
             }
-        ArchiveFile archive = _archive!;
+        Archive archive = _archive!;
         try {
             RunTransfer("Deleting archive entries", () => {
                 foreach (Guid id in ids) {
-                    if (archive.GetFile(id) is not null && archive.DeleteFileFromArchive(id) != ArchiveFile.ReturnCode.Success) {
+                    if (archive.GetFile(id) is not null && archive.DeleteFileFromArchive(id) != Archive.ReturnCode.Success) {
                         throw new IOException("Could not delete archive entry " + id);
                         }
                     }

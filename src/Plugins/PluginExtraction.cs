@@ -1,4 +1,4 @@
-namespace Mash.UI.MNXFile.GUI.Plugins;
+namespace Mash.GUI.MNXArchiver.Plugins;
 
 /// <summary>Map selected archive paths to explicit local outputs; the module copies the bytes.</summary>
 internal sealed class PluginExtraction {

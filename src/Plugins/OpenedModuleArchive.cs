@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Mash.UI.MNXFile.GUI.Plugins;
+namespace Mash.GUI.MNXArchiver.Plugins;
 
 /// <summary>An open archive path and its browser listing. The module performs the archive I/O.</summary>
 internal sealed class OpenedModuleArchive {

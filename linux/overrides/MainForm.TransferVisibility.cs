@@ -1,6 +1,6 @@
 using Majorsilence.Forms.Gtk4;
 
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 public sealed partial class MainForm {
     partial void SetPlatformTransferConcealment(bool concealed, ref bool handled) {

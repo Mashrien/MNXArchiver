@@ -1,6 +1,6 @@
 #nullable disable
 // Keep resource casts in the syntax understood by the WinForms designer.
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 partial class MainForm {
     private System.ComponentModel.IContainer components;

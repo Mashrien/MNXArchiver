@@ -1,4 +1,4 @@
-namespace Mash.UI.MNXFile.GUI;
+namespace Mash.GUI.MNXArchiver;
 
 /// <summary>Shared MWin chrome defaults for owned MNX dialogs; content stays designer-editable.</summary>
 public partial class MnxDialog : MashWin.MWindow {

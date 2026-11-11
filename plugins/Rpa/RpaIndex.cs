@@ -3,7 +3,7 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 
-namespace Mash.UI.MNXFile.GUI.Plugins.Rpa;
+namespace Mash.GUI.MNXArchiver.Plugins.Rpa;
 
 internal sealed record RpaSegment(long Offset, long Length, byte[] Prefix);
 internal sealed record RpaEntry(RpaSegment[] Segments, long Size);
