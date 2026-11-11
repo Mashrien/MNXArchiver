@@ -52,6 +52,27 @@ catch (IOException) {
 Require(rejected, "The cache ignored its decoded-memory budget.");
 Console.WriteLine("PASS: reduced static image, memory limit and disposal.");
 
+int providerCalls = 0;
+using (CachedImageDecoder frames = new CachedImageDecoder(1, 1, 2, 3, (pixels, stride, delays) => {
+    providerCalls++;
+    if (stride < 4 || pixels.Length != 2 || delays.Length != 2) {
+        throw new InvalidOperationException("The provider did not get a buffer and delay for each frame.");
+        }
+    System.Runtime.InteropServices.Marshal.WriteInt32(pixels[0], unchecked((int)0xffff0000));
+    System.Runtime.InteropServices.Marshal.WriteInt32(pixels[1], unchecked((int)0xff0000ff));
+    delays[0] = 80;
+    delays[1] = 120;
+    })) {
+    Require(frames.FrameCount == 2 && frames.TotalPlays == 3, "Provider animation metadata was lost.");
+    Require(frames.Delay(0) == 80 && frames.Delay(1) == 120, "Provider frame delays changed.");
+    for (int play = 0; play < frames.TotalPlays; play++) {
+        Require(frames.Frame(0).GetPixel(0, 0) == SKColors.Red, "The first provider frame changed.");
+        Require(frames.Frame(1).GetPixel(0, 0) == SKColors.Blue, "The second provider frame changed.");
+        }
+    Require(providerCalls == 1, "Provider playback decoded the animation again.");
+    }
+Console.WriteLine("PASS: provider frame buffers, delays and loop count are cached after one decode.");
+
 string? sample = Environment.GetEnvironmentVariable("MNX_GUI_GIF_SAMPLE");
 if (!string.IsNullOrEmpty(sample)) {
     string path = sample;

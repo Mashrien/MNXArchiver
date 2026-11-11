@@ -5,18 +5,20 @@ using System.Runtime.InteropServices;
 
 namespace Mash.UI.MNXFile.GUI.Plugins;
 
-/// <summary>Discover platform-native modules and route archives by their declared header bytes.</summary>
+/// <summary>Discovers native extensions and routes archives and previews to their providers.</summary>
 internal sealed class PluginCatalog {
     private static readonly Lazy<PluginCatalog> _installed = new(DiscoverInstalled);
     internal static PluginCatalog Installed => _installed.Value;
     internal IReadOnlyList<NativeArchiveModule> Modules { get; }
+    internal IReadOnlyList<NativeImageProvider> ImageProviders { get; }
     internal IReadOnlyList<string> Issues { get; }
     internal string DirectoryPath { get; }
     private readonly int _headerLength;
 
-    private PluginCatalog(string directory, List<NativeArchiveModule> modules, List<string> issues) {
+    private PluginCatalog(string directory, List<NativeArchiveModule> modules, List<NativeImageProvider> imageProviders, List<string> issues) {
         DirectoryPath = directory;
         Modules = modules.AsReadOnly();
+        ImageProviders = imageProviders.AsReadOnly();
         Issues = issues.AsReadOnly();
         _headerLength = Math.Max(4, modules.Select(module => module.SignatureLength).DefaultIfEmpty().Max());
         }
@@ -30,7 +32,7 @@ internal sealed class PluginCatalog {
         if (string.IsNullOrEmpty(root) || !Path.IsPathFullyQualified(root)) {
             string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             if (!Path.IsPathFullyQualified(profile)) {
-                return new PluginCatalog("(unavailable)", [], ["No absolute per-user module directory is available."]);
+                return new PluginCatalog("(unavailable)", [], [], ["No absolute per-user module directory is available."]);
                 }
             root = Path.Combine(profile, ".config");
             }
@@ -39,9 +41,9 @@ internal sealed class PluginCatalog {
 
     internal static PluginCatalog Discover(string directory) {
         directory = Path.GetFullPath(directory);
-        List<NativeArchiveModule> modules = new();
-        List<string> issues = new();
-        HashSet<string> ids = new(StringComparer.Ordinal);
+        List<NativeArchiveModule> modules = new List<NativeArchiveModule>();
+        List<NativeImageProvider> imageProviders = new List<NativeImageProvider>();
+        List<string> issues = new List<string>();
         try {
             if (Directory.Exists(directory)) {
                 string extension = OperatingSystem.IsWindows() ? ".dll" : ".so";
@@ -50,12 +52,7 @@ internal sealed class PluginCatalog {
                         continue;
                         }
                     try {
-                        CheckNativeLibrary(path);
-                        NativeArchiveModule module = new(path);
-                        if (!ids.Add(module.Format.Id)) {
-                            throw new InvalidDataException("A module with the same ID is already installed.");
-                            }
-                        modules.Add(module);
+                        LoadExtension(path, modules, imageProviders);
                         }
                     catch (Exception error) {
                         issues.Add(Path.GetFileName(path) + ": " + error.Message);
@@ -66,7 +63,42 @@ internal sealed class PluginCatalog {
         catch (Exception error) {
             issues.Add(error.Message);
             }
-        return new PluginCatalog(directory, modules, issues);
+        return new PluginCatalog(directory, modules, imageProviders, issues);
+        }
+
+    private static void LoadExtension(string path, List<NativeArchiveModule> modules, List<NativeImageProvider> imageProviders) {
+        CheckNativeLibrary(path);
+        nint library = NativeLibrary.Load(path, typeof(PluginCatalog).Assembly,
+            DllImportSearchPath.SafeDirectories | DllImportSearchPath.UseDllDirectoryForDependencies);
+        if (NativeLibrary.TryGetExport(library, "mnx_image_provider_abi_version", out nint versionExport)) {
+            AddImageProvider(path, library, versionExport, imageProviders);
+            return;
+            }
+
+        NativeArchiveModule module = new NativeArchiveModule(path, library);
+        if (modules.Any(existing => existing.Format.Id == module.Format.Id)) {
+            throw new InvalidDataException("A module with the same ID is already installed.");
+            }
+        modules.Add(module);
+        }
+
+    private static void AddImageProvider(string path, nint library, nint versionExport, List<NativeImageProvider> providers) {
+        NativeImageProvider provider = new NativeImageProvider(path, library, versionExport);
+        foreach (NativeImageProvider existing in providers) {
+            if (existing.Description.Id == provider.Description.Id) {
+                throw new InvalidDataException("An image provider with the same ID is already installed.");
+                }
+            if (existing.Description.Extensions.Intersect(provider.Description.Extensions, StringComparer.OrdinalIgnoreCase).Any()) {
+                throw new InvalidDataException("An installed image provider already handles one of these extensions.");
+                }
+            }
+        providers.Add(provider);
+        }
+
+    internal NativeImageProvider? ImageProviderFor(string fileName) {
+        string extension = Path.GetExtension(fileName);
+        return ImageProviders.FirstOrDefault(provider =>
+            provider.Description.Extensions.Contains(extension, StringComparer.OrdinalIgnoreCase));
         }
 
     internal string AboutSummary() {
@@ -76,6 +108,13 @@ internal sealed class PluginCatalog {
             string extensions = string.Join(", ", format.Extensions);
             string versions = string.Join(", ", format.Versions.Select(version => version.Version));
             lines.Add($"  {format.Name} {format.Version} ({module.LibraryName}) — {extensions}, format {versions}");
+            }
+        lines.Add("");
+        lines.Add($"Image providers loaded: {ImageProviders.Count}");
+        foreach (NativeImageProvider provider in ImageProviders) {
+            ImageProviderDescription description = provider.Description;
+            string extensions = string.Join(", ", description.Extensions);
+            lines.Add($"  {description.Name} {description.Version} ({provider.LibraryName}) — {extensions}");
             }
         if (Issues.Count > 0) {
             lines.Add("");

@@ -19,6 +19,36 @@ internal sealed class CachedImageDecoder : IDisposable {
         return bytes.AsSpan().StartsWith("GIF89a"u8) || bytes.AsSpan().StartsWith("GIF87a"u8);
         }
 
+    internal CachedImageDecoder(int width, int height, int frameCount, int totalPlays,
+        Action<nint[], int, int[]> decode) {
+        Width = width;
+        Height = height;
+        TotalPlays = totalPlays;
+        SKImageInfo output = new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
+        nint[] pixels = new nint[frameCount];
+        int[] delays = new int[frameCount];
+        try {
+            for (int index = 0; index < frameCount; index++) {
+                SKBitmap frame = new SKBitmap(output);
+                _frames.Add(frame);
+                pixels[index] = frame.GetPixels();
+                if (pixels[index] == 0) {
+                    throw new IOException("Could not allocate an image provider frame.");
+                    }
+                }
+
+            decode(pixels, _frames[0].RowBytes, delays);
+            foreach (int delay in delays) {
+                _delays.Add(delay <= 0 ? 40 : Math.Max(10, delay));
+                }
+            DecodeCount = frameCount;
+            }
+        catch {
+            Dispose();
+            throw;
+            }
+        }
+
     internal CachedImageDecoder(byte[] bytes, int width, int height, long decodedLimit) {
         Width = width;
         Height = height;

@@ -89,7 +89,10 @@ public sealed partial class PreviewForm : MnxDialog {
                 if (!imageInfo.HasValue) {
                     throw new IOException("The image has not passed header validation.");
                     }
-                if (CachedImageDecoder.IsGif(data.Bytes) || settings.HalfResolutionPreviews) {
+                if (imageInfo.Value.Provider is not null) {
+                    LoadCachedImage(data, imageInfo.Value, settings.DecodedPreviewBytes);
+                    }
+                else if (CachedImageDecoder.IsGif(data.Bytes) || settings.HalfResolutionPreviews) {
                     try {
                         LoadCachedImage(data, imageInfo.Value, settings.DecodedPreviewBytes);
                         }
@@ -152,7 +155,7 @@ public sealed partial class PreviewForm : MnxDialog {
         }
 
     private void LoadCachedImage(PreviewData data, ImagePreflight.ImageInfo info, long decodedLimit) {
-        _cachedImage = new CachedImageDecoder(data.Bytes, info.Width, info.Height, decodedLimit);
+        _cachedImage = info.DecodeCached(data.Bytes, decodedLimit);
         for (int index = 0; index < _cachedImage.FrameCount; index++) {
             SkiaSharp.SKBitmap pixels = _cachedImage.Frame(index);
             // These lightweight drawing wrappers borrow the cached pixels. Release

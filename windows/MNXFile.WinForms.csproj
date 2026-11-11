@@ -28,7 +28,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Update="ArchiveDropForm.cs;MainForm.cs;InputSelectionForm.cs;CreationForm.cs;ProgressForm.cs;Dialogs/OptionsForm.cs;Previews/PreviewForm.cs;TextPromptForm.cs;TextViewerForm.cs;CancellationForm.cs"><SubType>Form</SubType></Compile>
-    <Compile Update="MainForm.Operations.cs;MainForm.PreviewsAndDrag.cs;MainForm.Layout.cs;MainForm.Smoke.cs;MainForm.DropSmoke.cs;MainForm.DesignerSmoke.cs"><DependentUpon>MainForm.cs</DependentUpon></Compile>
+    <Compile Update="MainForm.Operations.cs;MainForm.Previews.cs;MainForm.DragAndDrop.cs;MainForm.Layout.cs;MainForm.Smoke.cs;MainForm.DropSmoke.cs;MainForm.DesignerSmoke.cs"><DependentUpon>MainForm.cs</DependentUpon></Compile>
     <Compile Update="**/*.Designer.cs"><DependentUpon>$([System.String]::Copy('%(Filename)').Replace('.Designer', '')).cs</DependentUpon></Compile>
     <EmbeddedResource Update="**/*.resx"><DependentUpon>%(Filename).cs</DependentUpon></EmbeddedResource>
   </ItemGroup>

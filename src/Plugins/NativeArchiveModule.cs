@@ -15,10 +15,8 @@ internal sealed unsafe class NativeArchiveModule {
     internal PluginFormatVersion Current { get; }
     internal int SignatureLength { get; }
 
-    internal NativeArchiveModule(string path) {
+    internal NativeArchiveModule(string path, nint library) {
         LibraryName = Path.GetFileName(path);
-        nint library = NativeLibrary.Load(path, typeof(NativeArchiveModule).Assembly,
-            DllImportSearchPath.SafeDirectories | DllImportSearchPath.UseDllDirectoryForDependencies);
         delegate* unmanaged[Cdecl]<uint> abi = (delegate* unmanaged[Cdecl]<uint>)NativeLibrary.GetExport(library, "mnx_plugin_abi_version");
         uint version = abi();
         if (version != PluginProtocol.AbiVersion) {
@@ -33,7 +31,7 @@ internal sealed unsafe class NativeArchiveModule {
 
         Format = Invoke(new PluginRequest { Operation = "describe" }).Format
             ?? throw new InvalidDataException("The plugin returned no format descriptor.");
-        ArchiveModuleDescriptor.Validate(Format);
+        PluginDescriptorValidation.Validate(Format);
         if (_readEntry == null && Format.Versions.Any(entry => entry.Actions.HasFlag(PluginActions.ReadEntry))) {
             throw new InvalidDataException("The module advertises entry reads but does not export mnx_plugin_read_entry.");
             }

@@ -31,6 +31,8 @@ installed .NET runtime. See [packaging instructions](packaging/README.md).
 MNXArchiver 2.0 supports native archive modules. The first module adds Ren’Py
 RPA 3.0 browsing, text and image previews, extraction, add, replace, delete, and creation to the same GUI.
 See the [module installation and ABI guide](docs/ARCHIVE-PLUGINS.md).
+The `ext.image.webp` extension adds static WebP previews through the
+[image provider interface](docs/IMAGE-PROVIDERS.md).
 
 ## Features
 

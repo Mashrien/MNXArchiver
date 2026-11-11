@@ -1,5 +1,6 @@
 using System.Drawing.Drawing2D;
 using System.Globalization;
+using Mash.UI.MNXFile.GUI.Plugins;
 using Mash.UI.MNXFile.GUI.Previews;
 using Mash.UI.MNXFile.GUI.Settings;
 
@@ -27,6 +28,9 @@ internal sealed class PreviewManager : IDisposable {
         PreviewKind kind = PreviewData.Classify(name, _settings);
         if (kind == PreviewKind.Unsupported) {
             return false;
+            }
+        if (kind == PreviewKind.Image && PluginCatalog.Installed.ImageProviderFor(name) is not null) {
+            return true;
             }
         string extension = Path.GetExtension(name).ToLowerInvariant();
         if (kind == PreviewKind.Image && new string[] { ".webp", ".pnm", ".ppm", ".pgm", ".pbm", ".tga" }.Contains(extension)) {
@@ -56,7 +60,10 @@ internal sealed class PreviewManager : IDisposable {
             if (_windows.Count >= MaximumWindows) {
                 throw new IOException("Close a preview first: at most ten preview windows may be open.");
                 }
-            ImagePreflight.ImageInfo? imageInfo = data.Kind == PreviewKind.Image ? ImagePreflight.Inspect(data.Bytes, _settings.Flag("Images", "Animated"), _settings.DecodedPreviewBytes, _settings.HalfResolutionPreviews) : null;
+            ImagePreflight.ImageInfo? imageInfo = null;
+            if (data.Kind == PreviewKind.Image) {
+                imageInfo = InspectImage(data, name);
+                }
             long memoryCost = data.Bytes.Length + (imageInfo.HasValue ? imageInfo.Value.MemoryCost : 4L * data.Bytes.Length + 4096);
             if (_windows.Sum(window => window.MemoryCost) + memoryCost > _settings.TotalPreviewBytes) {
                 throw new IOException($"Close a preview first: the combined preview memory limit is {_settings.TotalPreviewBytes / (1024 * 1024):N0} MiB. You can change it in Options.");
@@ -85,6 +92,12 @@ internal sealed class PreviewManager : IDisposable {
                 }
             }
         }
+    private ImagePreflight.ImageInfo InspectImage(PreviewData data, string name) {
+        NativeImageProvider? provider = PluginCatalog.Installed.ImageProviderFor(name);
+        return ImagePreflight.Inspect(data.Bytes, _settings.Flag("Images", "Animated"),
+            _settings.DecodedPreviewBytes, _settings.HalfResolutionPreviews, provider);
+        }
+
     private void PreviewDisposed(object? sender, EventArgs args) {
         if (sender is PreviewForm preview) {
             preview.Disposed -= PreviewDisposed;

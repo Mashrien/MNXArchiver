@@ -8,8 +8,14 @@ Place the library for your platform in the per-user module directory and restart
 
 | Platform | Module | Directory |
 |---|---|---|
-| Linux | `MnxRpa.so` | `${XDG_CONFIG_HOME:-$HOME/.config}/mnxarchiver/plugins/` |
-| Windows | `MnxRpa.dll` | `%APPDATA%\mnxarchiver\plugins\` |
+| Linux | `ext.format.rpa.so` | `${XDG_CONFIG_HOME:-$HOME/.config}/mnxarchiver/plugins/` |
+| Windows | `ext.format.rpa.dll` | `%APPDATA%\mnxarchiver\plugins\` |
+
+If you installed the older `MnxRpa.so` or `MnxRpa.dll`, move it out of the
+plugins directory when installing the renamed module. Both filenames use
+the same archive module ID.
+
+For preview format extensions, see [Image preview providers](IMAGE-PROVIDERS.md).
 
 Install modules you trust: native modules run inside the GUI process with your permissions. The library header and version handshake check compatibility.
 
@@ -25,20 +31,20 @@ The module reads a bounded subset of pickle as data and requires no Python insta
 On Linux with the .NET 10 SDK and NativeAOT compiler prerequisites:
 
 ```sh
-dotnet publish plugins/Rpa/MnxRpa.csproj -c Release -r linux-x64 -o /tmp/mnx-rpa-module
+dotnet publish plugins/Rpa/ext.format.rpa.csproj -c Release -r linux-x64 -o /tmp/mnx-rpa-module
 ```
 
 Use `linux-arm64` for an ARM64 host. On Windows with the .NET 10 SDK and Visual C++ NativeAOT toolchain:
 
 ```powershell
-dotnet publish plugins/Rpa/MnxRpa.csproj -c Release -r win-x64 -o .\rpa-module
+dotnet publish plugins/Rpa/ext.format.rpa.csproj -c Release -r win-x64 -o .\rpa-module
 ```
 
 Copy the resulting shared library to the module directory above. Python is only needed for the independent format checks:
 
 ```sh
-python3 plugins/Rpa/verify_rpa.py /tmp/mnx-rpa-module/MnxRpa.so -v
-tests/PluginChecks/run-linux.sh /tmp/mnx-rpa-module/MnxRpa.so
+python3 plugins/Rpa/verify_rpa.py /tmp/mnx-rpa-module/ext.format.rpa.so -v
+tests/PluginChecks/run-linux.sh /tmp/mnx-rpa-module/ext.format.rpa.so
 ```
 
 The host checks use a small independently generated protocol 4 fixture under

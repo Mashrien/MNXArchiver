@@ -1,12 +1,28 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
+using Mash.UI.MNXFile.GUI.Plugins;
 using Mash.UI.MNXFile.GUI.Previews;
 
 namespace Mash.UI.MNXFile.GUI;
 
-/// <summary>Reads dimensions and frame metadata before handing bytes to GDI+.</summary>
+/// <summary>Reads dimensions and reserves preview memory before decoding pixels.</summary>
 internal readonly struct ImagePreflight {
-    internal readonly record struct ImageInfo(int Width, int Height, int Frames, long MemoryCost);
+    internal readonly record struct ImageInfo(int Width, int Height, int Frames, long MemoryCost) {
+        internal NativeImageProvider? Provider { get; init; }
+        internal int ProviderPlays { get; init; }
+
+        internal CachedImageDecoder DecodeCached(byte[] encoded, long decodedLimit) {
+            NativeImageProvider? provider = Provider;
+            if (provider is null) {
+                return new CachedImageDecoder(encoded, Width, Height, decodedLimit);
+                }
+
+            int width = Width;
+            int height = Height;
+            return new CachedImageDecoder(width, height, Frames, ProviderPlays,
+                (pixels, stride, delays) => provider.Decode(encoded, width, height, pixels, stride, delays));
+            }
+        }
     private const int MaximumDimension = 16384;
     private const int MaximumFrames = 1024;
 
@@ -18,9 +34,44 @@ internal readonly struct ImagePreflight {
         _halfResolution = halfResolution;
         }
 
-    internal static ImageInfo Inspect(byte[] data, bool animated, long decodedLimit = PreviewData.DecodedLimit, bool halfResolution = false) {
+    internal static ImageInfo InspectProvider(byte[] encoded, NativeImageProvider provider, long decodedLimit,
+        bool halfResolution, bool animated) {
+        ImageProviderImageInfo info = provider.Inspect(encoded);
+        if (info.FrameCount > 1 && !animated) {
+            throw new IOException("Animated previews are disabled. Enable Animated [EXPERIMENTAL] in Options.");
+            }
+
+        int width = info.Width;
+        int height = info.Height;
+        if (halfResolution) {
+            width = (width + 1) / 2;
+            height = (height + 1) / 2;
+            }
+
+        // Reserve a full-size decoding raster and scratch space, retained
+        // frames, and a display copy for frontends that need different byte order.
+        long workingBytes = (long)info.Width * info.Height * 8;
+        long retainedBytes = (long)width * height * 4 * (info.FrameCount + 1L);
+        long decodedBytes = workingBytes + retainedBytes;
+        PreviewData.CheckDecodedBudget(decodedBytes, decodedLimit);
+        return new ImageInfo(width, height, info.FrameCount, decodedBytes) {
+            Provider = provider,
+            ProviderPlays = info.TotalPlays
+            };
+        }
+
+    internal static ImageInfo Inspect(byte[] data, bool animated, long decodedLimit = PreviewData.DecodedLimit,
+        bool halfResolution = false, NativeImageProvider? provider = null) {
         ImagePreflight reader = new ImagePreflight(decodedLimit, halfResolution);
-        ImageInfo source = reader.ReadImage(data, animated);
+        ImageInfo? builtIn = reader.ReadBuiltInImage(data, animated);
+        if (!builtIn.HasValue) {
+            if (provider is not null) {
+                return InspectProvider(data, provider, decodedLimit, halfResolution, animated);
+                }
+            throw new IOException("This image signature is not supported by the in-memory previewer.");
+            }
+
+        ImageInfo source = builtIn.Value;
         if (!halfResolution) {
             return source;
             }
@@ -31,7 +82,7 @@ internal readonly struct ImagePreflight {
         return new ImageInfo(width, height, source.Frames, source.MemoryCost);
         }
 
-    private ImageInfo ReadImage(byte[] data, bool animated) {
+    private ImageInfo? ReadBuiltInImage(byte[] data, bool animated) {
         ReadOnlySpan<byte> bytes = data;
         if (bytes.Length >= 24 && bytes.StartsWith(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 })) {
             return Png(data, 0, data.Length);
@@ -113,7 +164,7 @@ internal readonly struct ImagePreflight {
         if (bytes.Length >= 8 && (bytes.StartsWith(new byte[] { 73, 73, 42, 0 }) || bytes.StartsWith(new byte[] { 77, 77, 0, 42 }))) {
             return Tiff(data);
             }
-        throw new IOException("This image format is unsupported by the Windows previewer. Use PNG, JPEG, BMP, GIF, TIFF or ICO.");
+        return null;
         }
 
     private ImageInfo Png(byte[] data, int start, int length) {

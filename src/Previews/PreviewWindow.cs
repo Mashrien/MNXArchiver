@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Gtk;
+using Mash.UI.MNXFile.GUI.Plugins;
 using Mash.UI.MNXFile.GUI.Settings;
 
 namespace Mash.UI.MNXFile.GUI.Previews;
@@ -144,12 +145,26 @@ internal sealed class PreviewWindow : IDisposable {
         }
 
     private void DecodeImage() {
-        if (CachedImageDecoder.IsGif(_data.Bytes)) {
-            DecodeCachedImage();
+        string? format = BuiltInImageFormat(_data.Bytes, _fileName);
+        if (format == "gif") {
+            ImagePreflight.ImageInfo info = ImagePreflight.Inspect(_data.Bytes, _settings.Flag("Images", "Animated"),
+                _settings.DecodedPreviewBytes, _settings.HalfResolutionPreviews);
+            DecodeCachedImage(info);
             return;
             }
+        if (format is null) {
+            NativeImageProvider? provider = PluginCatalog.Installed.ImageProviderFor(_fileName);
+            if (provider is not null) {
+                ImagePreflight.ImageInfo info = ImagePreflight.InspectProvider(_data.Bytes, provider,
+                    _settings.DecodedPreviewBytes, _settings.HalfResolutionPreviews, _settings.Flag("Images", "Animated"));
+                DecodeCachedImage(info);
+                return;
+                }
+            format = PlatformImageFormat(_data.Bytes);
+            }
+
         int frameCount = PreviewData.CheckGif(_data.Bytes, _settings.Flag("Images", "Animated"), _settings.DecodedPreviewBytes);
-        _loader = Gdk.PixbufLoader.NewWithType(ImageFormat(_data.Bytes, _fileName));
+        _loader = Gdk.PixbufLoader.NewWithType(format);
         bool tooLarge = false;
         long requiredDecodedMemory = 0;
         _loader.SizePrepared += (_, size) => {
@@ -229,12 +244,10 @@ internal sealed class PreviewWindow : IDisposable {
         CheckAvailableMemory(MemoryCost);
         }
 
-    private void DecodeCachedImage() {
-        ImagePreflight.ImageInfo info = ImagePreflight.Inspect(_data.Bytes, _settings.Flag("Images", "Animated"),
-            _settings.DecodedPreviewBytes, _settings.HalfResolutionPreviews);
+    private void DecodeCachedImage(ImagePreflight.ImageInfo info) {
         MemoryCost = _data.Bytes.Length + info.MemoryCost;
         CheckAvailableMemory(MemoryCost);
-        _cachedImage = new CachedImageDecoder(_data.Bytes, info.Width, info.Height, _settings.DecodedPreviewBytes);
+        _cachedImage = info.DecodeCached(_data.Bytes, _settings.DecodedPreviewBytes);
         _image = new Gdk.Pixbuf(Gdk.Colorspace.Rgb, true, 8, info.Width, info.Height);
         _cachedImage.CopyRgbaFrame(0, _image.Pixels, _image.Rowstride);
         if (_cachedImage.FrameCount <= 1) {
@@ -274,7 +287,7 @@ internal sealed class PreviewWindow : IDisposable {
             }
         }
 
-    private static string ImageFormat(byte[] data, string fileName) {
+    private static string? BuiltInImageFormat(byte[] data, string fileName) {
         ReadOnlySpan<byte> bytes = data;
         if (bytes.StartsWith(new byte[] {137,80,78,71,13,10,26,10})) {
             return "png";
@@ -294,18 +307,23 @@ internal sealed class PreviewWindow : IDisposable {
         if (bytes.StartsWith(new byte[] {0,0,1,0}) || bytes.StartsWith(new byte[] {0,0,2,0})) {
             return "ico";
             }
+        if (bytes.Length > 2 && bytes[0] == 'P' && bytes[1] >= '1' && bytes[1] <= '6' && char.IsWhiteSpace((char)bytes[2])) {
+            return "pnm";
+            }
+        if (Path.GetExtension(fileName).Equals(".tga", StringComparison.OrdinalIgnoreCase) && bytes.Length >= 18 && bytes[1] <= 1 && new byte[] {1,2,3,9,10,11}.Contains(bytes[2])) {
+            return "tga";
+            }
+        return null;
+        }
+
+    private static string PlatformImageFormat(byte[] data) {
+        ReadOnlySpan<byte> bytes = data;
         if (bytes.Length >= 12 && bytes.StartsWith("RIFF"u8) && bytes.Slice(8,4).SequenceEqual("WEBP"u8)) {
             // The GTK WebP loader may decode animation without reporting all frames.
             if (bytes.Length >= 21 && bytes.Slice(12,4).SequenceEqual("VP8X"u8) && (bytes[20] & 2) != 0) {
                 throw new IOException("Animated WebP previews are not yet supported; GIF animation is available.");
                 }
             return "webp";
-            }
-        if (bytes.Length > 2 && bytes[0] == 'P' && bytes[1] >= '1' && bytes[1] <= '6' && char.IsWhiteSpace((char)bytes[2])) {
-            return "pnm";
-            }
-        if (Path.GetExtension(fileName).Equals(".tga", StringComparison.OrdinalIgnoreCase) && bytes.Length >= 18 && bytes[1] <= 1 && new byte[] {1,2,3,9,10,11}.Contains(bytes[2])) {
-            return "tga";
             }
         throw new IOException("This image signature is not supported by the in-memory previewer.");
         }

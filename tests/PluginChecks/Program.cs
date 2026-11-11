@@ -8,7 +8,8 @@ if (args.Length == 1 && args[0] == "--check-plugin-path") {
     return;
     }
 
-if (args.Length != 2) {
+bool checkWebp = args.Length == 3 && args[2] == "--check-webp";
+if (args.Length != 2 && !checkWebp) {
     throw new ArgumentException("Pass the fixture plugin directory and a Python-produced hello.rpa.");
     }
 PluginCatalog catalog = PluginCatalog.Discover(args[0]);
@@ -24,6 +25,9 @@ foreach ((string file, string reason) in new (string, string)[] {
         "Expected rejection did not occur: " + file + "\n" + string.Join("\n", catalog.Issues));
     }
 Console.WriteLine("PASS: native library magic, ABI, old/new peer versions and module refusal.");
+if (checkWebp) {
+    ImageProviderChecks.Run(catalog);
+    }
 
 DirectoryInfo work = Directory.CreateTempSubdirectory("mnx-plugin-checks-");
 try {

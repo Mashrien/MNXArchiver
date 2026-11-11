@@ -1,42 +1,42 @@
 namespace Mash.UI.MNXFile.GUI.Plugins;
 
-internal static class ArchiveModuleDescriptor {
+internal static class PluginDescriptorValidation {
     internal static void Validate(PluginFormat format) {
-        ValidateReleaseRanges(format);
-        ValidateIdentity(format);
+        ValidateReleaseRanges(format.Version, format.MinHostVersion, format.MaxHostVersion);
+        ValidateIdentity(format.Id, format.Name);
         ValidateExtensions(format.Extensions);
         ValidateSignatures(format.Versions, format.CurrentVersion);
         }
 
-    private static void ValidateReleaseRanges(PluginFormat format) {
-        if (!PluginProtocol.Supports(format.Version, PluginProtocol.MinPluginVersion, PluginProtocol.MaxPluginVersion)) {
-            throw new NotSupportedException($"Module release {format.Version} is outside {PluginProtocol.MinPluginVersion}–{PluginProtocol.MaxPluginVersion}.");
+    internal static void ValidateReleaseRanges(string release, string minimumHost, string maximumHost) {
+        if (!PluginProtocol.Supports(release, PluginProtocol.MinPluginVersion, PluginProtocol.MaxPluginVersion)) {
+            throw new NotSupportedException($"Module release {release} is outside {PluginProtocol.MinPluginVersion}–{PluginProtocol.MaxPluginVersion}.");
             }
-        if (!PluginProtocol.Supports(PluginProtocol.HostVersion, format.MinHostVersion, format.MaxHostVersion)) {
-            throw new NotSupportedException($"Module requires MNXArchiver {format.MinHostVersion}–{format.MaxHostVersion}; this host is {PluginProtocol.HostVersion}.");
+        if (!PluginProtocol.Supports(PluginProtocol.HostVersion, minimumHost, maximumHost)) {
+            throw new NotSupportedException($"Module requires MNXArchiver {minimumHost}–{maximumHost}; this host is {PluginProtocol.HostVersion}.");
             }
         }
 
-    private static void ValidateIdentity(PluginFormat format) {
-        if (string.IsNullOrWhiteSpace(format.Id) || format.Id.Length > 80) {
-            throw new InvalidDataException("The archive module ID is missing or too long.");
+    internal static void ValidateIdentity(string id, string name) {
+        if (string.IsNullOrWhiteSpace(id) || id.Length > 80) {
+            throw new InvalidDataException("The module ID is missing or too long.");
             }
-        foreach (char character in format.Id) {
+        foreach (char character in id) {
             if (char.IsAsciiLetterOrDigit(character) || character == '.' || character == '-') {
                 continue;
                 }
-            throw new InvalidDataException("The archive module ID may contain letters, digits, periods and hyphens.");
+            throw new InvalidDataException("The module ID may contain letters, digits, periods and hyphens.");
             }
 
-        if (string.IsNullOrWhiteSpace(format.Name) || format.Name.Length > 80) {
-            throw new InvalidDataException("The archive module name is missing or too long.");
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 80) {
+            throw new InvalidDataException("The module name is missing or too long.");
             }
-        if (format.Name.Any(character => char.IsControl(character) || character == '|')) {
-            throw new InvalidDataException("The archive module name contains an invalid character.");
+        if (name.Any(character => char.IsControl(character) || character == '|')) {
+            throw new InvalidDataException("The module name contains an invalid character.");
             }
         }
 
-    private static void ValidateExtensions(string[] extensions) {
+    internal static void ValidateExtensions(string[] extensions) {
         if (extensions is null || extensions.Length is < 1 or > 16) {
             throw new InvalidDataException("The archive module must declare between 1 and 16 extensions.");
             }

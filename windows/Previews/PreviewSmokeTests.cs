@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Text;
+using Mash.UI.MNXFile.GUI.Plugins;
 using Mash.UI.MNXFile.GUI.Previews;
 using Mash.UI.MNXFile.GUI.Settings;
 using ArchiveFile = Mash.IO.Format.MNX.MNX;
@@ -70,7 +71,7 @@ internal static class PreviewSmokeTests {
             using (PreviewManager previews = new PreviewManager(owner, settings)) {
                 Require(previews.CanPreview("readme.txt"), "Text classification failed.");
                 Require(previews.CanPreview("picture.png"), "PNG classification failed.");
-                Require(!previews.CanPreview("picture.webp"), "Unsupported native image type was advertised.");
+                CheckWebpProvider(previews);
                 byte[] firstText = Encoding.UTF8.GetBytes("MNX Windows read-only preview\r\nUnicode: λ 文件");
                 previews.Show(new PreviewData(firstText, PreviewKind.Text, false), "readme.txt", owner.Location, false);
                 Application.DoEvents();
@@ -233,6 +234,28 @@ internal static class PreviewSmokeTests {
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr SendMessage(IntPtr window, uint message, IntPtr first, IntPtr second);
+
+    private static void CheckWebpProvider(PreviewManager previews) {
+        bool providerInstalled = PluginCatalog.Installed.ImageProviderFor("picture.webp") is not null;
+        Require(previews.CanPreview("picture.webp") == providerInstalled, "WebP eligibility does not follow the installed provider.");
+        if (!providerInstalled) {
+            return;
+            }
+
+        byte[] webp = Convert.FromBase64String("UklGRh4AAABXRUJQVlA4TBEAAAAvAoAAEAdQsiJXpoCBiOh/AAA=");
+        previews.Show(new PreviewData(webp, PreviewKind.Image, false), "picture.webp", Point.Empty, false);
+        Application.DoEvents();
+        PreviewForm preview = (PreviewForm)previews.Windows.Single();
+        Require(preview.ImageSize == new Size(3, 3), "The WebP provider did not display a decoded frame.");
+        preview.Close();
+        Require(previews.Count == 0 && webp.All(value => value == 0), "Closing a WebP preview did not release its buffer.");
+
+        previews.Show(new PreviewData(Png(), PreviewKind.Image, false), "png-with-webp-extension.webp", Point.Empty, false);
+        Application.DoEvents();
+        PreviewForm builtIn = (PreviewForm)previews.Windows.Single();
+        Require(builtIn.ImageSize == new Size(4, 3), "The provider took precedence over a built-in PNG signature.");
+        builtIn.Close();
+        }
 
     internal static byte[] Png() {
         using Bitmap bitmap = new Bitmap(4, 3);

@@ -39,6 +39,9 @@ internal sealed class PreviewData : IDisposable {
         if (settings.Flag("Images", "Static", true) && HasType(extension, "png,jpg,jpeg,jpe,bmp,gif,tif,tiff,ico,webp,pnm,ppm,pgm,pbm,tga", settings.Get("Images", "StaticTypes", ""))) {
             return PreviewKind.Image;
             }
+        if (settings.Flag("Images", "Static", true) && PluginCatalog.Installed.ImageProviderFor(name) is not null) {
+            return PreviewKind.Image;
+            }
         if (extension == "gif" && settings.Flag("Images", "Animated")) {
             return PreviewKind.Image;
             }

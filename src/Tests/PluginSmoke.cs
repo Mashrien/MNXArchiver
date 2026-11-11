@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Gtk;
+using Mash.UI.MNXFile.GUI.Plugins;
 using ArchiveFile = Mash.IO.Format.MNX.MNX;
 using DiskFile = System.IO.File;
 
@@ -116,6 +117,8 @@ internal static class PluginSmoke {
             host.OpenArchive(archive, showErrors: false);
             ArchiveBrowser browser = host.TestBrowser!;
             Check(!browser.Children(browser.Resolve("/folder")).Any(entry => entry.Name == "source"), "Confirmed Delete persists after reopening");
+
+            CheckWebpPreview(host, work);
 
             string mnx = Path.Combine(work, "mnx with plugin extension.rpa");
             using (ArchiveFile native = new ArchiveFile()) {
@@ -271,7 +274,39 @@ internal static class PluginSmoke {
         Check(dialogType == MessageType.Warning && error is null, "Delete requests confirmation and succeeds: " + error);
         }
 
+    private static void CheckWebpPreview(MainWindow host, string work) {
+        if (PluginCatalog.Installed.ImageProviderFor("image.webp") is null) {
+            return;
+            }
+
+        string input = Path.Combine(Directory.CreateDirectory(Path.Combine(work, "webp-source")).FullName, "preview.webp");
+        byte[] encoded = Convert.FromBase64String("UklGRh4AAABXRUJQVlA4TBEAAAAvAoAAEAdQsiJXpoCBiOh/AAA=");
+        DiskFile.WriteAllBytes(input, encoded);
+        string archive = Path.Combine(work, "preview.rpa");
+        NativeArchiveModule module = PluginCatalog.Installed.Modules.Single(candidate => candidate.Format.Id == "renpy.rpa");
+        OpenedModuleArchive.Create(module, archive, [input], false);
+        Check(host.OpenArchive(archive, showErrors: false), "Open RPA containing a provider-backed image");
+        ArchiveBrowser browser = host.TestBrowser!;
+        Guid image = browser.Children(browser.Root).Single().Id;
+        host.TestSettings.Set("Previews", "Enabled", true);
+        host.PreviewEntry(image);
+        WaitForPreview(host);
+        Check(host.TestPreviews[0].ImageSize == (3, 3), "The WebP provider displayed a decoded frame");
+        host.TestPreviews[0].Dispose();
+        host.TestSettings.Set("Previews", "Enabled", false);
+
+        host.ExtractArchive(archive, extractHere: true);
+        string extracted = Path.Combine(work, "preview.webp");
+        Check(DiskFile.ReadAllBytes(extracted).AsSpan().SequenceEqual(encoded), "Extraction returns the original WebP bytes");
+        Console.WriteLine("PASS: GTK WebP provider preview and byte-for-byte RPA extraction");
+        }
+
     private static void CheckTextPreview(MainWindow host) {
+        WaitForPreview(host);
+        host.TestPreviews[0].Dispose();
+        }
+
+    private static void WaitForPreview(MainWindow host) {
         Stopwatch wait = Stopwatch.StartNew();
         while (host.TestPreviewCount == 0 && wait.ElapsedMilliseconds < 5000) {
             while (Application.EventsPending()) {
@@ -279,8 +314,7 @@ internal static class PluginSmoke {
                 }
             Thread.Sleep(10);
             }
-        Check(host.TestPreviewCount == 1, "The RPA text preview opened");
-        host.TestPreviews[0].Dispose();
+        Check(host.TestPreviewCount == 1, "The RPA preview opened");
         }
 
     private static void Check(bool condition, string description) {
