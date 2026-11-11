@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Reflection.PortableExecutable;
 using System.Runtime.InteropServices;
 
@@ -66,6 +67,35 @@ internal sealed class PluginCatalog {
             issues.Add(error.Message);
             }
         return new PluginCatalog(directory, modules, issues);
+        }
+
+    internal string AboutSummary() {
+        List<string> lines = new() { $"Archive modules loaded: {Modules.Count}" };
+        foreach (ArchivePlugin module in Modules) {
+            PluginFormat format = module.Format;
+            string extensions = string.Join(", ", format.Extensions);
+            string versions = string.Join(", ", format.Versions.Select(version => version.Version));
+            lines.Add($"  {format.Name} {format.Version} ({module.LibraryName}) — {extensions}, format {versions}");
+            }
+        if (Issues.Count > 0) {
+            lines.Add("");
+            lines.Add("Module discovery issues:");
+            foreach (string issue in Issues) {
+                lines.Add("  " + issue);
+                }
+            }
+        lines.Add("");
+        lines.Add("Plugins directory: " + DirectoryPath);
+        lines.Add("Restart MNXArchiver after adding or removing modules.");
+        return string.Join(Environment.NewLine, lines);
+        }
+
+    internal void OpenDirectory() {
+        if (!Path.IsPathFullyQualified(DirectoryPath)) {
+            throw new IOException("No per-user plugins directory is available.");
+            }
+        Directory.CreateDirectory(DirectoryPath);
+        using Process? opener = Process.Start(new ProcessStartInfo(DirectoryPath) { UseShellExecute = true });
         }
 
     private static void CheckNativeLibrary(string path) {

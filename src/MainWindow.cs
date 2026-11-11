@@ -115,7 +115,15 @@ public sealed partial class MainWindow : IDisposable {
             };
         Widget<MenuItem>("menu_about").Activated += (_, _) => {
             string version = typeof(MainWindow).Assembly.GetName().Version?.ToString() ?? "Unknown";
-            Message("MNX Archive Manager", "MNX Archive Manager — " + version + "\nGTK3 / C#\nArchive browsing, creation, extraction, recovery and in-memory previews.");
+            Message("About MNX", "MNX Archive Manager — " + version + "\nGTK3 / C#\n\n" + PluginCatalog.Installed.AboutSummary());
+            };
+        Widget<MenuItem>("menu_open_plugins_dir").Activated += (_, _) => {
+            try {
+                PluginCatalog.Installed.OpenDirectory();
+                }
+            catch (Exception error) {
+                Message("Could not open plugins directory", error.Message, MessageType.Error);
+                }
             };
         foreach (ArchiveAction action in Enum.GetValues<ArchiveAction>()) {
             ArchiveAction captured = action;

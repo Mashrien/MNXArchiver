@@ -202,7 +202,13 @@ public sealed partial class MainForm : MashWin.MWindow {
         closeArchiveMenuItem.Click += (_, _) => CloseArchive();
         TrackAction("Close", closeArchiveMenuItem);
         exitMenuItem.Click += (_, _) => Close();
-        aboutMenuItem.Click += (_, _) => MessageBox.Show(this, "MNX Archive Manager " + Assembly.GetExecutingAssembly().GetName().Version + "\nWindows Forms / C#\nArchive creation, extraction, recovery and in-memory previews.", "About MNX");
+        aboutMenuItem.Click += (_, _) => MessageBox.Show(this,
+            "MNX Archive Manager " + Assembly.GetExecutingAssembly().GetName().Version
+            + "\nWindows Forms / C#\n\n" + PluginCatalog.Installed.AboutSummary(), "About MNX");
+        openPluginsDirectoryMenuItem.Click += async (_, _) => await Guard(() => {
+            PluginCatalog.Installed.OpenDirectory();
+            return Task.CompletedTask;
+            });
         ConfigurePluginActions();
         ContextMenuStrip menu = entryContextMenu;
         extractContextMenuItem.Click += async (_, _) => await Guard(() => ChooseExtraction(_contextSelection));

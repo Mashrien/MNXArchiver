@@ -48,6 +48,7 @@
                 <property name="visible">True</property><property name="label">_Help</property><property name="use-underline">True</property>
                 <child type="submenu"><object class="GtkMenu" id="help_submenu">
                   <child><object class="GtkMenuItem" id="menu_options"><property name="visible">True</property><property name="label">Options…</property></object></child>
+                  <child><object class="GtkMenuItem" id="menu_open_plugins_dir"><property name="visible">True</property><property name="label">Open Plugins Dir</property></object></child>
                   <child><object class="GtkMenuItem" id="menu_about"><property name="visible">True</property><property name="label">About MNX</property></object></child>
                 </object></child>
               </object>

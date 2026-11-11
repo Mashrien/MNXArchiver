@@ -9,11 +9,13 @@ internal sealed unsafe class ArchivePlugin {
     private readonly delegate* unmanaged[Cdecl]<byte*, int, nint, nint, byte**, int*, int> _request;
     private readonly delegate* unmanaged[Cdecl]<byte*, void> _release;
     private readonly (PluginFormatVersion Version, byte[] Magic)[] _signatures;
+    internal string LibraryName { get; }
     internal PluginFormat Format { get; }
     internal PluginFormatVersion Current { get; }
     internal int SignatureLength { get; }
 
     internal ArchivePlugin(string path) {
+        LibraryName = Path.GetFileName(path);
         nint library = NativeLibrary.Load(path, typeof(ArchivePlugin).Assembly,
             DllImportSearchPath.SafeDirectories | DllImportSearchPath.UseDllDirectoryForDependencies);
         delegate* unmanaged[Cdecl]<uint> abi = (delegate* unmanaged[Cdecl]<uint>)NativeLibrary.GetExport(library, "mnx_plugin_abi_version");

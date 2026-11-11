@@ -28,6 +28,7 @@ partial class MainForm {
         optionsMenuItem = new ToolStripMenuItem();
         helpMenu = new ToolStripMenuItem();
         aboutMenuItem = new ToolStripMenuItem();
+        openPluginsDirectoryMenuItem = new ToolStripMenuItem();
         mainToolbar = new ToolStrip();
         newArchiveButton = new ToolStripButton();
         openArchiveButton = new ToolStripButton();
@@ -197,11 +198,16 @@ partial class MainForm {
         // 
         // helpMenu
         // 
-        helpMenu.DropDownItems.AddRange(new ToolStripItem[] { aboutMenuItem });
+        helpMenu.DropDownItems.AddRange(new ToolStripItem[] { openPluginsDirectoryMenuItem, aboutMenuItem });
         helpMenu.Name = "helpMenu";
         helpMenu.Size = new Size(44, 20);
         helpMenu.Text = "&Help";
         // 
+        // openPluginsDirectoryMenuItem
+        //
+        openPluginsDirectoryMenuItem.Name = "openPluginsDirectoryMenuItem";
+        openPluginsDirectoryMenuItem.Text = "Open Plugins Dir";
+        //
         // aboutMenuItem
         // 
         aboutMenuItem.Name = "aboutMenuItem";
@@ -614,6 +620,7 @@ partial class MainForm {
     private System.Windows.Forms.ToolStripMenuItem closeArchiveMenuItem;
     private System.Windows.Forms.ToolStripMenuItem exitMenuItem;
     private System.Windows.Forms.ToolStripMenuItem aboutMenuItem;
+    private System.Windows.Forms.ToolStripMenuItem openPluginsDirectoryMenuItem;
     private System.Windows.Forms.ToolStripSeparator archiveSeparator;
     private System.Windows.Forms.SplitContainer browserSplit;
     private System.Windows.Forms.TreeView folderTree;
