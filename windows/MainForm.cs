@@ -59,6 +59,13 @@ public sealed partial class MainForm : MashWin.MWindow {
         base.OnLoad(args);
         }
 
+    protected override void OnShown(EventArgs args) {
+        if (_runtimeInitialized) {
+            InitializeFolderPaneWidth();
+            }
+        base.OnShown(args);
+        }
+
     private void InitializeRuntime(AppSettings? settings) {
         rootButton.Click += (_, _) => NavigateRoot();
         upButton.Click += (_, _) => NavigateUp();
@@ -204,7 +211,7 @@ public sealed partial class MainForm : MashWin.MWindow {
         exitMenuItem.Click += (_, _) => Close();
         aboutMenuItem.Click += (_, _) => MessageBox.Show(this,
             "MNX Archive Manager " + Assembly.GetExecutingAssembly().GetName().Version
-            + "\nWindows Forms / C#\n\n" + PluginCatalog.Installed.AboutSummary(), "About MNX");
+            + "\nWindows Forms / C#\n\n" + BuiltInArchiveFormat() + "\n\n" + PluginCatalog.Installed.AboutSummary(), "About MNX");
         openPluginsDirectoryMenuItem.Click += async (_, _) => await Guard(() => {
             PluginCatalog.Installed.OpenDirectory();
             return Task.CompletedTask;

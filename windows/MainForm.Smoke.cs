@@ -24,7 +24,12 @@ public sealed partial class MainForm {
         await Task.Delay(200);
         Require(folderTree.Nodes.Count == 1 && fileList.Items.Count > 0, "Preview layout was not populated.");
         SaveScreenshot(Path.Combine(directory, "01-layout.png"));
-        Require(browserSplit.SplitterDistance == 192, "The folder pane must start at 192 pixels.");
+        int initialFolderPaneWidth = browserSplit.SplitterDistance;
+        Require(Math.Abs(initialFolderPaneWidth - browserSplit.Width * 0.225) <= 2,
+            "The folder pane must start at 22.5% of the usable form width.");
+        using ArchiveFile formatProbe = new ArchiveFile();
+        Require(BuiltInArchiveFormat().Contains("version " + formatProbe.FormatVersion, StringComparison.Ordinal),
+            "About must show the installed MNX engine's archive format version.");
         Require(ReferenceEquals(statusBar.Parent, StatusBarControls) && ReferenceEquals(statusMessage, StatusText),
             "Status items are not hosted inside MWin's owned status region.");
         Require(StatusBarStrip.SizingGrip == false && !StatusBarControls.Bounds.Contains(ClientSize.Width - 5, ClientSize.Height - 5),
@@ -40,7 +45,7 @@ public sealed partial class MainForm {
         Size previous = Size;
         Size = new Size(1380, 860);
         await Task.Delay(80);
-        Require(currentPath.Width > pathWidth && searchText.Width == searchWidth && browserSplit.SplitterDistance == 192,
+        Require(currentPath.Width > pathWidth && searchText.Width == searchWidth && browserSplit.SplitterDistance == initialFolderPaneWidth,
             "Resizing must grow the path field and preserve the search and folder pane widths.");
         Require(nameColumn.Width > previousNameWidth, "The Name column must absorb spare width when the file list grows.");
         int expandedNameWidth = nameColumn.Width;
@@ -55,7 +60,22 @@ public sealed partial class MainForm {
         Require(browserSplit.Width > 1000 && fileList.Width > 500 && folderTree.Width > 180, "Docking did not resize the browser.");
         SaveScreenshot(Path.Combine(directory, "02-resized.png"));
         Size = previous;
-        evidence.Add("PASS: populated designer layout, 192-pixel folder pane, expanding path field, stable search width, protected MWin status container, embedded icons");
+        evidence.Add("PASS: populated designer layout, 22.5% initial folder pane, expanding path field, stable search width, protected MWin status container, embedded icons");
+        Point initialPosition = Location;
+        ReadPlatformWindowPosition(ref initialPosition);
+        Point testPosition = new Point(initialPosition.X + 37, initialPosition.Y + 29);
+        Location = testPosition;
+        RestorePlatformWindowPosition(testPosition);
+        Point positionBeforeTransfer = Location;
+        ReadPlatformWindowPosition(ref positionBeforeTransfer);
+        await RunOperation("Checking transfer window placement", () => true);
+        Point positionAfterTransfer = Location;
+        ReadPlatformWindowPosition(ref positionAfterTransfer);
+        Require(Visible && positionBeforeTransfer == positionAfterTransfer,
+            "The main window must return to the same position after a transfer.");
+        Location = initialPosition;
+        RestorePlatformWindowPosition(initialPosition);
+        evidence.Add("PASS: main window retains its position across an owned transfer");
         string inputs = Path.Combine(work, "Unicode 文件 λ");
         Directory.CreateDirectory(inputs);
         string first = Path.Combine(inputs, "Read me λ.txt");
@@ -277,7 +297,7 @@ public sealed partial class MainForm {
                 return;
                 }
             progressSeen = true;
-            if (Visible || progress.Owner != this) {
+            if ((Visible && !_transferConcealed) || progress.Owner != this) {
                 monitorError = "The progress window did not own a hidden main window.";
                 }
             TransferSnapshot? snapshot = progress.Snapshot;

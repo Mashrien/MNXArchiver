@@ -3,6 +3,24 @@ namespace Mash.UI.MNXFile.GUI;
 public sealed partial class MainForm {
     private int _minimumNameColumnWidth;
     private bool _updatingFileColumns;
+    private bool _folderPaneWidthInitialized;
+
+    private void InitializeFolderPaneWidth() {
+        if (_folderPaneWidthInitialized) {
+            return;
+            }
+        _folderPaneWidthInitialized = true;
+        int usableWidth = ClientSize.Width - Padding.Horizontal;
+        // MWin's Linux adapter already includes the drawn border in its padding.
+        if (OperatingSystem.IsWindows() && Frame.ShowChrome) {
+            usableWidth -= Math.Max(0, Frame.BorderThickness) * 2;
+            }
+        int preferredWidth = (int)Math.Round(usableWidth * 0.225);
+        int maximumWidth = browserSplit.Width - browserSplit.SplitterWidth - browserSplit.Panel2MinSize;
+        if (maximumWidth >= browserSplit.Panel1MinSize) {
+            browserSplit.SplitterDistance = Math.Clamp(preferredWidth, browserSplit.Panel1MinSize, maximumWidth);
+            }
+        }
 
     private void ConfigureFileListLayout() {
         _minimumNameColumnWidth = nameColumn.Width;

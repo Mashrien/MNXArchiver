@@ -257,4 +257,19 @@ internal sealed class DragFiles : IDisposable {
         _leases.Clear();
     // Do not delete here: a receiving file manager may still be copying.
         }
+
+    public void Discard() {
+        foreach (FileStream lease in _leases) {
+            string directory = Path.GetDirectoryName(lease.Name)!;
+            lease.Dispose();
+            try {
+                Directory.Delete(directory, true);
+                }
+            catch (IOException) {
+                }
+            catch (UnauthorizedAccessException) {
+                }
+            }
+        _leases.Clear();
+        }
     }

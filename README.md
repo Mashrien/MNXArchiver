@@ -139,7 +139,7 @@ Do not edit generated sources under `mnx_clutter/build/`.
 
 ## Outputs and versions
 
-Current GUI version is **`1.4.1.N`**; `BuildNumber.txt` supplies an automatic build
+Current GUI version is **`2.0.0.N`**; `BuildNumber.txt` supplies an automatic build
 counter. Set `MNXBuildNumber=N` to reproduce a specific counter. Output remains:
 
 - `../MNX_Builds/mnx-gui/linux-x64/` or `win-x64/`: component release.

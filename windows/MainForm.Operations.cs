@@ -10,6 +10,12 @@ using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
 namespace Mash.UI.MNXFile.GUI;
 
 public sealed partial class MainForm {
+    private bool _transferConcealed;
+
+    partial void SetPlatformTransferConcealment(bool concealed, ref bool handled);
+    partial void ReadPlatformWindowPosition(ref Point position);
+    partial void RestorePlatformWindowPosition(Point position);
+
     private async Task<T> RunOperation<T>(string title, Func<T> operation, ArchiveFile? target = null, TransferTracker? tracker = null, TransferCancellation? cancellation = null, bool extraction = false, string? displayPath = null, bool showProgress = true, bool encrypted = false, CancellationTokenSource? pluginCancellation = null, string? pluginFormat = null) {
         if (_busy) {
             throw new InvalidOperationException("An archive operation is already running.");
@@ -44,10 +50,19 @@ public sealed partial class MainForm {
             };
         statusMessage.Text = title;
         operationProgress.Visible = true;
-        bool previouslyVisible = Visible;
+        bool restoreMainWindow = showProgress && Visible;
+        Point previousLocation = Location;
+        Point previousPosition = previousLocation;
+        FormWindowState previousState = WindowState;
         try {
             if (showProgress) {
-                Hide();
+                if (restoreMainWindow) {
+                    ReadPlatformWindowPosition(ref previousPosition);
+                    SetPlatformTransferConcealment(true, ref _transferConcealed);
+                    if (!_transferConcealed) {
+                        Hide();
+                        }
+                    }
                 dialog.Show(this);
                 }
             timer.Start();
@@ -65,8 +80,24 @@ public sealed partial class MainForm {
                 }
             _busy = false;
             operationProgress.Visible = false;
-            if (previouslyVisible && !_closing) {
+            if (_transferConcealed) {
+                SetPlatformTransferConcealment(false, ref _transferConcealed);
+                _transferConcealed = false;
+                }
+            else if (restoreMainWindow && !_closing) {
+                StartPosition = FormStartPosition.Manual;
+                if (previousState == FormWindowState.Normal) {
+                    Location = previousLocation;
+                    }
                 Show();
+                if (WindowState != previousState) {
+                    WindowState = previousState;
+                    }
+                if (previousState == FormWindowState.Normal) {
+                    RestorePlatformWindowPosition(previousPosition);
+                    }
+                }
+            if (restoreMainWindow && !_closing) {
                 Activate();
                 }
             UpdateActions();
@@ -74,7 +105,7 @@ public sealed partial class MainForm {
         }
 
     private async Task ChooseArchive() {
-        using OpenFileDialog chooser = new OpenFileDialog { Title = "Open archive", Filter = PluginOpenFilter() };
+        using OpenFileDialog chooser = new OpenFileDialog { Title = "Open archive", Filter = PluginOpenFilter(), FilterIndex = 1 };
         if (chooser.ShowDialog(this) == DialogResult.OK) {
             await OpenArchive(chooser.FileName);
             }

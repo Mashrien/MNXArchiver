@@ -403,7 +403,7 @@ partial class MainForm {
         browserSplit.Panel2.Controls.Add(fileList);
         browserSplit.Panel2MinSize = 300;
         browserSplit.Size = new Size(1092, 537);
-        browserSplit.SplitterDistance = 192;
+        browserSplit.SplitterDistance = 246;
         browserSplit.TabIndex = 4;
         // 
         // folderTree
@@ -417,7 +417,7 @@ partial class MainForm {
         folderTree.Location = new Point(0, 0);
         folderTree.Name = "folderTree";
         folderTree.SelectedImageIndex = 0;
-        folderTree.Size = new Size(192, 537);
+        folderTree.Size = new Size(246, 537);
         folderTree.TabIndex = 0;
         // 
         // entryContextMenu

@@ -1,3 +1,4 @@
+using ArchiveFile = Mash.IO.Format.MNX.MNX;
 using Mash.UI.MNXFile.GUI.Plugins;
 
 namespace Mash.UI.MNXFile.GUI;
@@ -13,12 +14,25 @@ public sealed partial class MainForm {
             || (System.IO.File.Exists(path) && FileTransfer.IsArchive(path)));
         }
 
-    private string PluginOpenFilter() {
-        List<string> filters = new() { "MNX archives (*.mnx)|*.mnx" };
-        foreach (ArchivePlugin module in PluginCatalog.Installed.Modules) {
-            string patterns = string.Join(";", module.Format.Extensions.Select(extension => "*" + extension));
-            filters.Add(module.Format.Name + " archives (" + patterns + ")|" + patterns);
+    private static string BuiltInArchiveFormat() {
+        try {
+            using ArchiveFile engine = new ArchiveFile();
+            return $"Built-in archive format: MNX (.mnx), version {engine.FormatVersion}";
             }
+        catch (Exception error) {
+            return "Built-in archive format: MNX (.mnx), engine unavailable — " + error.Message;
+            }
+        }
+
+    private static string PluginOpenFilter() {
+        List<string> supportedPatterns = new List<string> { "*.mnx" };
+        List<string> filters = new List<string> { "MNX archives (*.mnx)|*.mnx" };
+        foreach (ArchivePlugin module in PluginCatalog.Installed.Modules) {
+            string[] patterns = module.Format.Extensions.Select(extension => "*" + extension).ToArray();
+            supportedPatterns.AddRange(patterns);
+            filters.Add(module.Format.Name + " archives|" + string.Join(";", patterns));
+            }
+        filters.Insert(0, "All supported archives|" + string.Join(";", supportedPatterns.Distinct(StringComparer.OrdinalIgnoreCase)));
         filters.Add("All files (*.*)|*.*");
         return string.Join("|", filters);
         }

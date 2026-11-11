@@ -1,25 +1,26 @@
 diff --git a/src/Majorsilence.Forms.Gtk4/Gtk4SkiaSurface.cs b/src/Majorsilence.Forms.Gtk4/Gtk4SkiaSurface.cs
-index b6c350e..f643afc 100644
+index b6c350e..ee9de03 100644
 --- a/src/Majorsilence.Forms.Gtk4/Gtk4SkiaSurface.cs
 +++ b/src/Majorsilence.Forms.Gtk4/Gtk4SkiaSurface.cs
-@@ -20,6 +20,7 @@ namespace Majorsilence.Forms.Gtk4
+@@ -20,6 +20,8 @@ namespace Majorsilence.Forms.Gtk4
      internal sealed class Gtk4SkiaSurface
      {
          private readonly Func<MF.WindowBase?> _owner;
 +        internal Action<SKPixmap, int>? UpdateInputRegion { get; set; }
- 
++        internal Gdk.Device? PointerMotionDevice { get; private set; }
+
          /// <summary>The GTK widget to parent into a window or a presenter.</summary>
          public global::Gtk.DrawingArea Widget { get; }
-@@ -96,7 +97,7 @@ private void Render (global::Gtk.DrawingArea area, Cairo.Context cr, int width,
+@@ -96,7 +98,7 @@ private void Render (global::Gtk.DrawingArea area, Cairo.Context cr, int width,
              cr.Restore ();
          }
- 
+
 -        private static unsafe void RenderInto (MF.WindowBase owner, Cairo.ImageSurface surface, int physW, int physH, double scale)
 +        private unsafe void RenderInto (MF.WindowBase owner, Cairo.ImageSurface surface, int physW, int physH, double scale)
          {
              var data = surface.GetData ();
              fixed (byte* ptr = data) {
-@@ -109,6 +110,9 @@ private static unsafe void RenderInto (MF.WindowBase owner, Cairo.ImageSurface s
+@@ -109,6 +111,9 @@ private static unsafe void RenderInto (MF.WindowBase owner, Cairo.ImageSurface s
                  skSurface.Canvas.Clear (SKColors.Transparent);
                  owner.RenderFrame (skSurface.Canvas, physW, physH, scale);
                  skSurface.Canvas.Flush ();
@@ -28,10 +29,10 @@ index b6c350e..f643afc 100644
 +                UpdateInputRegion?.Invoke(pixels, (int)scale);
              }
          }
- 
-@@ -140,14 +144,15 @@ private void WireInput ()
+
+@@ -140,14 +145,21 @@ private void WireInput ()
              Widget.AddController (click);
- 
+
              var motion = global::Gtk.EventControllerMotion.New ();
 -            motion.OnMotion += (m, e) => {
 -                var controller = (global::Gtk.EventController) m;
@@ -46,7 +47,13 @@ index b6c350e..f643afc 100644
 +                LastPointer = (pointerX, pointerY);
 +                Gdk.ModifierType state = controller.GetCurrentEventState();
 +                (int x, int y) = Device(pointerX, pointerY);
-+                _owner()?.HandlePointerMoved(Gtk4KeyInterop.ButtonsFromState(state), x, y, Gtk4KeyInterop.ModifierKeys(state));
++                PointerMotionDevice = controller.GetCurrentEventDevice();
++                try {
++                    _owner()?.HandlePointerMoved(Gtk4KeyInterop.ButtonsFromState(state), x, y, Gtk4KeyInterop.ModifierKeys(state));
++                    }
++                finally {
++                    PointerMotionDevice = null;
++                    }
 +                }
 +            motion.OnEnter += (controller, arguments) => MovePointer(controller, arguments.X, arguments.Y);
 +            motion.OnMotion += (controller, arguments) => MovePointer(controller, arguments.X, arguments.Y);
@@ -199,24 +206,46 @@ index 22f3924..9c9185e 100644
          }
  
 diff --git a/src/Majorsilence.Forms/Control.Compat.cs b/src/Majorsilence.Forms/Control.Compat.cs
-index 493b3fc..9dac050 100644
+index 493b3fc..6b887d7 100644
 --- a/src/Majorsilence.Forms/Control.Compat.cs
 +++ b/src/Majorsilence.Forms/Control.Compat.cs
-@@ -620,6 +620,14 @@ public DragDropEffects DoDragDrop (object data, DragDropEffects allowedEffects)
+@@ -1,5 +1,7 @@
+ ﻿using System;
+ using System.Drawing;
++using System.Threading;
++using System.Threading.Tasks;
+ using Majorsilence.Forms.Backends;
+ using SkiaSharp;
+
+@@ -620,11 +622,28 @@ public DragDropEffects DoDragDrop (object data, DragDropEffects allowedEffects)
              // Real as of W6 mechanisms: an in-process session (DragDropSession) takes over the window's
              // pointer events and this blocks in the nested loop until the drop, the cancel or Escape,
              // returning the effect the target chose -- upstream's contract, without an OLE source.
 +            if (data is IDataObject files && files.GetData(DataFormats.FileDrop) is string[] paths
-+                && FindWindow()?.Backend is Backends.INativeFileDragBackend desktop) {
-+                if (Control.CaptureHolder is { } capturedControl) {
-+                    capturedControl.Capture = false;
-+                    }
-+                return Form.RunModal(desktop.BeginFileDrag(paths, allowedEffects));
++                && FindWindow()?.Backend is INativeFileDragBackend) {
++                return Form.RunModal(StartStagedFileDrag(_ => Task.FromResult(paths), allowedEffects));
 +                }
 +
              var session = DragDropSession.Begin (this, data, allowedEffects);
- 
+
              return Form.RunModal (session.Completion);
+         }
+
++        /// <summary>Starts a desktop drag before preparing the files requested by its target.</summary>
++        public Task<DragDropEffects> StartStagedFileDrag(Func<CancellationToken, Task<string[]>> prepareFiles, DragDropEffects allowedEffects)
++        {
++            if (FindWindow()?.Backend is not INativeFileDragBackend desktop)
++                return Task.FromResult(DragDropEffects.None);
++
++            if (CaptureHolder is { } capturedControl)
++                capturedControl.Capture = false;
++
++            return desktop.BeginFileDrag(prepareFiles, allowedEffects);
++        }
++
+         /// <summary>Paints the control's invalidated area now, before returning.</summary>
+         /// <remarks>
+         /// Upstream's UpdateWindow raises Paint synchronously (Control.cs Update). This used to be an
 diff --git a/src/Majorsilence.Forms/Form.cs b/src/Majorsilence.Forms/Form.cs
 index 3ba892d..203a650 100644
 --- a/src/Majorsilence.Forms/Form.cs
@@ -354,13 +383,27 @@ index abb099a..0a67a9c 100644
              for (var i = trailing.Count - 1; i >= 0; i--) {
                  var bounds = trailing[i].Bounds;
 diff --git a/src/Majorsilence.Forms/WindowBase.cs b/src/Majorsilence.Forms/WindowBase.cs
-index 2890ac4..2442222 100644
+index 2890ac4..dfda58e 100644
 --- a/src/Majorsilence.Forms/WindowBase.cs
 +++ b/src/Majorsilence.Forms/WindowBase.cs
-@@ -3484,7 +3484,7 @@ public Majorsilence.Forms.Drawing.Region? Region {
- 
+@@ -428,6 +428,13 @@ private MouseEventArgs BuildMouseClickArgs (MouseButtons buttons, System.Drawing
+             return e;
+         }
+
++        // A control that recognizes a drag can prevent its release from starting a click sequence.
++        internal void ResetClickSequence ()
++        {
++            last_click_time = DateTime.MinValue;
++            last_click_point = System.Drawing.Point.Empty;
++        }
++
+         /// <summary>Closes and destroys the window.</summary>
+         public virtual void Close ()
+         {
+@@ -3484,7 +3491,7 @@ public Majorsilence.Forms.Drawing.Region? Region {
+
                  region = value;
- 
+
 -                Backend.SetShaped (value is not null);
 +                Backend.SetShaped (value is not null || this is Form form && !form.TransparencyKey.IsEmpty);
                  Invalidate ();
@@ -398,38 +441,49 @@ index 02f38ae..077a510 100644
  Majorsilence.Forms.GiveFeedbackEventArgs.CursorOffset    -- drop-description text and drag images are drawn by the OS shell drag image; the in-process session (W6) has none to hand them to
  Majorsilence.Forms.GiveFeedbackEventArgs.DragImage    -- drop-description text and drag images are drawn by the OS shell drag image; the in-process session (W6) has none to hand them to
  Majorsilence.Forms.GiveFeedbackEventArgs.UseDefaultDragImage    -- drop-description text and drag images are drawn by the OS shell drag image; the in-process session (W6) has none to hand them to
+diff --git a/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.FileDrag.cs b/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.FileDrag.cs
+new file mode 100644
+index 0000000..785c7aa
 --- /dev/null
 +++ b/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.FileDrag.cs
-@@ -0,0 +1,101 @@
+@@ -0,0 +1,206 @@
 +using System;
 +using System.Collections.Generic;
++using System.IO;
 +using System.Runtime.InteropServices;
 +using System.Text;
++using System.Threading;
 +using System.Threading.Tasks;
 +using Majorsilence.Forms.Backends;
 +
 +namespace Majorsilence.Forms.Gtk4 {
 +    internal sealed partial class Gtk4WindowHost : INativeFileDragBackend {
-+        private global::Gtk.DropTarget? _fileDropTarget;
++        private const string FileUriList = "text/uri-list";
++        private static readonly Lazy<GObject.Type> StagedFilesType = new Lazy<GObject.Type>(RegisterStagedFilesType);
++        private static readonly Dictionary<IntPtr, Lazy<Task<string[]>>> StagedFiles = new Dictionary<IntPtr, Lazy<Task<string[]>>>();
++        private static readonly Gio.Internal.AsyncReadyCallback FileDropReadCallback = OnFileDropRead;
++        private static int _nextFileDrag;
++        private DataObject? _incomingFiles;
 +
-+        [DllImport("libgtk-4.so.1", CallingConvention = CallingConvention.Cdecl)]
-+        private static extern IntPtr gdk_file_list_get_files(IntPtr fileList);
++        private sealed record FileDropRead(Gdk.Drop Drop, TaskCompletionSource<Gio.InputStream> Completion);
 +
 +        private void InitializeFileDrag() {
-+            _fileDropTarget = global::Gtk.DropTarget.New(Gdk.FileList.GetGType(), Gdk.DragAction.Copy);
-+            _fileDropTarget.SetPreload(true);
-+            _fileDropTarget.OnEnter += (_, args) => FileDragOver(args.X, args.Y);
-+            _fileDropTarget.OnMotion += (_, args) => FileDragOver(args.X, args.Y);
-+            _fileDropTarget.OnLeave += (_, _) => _owner.HandleExternalDragLeave();
-+            _fileDropTarget.OnDrop += (_, args) => {
-+                DataObject? files = ReadFileDrop(args.Value);
-+                if (files is null) {
++            // Dolphin can advertise a portal token alongside the local URI list.
++            // Request the URI list explicitly so a missing portal does not reject a local drop.
++            using Gdk.ContentFormats formats = Gdk.ContentFormats.New(new[] { FileUriList });
++            global::Gtk.DropTargetAsync target = global::Gtk.DropTargetAsync.New(formats, Gdk.DragAction.Copy);
++            target.OnDragEnter += (_, args) => FileDragOver(args.X, args.Y);
++            target.OnDragMotion += (_, args) => FileDragOver(args.X, args.Y);
++            target.OnDragLeave += (_, _) => ClearIncomingFileDrag();
++            target.OnDrop += (sender, args) => {
++                if (FileDragOver(args.X, args.Y) == 0) {
 +                    return false;
 +                    }
-+                return _owner.HandleExternalDrop(files, DragDropEffects.Copy,
-+                    FileDragCoordinate(args.X), FileDragCoordinate(args.Y), Keys.None) != DragDropEffects.None;
++                ClearIncomingFileDrag();
++                _ = ReceiveFileDrop(args.Drop, FileDragCoordinate(args.X), FileDragCoordinate(args.Y));
++                return true;
 +                };
-+            _surface.Widget.AddController(_fileDropTarget);
++            _surface.Widget.AddController(target);
 +            }
 +
 +        private int FileDragCoordinate(double value) {
@@ -437,74 +491,174 @@ index 02f38ae..077a510 100644
 +            }
 +
 +        private Gdk.DragAction FileDragOver(double x, double y) {
-+            DataObject? files = ReadFileDrop(_fileDropTarget!.GetValue());
-+            if (files is null) {
-+                return (Gdk.DragAction)0;
-+                }
-+            DragDropEffects effect = _owner.HandleExternalDragOver(files, DragDropEffects.Copy,
++            // A cross-process source may deliver the URI list only after we accept its format.
++            _incomingFiles ??= new DataObject(DataFormats.FileDrop, Array.Empty<string>());
++            DragDropEffects effect = _owner.HandleExternalDragOver(_incomingFiles, DragDropEffects.Copy,
 +                FileDragCoordinate(x), FileDragCoordinate(y), Keys.None);
 +            return effect == DragDropEffects.None ? (Gdk.DragAction)0 : Gdk.DragAction.Copy;
 +            }
 +
-+        private static DataObject? ReadFileDrop(GObject.Value? value) {
-+            if (value is null) {
-+                return null;
-+                }
-+            IntPtr boxed = value.GetBoxed();
-+            if (boxed == IntPtr.Zero) {
-+                return null;
-+                }
-+            List<string> paths = new List<string>();
-+            // The GSList and its files belong to GdkFileList and remain borrowed here.
-+            for (IntPtr item = gdk_file_list_get_files(boxed); item != IntPtr.Zero; item = Marshal.ReadIntPtr(item, IntPtr.Size)) {
-+                using Gio.FileHelper file = Gio.FileHelper.NewFromPointer(Marshal.ReadIntPtr(item), false);
-+                string? path = file.GetPath();
-+                if (!string.IsNullOrEmpty(path)) {
-+                    paths.Add(path);
-+                    }
-+                }
-+            return paths.Count == 0 ? null : new DataObject(DataFormats.FileDrop, paths.ToArray());
++        private void ClearIncomingFileDrag() {
++            _incomingFiles = null;
++            _owner.HandleExternalDragLeave();
 +            }
 +
-+        public Task<DragDropEffects> BeginFileDrag(string[] paths, DragDropEffects allowedEffects) {
-+            if ((allowedEffects & DragDropEffects.Copy) == 0 || paths.Length == 0) {
-+                return Task.FromResult(DragDropEffects.None);
++        private async Task ReceiveFileDrop(Gdk.Drop drop, int x, int y) {
++            Gdk.DragAction effect = 0;
++            try {
++                using Gio.InputStream stream = await ReadFileDrop(drop);
++                string[] paths = await Task.Run(() => ReadLocalFileUris(stream));
++                if (paths.Length > 0) {
++                    DataObject files = new DataObject(DataFormats.FileDrop, paths);
++                    if (_owner.HandleExternalDrop(files, DragDropEffects.Copy, x, y, Keys.None) == DragDropEffects.Copy) {
++                        effect = Gdk.DragAction.Copy;
++                        }
++                    }
 +                }
++            catch (Exception error) {
++                Console.Error.WriteLine("Could not read the dropped file URI list: " + error.Message);
++                }
++            finally {
++                drop.Finish(effect);
++                }
++            }
++
++        private static Task<Gio.InputStream> ReadFileDrop(Gdk.Drop drop) {
++            TaskCompletionSource<Gio.InputStream> completion = new TaskCompletionSource<Gio.InputStream>(TaskCreationOptions.RunContinuationsAsynchronously);
++            using GLib.Internal.Utf8StringArrayNullTerminatedOwnedHandle formats =
++                GLib.Internal.Utf8StringArrayNullTerminatedOwnedHandle.Create(new[] { FileUriList });
++            GCHandle state = GCHandle.Alloc(new FileDropRead(drop, completion));
++            try {
++                Gdk.Internal.Drop.ReadAsync(drop.Handle.DangerousGetHandle(), formats, 0, IntPtr.Zero,
++                    FileDropReadCallback, GCHandle.ToIntPtr(state));
++                }
++            catch {
++                state.Free();
++                throw;
++                }
++            return completion.Task;
++            }
++
++        private static void OnFileDropRead(IntPtr source, IntPtr result, IntPtr userData) {
++            GCHandle handle = GCHandle.FromIntPtr(userData);
++            FileDropRead state = (FileDropRead)handle.Target!;
++            handle.Free();
++            try {
++                using Gio.Task read = Gio.Task.NewFromPointer(result, false);
++                Gio.InputStream stream = state.Drop.ReadFinish(read, out _)
++                    ?? throw new IOException("The drop source did not send a URI list.");
++                state.Completion.SetResult(stream);
++                }
++            catch (Exception error) {
++                state.Completion.SetException(error);
++                }
++            }
++
++        private static string[] ReadLocalFileUris(Gio.InputStream stream) {
++            using MemoryStream content = new MemoryStream();
++            byte[] buffer = new byte[8192];
++            int count;
++            while ((count = checked((int)stream.Read(buffer, null))) > 0) {
++                content.Write(buffer, 0, count);
++                }
++            using StringReader lines = new StringReader(Encoding.UTF8.GetString(content.ToArray()));
++            List<string> paths = new List<string>();
++            while (lines.ReadLine() is { } line) {
++                if (Uri.TryCreate(line, UriKind.Absolute, out Uri? uri) && uri.IsFile && uri.Host is "" or "localhost") {
++                    paths.Add(uri.LocalPath);
++                    }
++                }
++            return paths.ToArray();
++            }
++
++        public async Task<DragDropEffects> BeginFileDrag(Func<CancellationToken, Task<string[]>> prepareFiles, DragDropEffects allowedEffects) {
 +            Gdk.Surface? surface = _window.GetNative()?.GetSurface();
-+            Gdk.Device? pointer = Gdk.Display.GetDefault()?.GetDefaultSeat()?.GetPointer();
-+            if (surface is null || pointer is null) {
-+                return Task.FromResult(DragDropEffects.None);
++            Gdk.Device? pointer = _surface.PointerMotionDevice;
++            if ((allowedEffects & DragDropEffects.Copy) == 0 || surface is null || pointer is null) {
++                return DragDropEffects.None;
 +                }
-+            StringBuilder uris = new StringBuilder();
-+            foreach (string path in paths) {
-+                uris.Append(new Uri(System.IO.Path.GetFullPath(path)).AbsoluteUri).Append("\r\n");
-+                }
-+            using GLib.Bytes bytes = GLib.Bytes.New(Encoding.UTF8.GetBytes(uris.ToString()));
-+            Gdk.ContentProvider provider = Gdk.ContentProvider.NewForBytes("text/uri-list", bytes);
-+            Gdk.Drag? drag = Gdk.Drag.Begin(surface, pointer, provider, Gdk.DragAction.Copy, 0, 0);
++
++            // Start in the current motion event so Wayland can use its implicit pointer grab.
++            using CancellationTokenSource cancellation = new CancellationTokenSource();
++            Lazy<Task<string[]>> staged = new Lazy<Task<string[]>>(() => prepareFiles(cancellation.Token));
++            IntPtr dragId = new IntPtr(++_nextFileDrag);
++            using GObject.Value value = new GObject.Value(StagedFilesType.Value);
++            value.SetPointer(dragId);
++            using Gdk.ContentProvider provider = Gdk.ContentProvider.NewForValue(value);
++            using Gdk.Drag? drag = Gdk.Drag.Begin(surface, pointer, provider, Gdk.DragAction.Copy, 0, 0);
 +            if (drag is null) {
-+                provider.Dispose();
-+                return Task.FromResult(DragDropEffects.None);
++                return DragDropEffects.None;
 +                }
-+            TaskCompletionSource<DragDropEffects> completion = new TaskCompletionSource<DragDropEffects>();
++
++            StagedFiles.Add(dragId, staged);
++            TaskCompletionSource<DragDropEffects> completion = new TaskCompletionSource<DragDropEffects>(TaskCreationOptions.RunContinuationsAsynchronously);
 +            void Finish(bool success) {
 +                if (completion.Task.IsCompleted) {
 +                    return;
 +                    }
 +                drag.DropDone(success);
 +                completion.SetResult(success ? DragDropEffects.Copy : DragDropEffects.None);
-+                drag.Dispose();
-+                provider.Dispose();
 +                }
 +            drag.OnCancel += (_, _) => Finish(false);
-+            drag.OnDndFinished += (_, _) => Finish(drag.GetSelectedAction() == Gdk.DragAction.Copy);
-+            return completion.Task;
++            drag.OnDndFinished += (_, _) => Finish(true);
++            global::Gtk.DragIcon.GetForDrag(drag).SetChild(global::Gtk.Image.NewFromIconName("document-save"));
++
++            try {
++                DragDropEffects effect = await completion.Task;
++                if (effect == DragDropEffects.None) {
++                    cancellation.Cancel();
++                    }
++                if (staged.IsValueCreated) {
++                    await staged.Value;
++                    }
++                return effect;
++                }
++            finally {
++                StagedFiles.Remove(dragId);
++                }
++            }
++
++        private static GObject.Type RegisterStagedFilesType() {
++            GObject.Type type = GObject.Functions.PointerTypeRegisterStatic("MajorsilenceStagedFileDrag");
++            Gdk.Functions.ContentRegisterSerializer(type, FileUriList, SerializeStagedFiles);
++            return type;
++            }
++
++        private static async void SerializeStagedFiles(Gdk.ContentSerializer serializer) {
++            try {
++                IntPtr dragId = serializer.GetValue().GetPointer();
++                if (!StagedFiles.TryGetValue(dragId, out Lazy<Task<string[]>>? staged)) {
++                    throw new InvalidOperationException("The drag has ended.");
++                    }
++                string[] paths = await staged.Value;
++                StringBuilder uris = new StringBuilder();
++                foreach (string path in paths) {
++                    uris.Append(new Uri(System.IO.Path.GetFullPath(path)).AbsoluteUri).Append("\r\n");
++                    }
++                byte[] bytes = Encoding.UTF8.GetBytes(uris.ToString());
++                using (Gio.OutputStream stream = serializer.GetOutputStream())
++                using (Gio.Cancellable? cancellation = serializer.GetCancellable()) {
++                    await Task.Run(() => stream.WriteAll(bytes, out _, cancellation));
++                    }
++                serializer.ReturnSuccess();
++                }
++            catch (Exception error) {
++                serializer.ReturnError(GLib.Error.NewLiteral(Gio.Functions.IoErrorQuark(), (int)Gio.IOErrorEnum.Failed, error.Message));
++                }
++            finally {
++                // The managed callback owns a reference too. Let GDK close the
++                // transport stream when its serialization callback finishes.
++                serializer.Dispose();
++                }
 +            }
 +        }
 +    }
+diff --git a/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.FilePickers.cs b/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.FilePickers.cs
+new file mode 100644
+index 0000000..f8b120a
 --- /dev/null
 +++ b/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.FilePickers.cs
-@@ -0,0 +1,78 @@
+@@ -0,0 +1,84 @@
 +using System;
 +using System.Collections.Generic;
 +using System.IO;
@@ -548,7 +702,13 @@ index 02f38ae..077a510 100644
 +                global::Gtk.FileFilter filter = global::Gtk.FileFilter.New();
 +                filter.SetName(filters[index].Name);
 +                foreach (string pattern in filters[index].Patterns) {
-+                    filter.AddPattern(pattern == "*.*" ? "*" : pattern);
++                    if (pattern.Length > 2 && pattern.StartsWith("*.", StringComparison.Ordinal)
++                        && pattern.AsSpan(2).IndexOfAny('*', '?', '[') < 0) {
++                        filter.AddSuffix(pattern[2..]);
++                        }
++                    else {
++                        filter.AddPattern(pattern == "*.*" ? "*" : pattern);
++                        }
 +                    }
 +                chooser.AddFilter(filter);
 +                if (index + 1 == filterIndex) {
@@ -681,6 +841,9 @@ index 02f38ae..077a510 100644
 +            }
 +        }
 +    }
+diff --git a/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.Transparency.cs b/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.Transparency.cs
+new file mode 100644
+index 0000000..0915f7d
 --- /dev/null
 +++ b/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.Transparency.cs
 @@ -0,0 +1,164 @@
@@ -730,7 +893,7 @@ index 02f38ae..077a510 100644
 +            }
 +
 +        private void UpdateTransparencyInput(SKPixmap pixels, int scale) {
-+            if (!_isShaped) {
++            if (!_isShaped || _transferConcealed) {
 +                return;
 +                }
 +            Gdk.Surface? nativeSurface = CurrentNativeSurface();
@@ -848,14 +1011,21 @@ index 02f38ae..077a510 100644
 +        private static extern void CairoRegionDestroy(IntPtr region);
 +        }
 +    }
+diff --git a/src/Majorsilence.Forms/Backends/INativeFileDragBackend.cs b/src/Majorsilence.Forms/Backends/INativeFileDragBackend.cs
+new file mode 100644
+index 0000000..d8f464b
 --- /dev/null
 +++ b/src/Majorsilence.Forms/Backends/INativeFileDragBackend.cs
-@@ -0,0 +1,7 @@
+@@ -0,0 +1,11 @@
++using System;
++using System.Threading;
++using System.Threading.Tasks;
++
 +namespace Majorsilence.Forms.Backends {
 +    /// <summary>Optional desktop file drag source for backends with OS drag-and-drop support.</summary>
 +    public interface INativeFileDragBackend {
 +        /// <summary>Starts a copy drag and completes when the desktop accepts or cancels it.</summary>
-+        System.Threading.Tasks.Task<DragDropEffects> BeginFileDrag(string[] paths, DragDropEffects allowedEffects);
++        Task<DragDropEffects> BeginFileDrag(Func<CancellationToken, Task<string[]>> prepareFiles, DragDropEffects allowedEffects);
 +        }
 +    }
 --- /dev/null
@@ -980,44 +1150,46 @@ diff --git a/src/Majorsilence.Forms/WinFormsCompat.cs b/src/Majorsilence.Forms/W
              set {
                  if (ReferenceEquals (renderer, value))
                      return;
+diff --git a/src/Majorsilence.Forms/ListView.cs b/src/Majorsilence.Forms/ListView.cs
+index 0b03515..6e92632 100644
 --- a/src/Majorsilence.Forms/ListView.cs
 +++ b/src/Majorsilence.Forms/ListView.cs
-@@ -31,7 +31,7 @@
+@@ -31,7 +31,7 @@ public ListView ()
                  SmallChange = 1,
                  LargeChange = 1,
                  Visible = false,
 -                Dock = DockStyle.Right,
 +                Dock = DockStyle.None,
              };
- 
+
              vscrollbar.ValueChanged += (_, _) => {
-@@ -40,6 +40,7 @@
+@@ -40,6 +40,7 @@ public ListView ()
              };
- 
+
              Controls.AddImplicitControl (vscrollbar);
 +            InitializeHorizontalScrolling ();
          }
- 
+
          private readonly VerticalScrollBar vscrollbar;
-@@ -75,7 +76,7 @@
+@@ -75,7 +76,7 @@ internal int ItemsPerLine {
          /// <summary>The number of whole lines that fit in the item area.</summary>
          internal int VisibleLineCount => Math.Max (1, ItemArea.Height / Math.Max (1, ScaledLineHeight));
- 
+
 -        internal void UpdateVerticalScrollBar ()
 +        private void UpdateVerticalScrollBarCore ()
          {
              var lines = LineCount;
              var visible = VisibleLineCount;
-@@ -261,7 +262,7 @@
+@@ -261,7 +262,7 @@ internal Rectangle ItemArea {
                  var width = bounds.Width - (vscrollbar.Visible ? vscrollbar.ScaledWidth : 0);
- 
+
                  return new Rectangle (bounds.Left, bounds.Top + ScaledHeaderHeight,
 -                    Math.Max (0, width), Math.Max (0, bounds.Height - ScaledHeaderHeight));
 +                    Math.Max (0, width), Math.Max (0, bounds.Height - ScaledHeaderHeight - (hscrollbar.Visible ? hscrollbar.ScaledHeight : 0)));
              }
          }
- 
-@@ -287,20 +288,16 @@
+
+@@ -287,20 +288,16 @@ private void LayoutSubItems (ListViewItem item)
              // Device pixels throughout -- ScaledCheckWidth and ScaledColumnWidth are scaled, and so is
              // the item rectangle this is laid out inside (LAY-38). The public Bounds converts out.
              var device = item.DeviceBounds;
@@ -1029,62 +1201,125 @@ diff --git a/src/Majorsilence.Forms/WinFormsCompat.cs b/src/Majorsilence.Forms/W
 +            // Share the header's geometry, including display order, mirroring and scroll offset.
 +            foreach (var (column, left, width) in ColumnCells (device.Left + ScaledCheckWidth, device.Right)) {
                  var i = column.Index;
- 
+
                  if (i >= 0 && i < item.SubItems.Count) {
                      // The owner is what lets a sub-item find the display scale for its own conversion.
                      item.SubItems[i].Owner = item;
 -                    item.SubItems[i].DeviceBounds = new Rectangle (x, device.Top, width, device.Height);
 +                    item.SubItems[i].DeviceBounds = new Rectangle (left, device.Top, width, device.Height);
                  }
- 
+
 -                x += width;
              }
          }
- 
-@@ -402,7 +399,7 @@
+
+@@ -402,7 +399,7 @@ internal int HeaderDividerAt (Point location)
          internal IEnumerable<(ColumnHeader Column, int Left, int Width)> ColumnCells (int left, int right)
          {
              var mirrored = MirrorsColumns;
 -            var x = mirrored ? right : left;
 +            var x = (mirrored ? right : left) + HorizontalContentOffset;
- 
+
              foreach (var column in DisplayColumns) {
                  var width = ScaledColumnWidth (column);
-@@ -647,6 +644,8 @@
+@@ -443,6 +440,7 @@ internal override bool TakesFocusOnPress (MouseButtons button)
+         /// <inheritdoc/>
+         protected override void OnMouseDown (MouseEventArgs e)
+         {
++            item_drag_raised = false;
+             base.OnMouseDown (e);
+
+             LayoutItems ();
+@@ -453,7 +451,6 @@ protected override void OnMouseDown (MouseEventArgs e)
+             if (!in_header) {
+                 drag_candidate = Items.FirstOrDefault (i => i.DeviceBounds.Contains (device));
+                 drag_origin = e.Location;
+-                item_drag_raised = false;
+             }
+
+             if (e.Button != MouseButtons.Left)
+@@ -530,6 +527,7 @@ private void TrackItemDrag (MouseEventArgs e)
                  return;
- 
+
+             item_drag_raised = true;
++            FindWindow ()?.ResetClickSequence ();
+             OnItemDrag (new ItemDragEventArgs (e.Button, drag_candidate));
+         }
+
+@@ -557,6 +555,11 @@ private void TrackHeaderResize (MouseEventArgs e)
+         /// <inheritdoc/>
+         protected override void OnMouseUp (MouseEventArgs e)
+         {
++            // WindowBase records the release before calling us. A drag must not become
++            // the first click of a double-click at the drop location.
++            if (item_drag_raised)
++                FindWindow ()?.ResetClickSequence ();
++
+             base.OnMouseUp (e);
+
+             if (resize_column >= 0) {
+@@ -567,7 +570,6 @@ protected override void OnMouseUp (MouseEventArgs e)
+             EndHeaderReorder (e);
+
+             drag_candidate = null;
+-            item_drag_raised = false;
+         }
+
+         // The item under the pointer, for HotTracking's hot colour (W6). Tracked here rather than in the
+@@ -647,6 +649,8 @@ internal void BeginLabelEdit (ListViewItem item)
+                 return;
+
              EndLabelEdit (commit: true);
 +            if (View == View.Details && hscrollbar.Value != 0)
 +                hscrollbar.Value = 0;
- 
+
              var before = new LabelEditEventArgs (item.Index);
              OnBeforeLabelEdit (before);
-@@ -679,8 +678,10 @@
+@@ -679,8 +683,10 @@ private Rectangle LabelDeviceBounds (ListViewItem item)
              var bounds = item.DeviceBounds;
              var left = bounds.Left + ScaledCheckWidth;
- 
+
 -            if (View == View.Details && DisplayColumns.Count > 0)
 -                return new Rectangle (left, bounds.Top, ScaledColumnWidth (DisplayColumns[0]), bounds.Height);
 +            if (View == View.Details && DisplayColumns.Count > 0) {
 +                var cell = ColumnCells (bounds.Left + ScaledCheckWidth, bounds.Right).First ();
 +                return new Rectangle (cell.Left, bounds.Top, cell.Width, bounds.Height);
 +            }
- 
+
              if (IsRowView) {
                  if (View == View.SmallIcon && item.ImageSK is not null)
-@@ -758,6 +759,9 @@
+@@ -730,6 +736,9 @@ protected override void OnMouseClick (MouseEventArgs e)
+         {
+             base.OnMouseClick (e);
+
++            if (e.Button != MouseButtons.Left || item_drag_raised)
++                return;
++
+             LayoutItems ();
+
+             var location = ToDevice (e.Location);
+@@ -758,16 +767,26 @@ protected override void OnMouseClick (MouseEventArgs e)
                  return;
              }
- 
+
 +            if (!ItemArea.Contains (location))
 +                return;
 +
              // DeviceBounds, because `location` is device (ToDevice above) -- LAY-38 made the public
              // Bounds logical and these three hit-tests were missed, so a click landed nowhere near the
              // item it was over on any display whose scale is not 1.
-@@ -767,7 +771,8 @@
+             var clicked_item = Items.FirstOrDefault (tp => tp.DeviceBounds.Contains (location));
+
+-            if (clicked_item is null)
++            if (clicked_item is null) {
++                if (!MultiSelect || (e.Modifiers & (Keys.Control | Keys.Shift)) == Keys.None) {
++                    SelectedItem = null;
++                    anchor_index = -1;
++                }
++
                  return;
- 
++            }
+
              // The check box is its own hit target: clicking it toggles and does not re-select.
 -            if (CheckBoxes && location.X < clicked_item.DeviceBounds.Left + ScaledCheckWidth) {
 +            var checkLeft = clicked_item.DeviceBounds.Left + HorizontalContentOffset;
@@ -1092,16 +1327,52 @@ diff --git a/src/Majorsilence.Forms/WinFormsCompat.cs b/src/Majorsilence.Forms/W
                  clicked_item.Checked = !clicked_item.Checked;
                  return;
              }
-@@ -1315,6 +1320,8 @@
+@@ -889,6 +908,9 @@ protected override void OnDoubleClick (MouseEventArgs e)
+         {
+             base.OnDoubleClick (e);
+
++            if (e.Button != MouseButtons.Left || item_drag_raised)
++                return;
++
              LayoutItems ();
- 
+
+             var clicked_item = Items.FirstOrDefault (tp => tp.DeviceBounds.Contains (ToDevice (e.Location)));
+@@ -924,21 +946,14 @@ protected override void OnPaint (PaintEventArgs e)
+         public ListViewItem? SelectedItem {
+             get => Items.FirstOrDefault (i => i.Selected);
+             set {
+-                var current_item = Items.FirstOrDefault (i => i.Selected);
+-
+-                if (current_item == value)
+-                    return;
+-
+-                // The per-item setters do the announcing now (LST-17), so this batches them: the
+-                // deselection and the selection each report ItemSelectionChanged as they happen -- a
+-                // handler tracking selection sees the item it must let go of before the one it gains --
+-                // and ONE SelectedIndexChanged follows, once the selection has settled. Raising both
+-                // here as well, as this used to, reported every change twice over.
++                // Preserve an already selected target and report one selection change for the
++                // whole replacement, even when several other items are deselected.
+                 selection_batch++;
+
+                 try {
+-                    if (current_item != null)
+-                        current_item.Selected = false;
++                    foreach (var item in Items)
++                        if (!ReferenceEquals (item, value))
++                            item.Selected = false;
+
+                     if (value != null)
+                         value.Selected = true;
+@@ -1315,6 +1330,8 @@ public void EnsureVisible (int index)
+             LayoutItems ();
+
              var location = ToDevice (new Point (x, y));
 +            if (!ItemArea.Contains (location))
 +                return null;
- 
+
              return Items.FirstOrDefault (i => i.DeviceBounds.Contains (location));
          }
-
 --- a/src/Majorsilence.Forms/ListViewParity.cs
 +++ b/src/Majorsilence.Forms/ListViewParity.cs
 @@ -308,6 +308,9 @@
@@ -1138,9 +1409,11 @@ diff --git a/src/Majorsilence.Forms/WinFormsCompat.cs b/src/Majorsilence.Forms/W
          }
  
 
+diff --git a/src/Majorsilence.Forms/Renderers/ListViewRenderer.cs b/src/Majorsilence.Forms/Renderers/ListViewRenderer.cs
+index 5f5ae1a..3de2fcb 100644
 --- a/src/Majorsilence.Forms/Renderers/ListViewRenderer.cs
 +++ b/src/Majorsilence.Forms/Renderers/ListViewRenderer.cs
-@@ -240,9 +240,9 @@
+@@ -240,9 +240,9 @@ protected virtual void RenderDetailsRow (ListView control, ListViewItem item, Pa
                  var highlight = control.FullRowSelect || display.Count == 0
                      ? item.DeviceBounds
                      : control.MirrorsColumns
@@ -1150,18 +1423,78 @@ diff --git a/src/Majorsilence.Forms/WinFormsCompat.cs b/src/Majorsilence.Forms/W
 -                        : new Rectangle (item.DeviceBounds.Left, item.DeviceBounds.Top,
 +                        : new Rectangle (item.DeviceBounds.Left + control.HorizontalContentOffset, item.DeviceBounds.Top,
                              control.ScaledCheckWidth + control.ScaledColumnWidth (display[0]), item.DeviceBounds.Height);
- 
+
                  e.Canvas.FillRectangle (highlight, ListView.DefaultSelectionStyle.GetBackgroundColor ());
-@@ -385,7 +385,7 @@
+@@ -274,7 +274,9 @@ protected virtual void RenderDetailsCell (ListView control, ListViewItem item, C
+                 ? item.Text
+                 : i < item.SubItems.Count ? item.SubItems[i].Text : string.Empty;
+
+-            if (!string.IsNullOrEmpty (text)) {
++            var icon = i == 0 ? ResolveDetailsImage (control, item) : null;
++
++            if (icon is not null || !string.IsNullOrEmpty (text)) {
+                 var text_cell = Padded (cell, e);
+
+                 // IndentCount (W6 mechanisms): the first cell's content starts that many small-image
+@@ -288,8 +290,24 @@ protected virtual void RenderDetailsCell (ListView control, ListViewItem item, C
+
+                 e.Canvas.Save ();
+                 e.Canvas.Clip (cell);
+-                e.Canvas.DrawText (text, Theme.UIFont, font_size, text_cell,
+-                    ItemForeColour (control, item, Foreground (item, i, ShowsSelection (control, item))), Align (column.TextAlign), maxLines: 1);
++
++                if (icon is not null && text_cell.Width > 0 && text_cell.Height > 0) {
++                    var height = Math.Min (text_cell.Height, e.LogicalToDeviceUnits (icon.Height));
++                    var width = Math.Max (1, (int)Math.Round ((double)icon.Width * height / icon.Height));
++                    var x = control.MirrorsColumns ? text_cell.Right - width : text_cell.Left;
++                    var y = text_cell.Top + (text_cell.Height - height) / 2;
++                    e.Canvas.DrawBitmap (icon, new Rectangle (x, y, width, height), !control.Enabled);
++
++                    var occupied = Math.Min (text_cell.Width, width + e.LogicalToDeviceUnits (4));
++                    if (!control.MirrorsColumns)
++                        text_cell.X += occupied;
++                    text_cell.Width -= occupied;
++                }
++
++                if (text_cell.Width > 0 && !string.IsNullOrEmpty (text))
++                    e.Canvas.DrawText (text, Theme.UIFont, font_size, text_cell,
++                        ItemForeColour (control, item, Foreground (item, i, ShowsSelection (control, item))), Align (column.TextAlign), maxLines: 1);
++
+                 e.Canvas.Restore ();
+             }
+
+@@ -299,6 +317,22 @@ protected virtual void RenderDetailsCell (ListView control, ListViewItem item, C
+             }
+         }
+
++        private static SkiaSharp.SKBitmap? ResolveDetailsImage (ListView control, ListViewItem item)
++        {
++            if (item.ImageSK is { } direct)
++                return direct;
++
++            var images = control.SmallImageList?.Images;
++            if (images is null)
++                return null;
++
++            if (!string.IsNullOrEmpty (item.ImageKey))
++                return images.GetBitmap (item.ImageKey);
++
++            var index = item.ImageIndex;
++            return index >= 0 && index < images.Count ? images.GetBitmap (index) : null;
++        }
++
+         // An owner-drawn item whose handler declined the default: each cell is offered to DrawSubItem,
+         // and painted by the default path only when that handler asks for it.
+         private void RenderOwnerDrawnCells (ListView control, ListViewItem item, PaintEventArgs e)
+@@ -385,7 +419,7 @@ protected virtual void RenderCheckBox (ListView control, ListViewItem item, Pain
                  return;
- 
+
              var size = e.LogicalToDeviceUnits (13);
 -            var box = new Rectangle (item.DeviceBounds.Left + e.LogicalToDeviceUnits (2),
 +            var box = new Rectangle (item.DeviceBounds.Left + control.HorizontalContentOffset + e.LogicalToDeviceUnits (2),
                  item.DeviceBounds.Top + (item.DeviceBounds.Height - size) / 2, size, size);
- 
-             // A state image replaces the glyph when the list has a StateImageList and the item names an
 
+             // A state image replaces the glyph when the list has a StateImageList and the item names an
 --- /dev/null
 +++ b/src/Majorsilence.Forms/ListView.Scrolling.cs
 @@ -0,0 +1,113 @@
@@ -1621,3 +1954,108 @@ diff --git a/src/Majorsilence.Forms/Renderers/StripRendererBridge.cs b/src/Major
          }
      }
  }
+diff --git a/src/Majorsilence.Forms.Gtk4/Gtk4HostInterop.cs b/src/Majorsilence.Forms.Gtk4/Gtk4HostInterop.cs
+index e2cb200..108d9d2 100644
+--- a/src/Majorsilence.Forms.Gtk4/Gtk4HostInterop.cs
++++ b/src/Majorsilence.Forms.Gtk4/Gtk4HostInterop.cs
+@@ -1,4 +1,5 @@
+ using System;
++using System.Drawing;
+ using MF = Majorsilence.Forms;
+
+ namespace Majorsilence.Forms.Gtk4
+@@ -53,5 +54,20 @@ public static class Gtk4HostInterop
+
+             return window;
+         }
++
++        public static bool TryConcealForTransfer(MF.Form form, bool concealed) {
++            return form.Backend is Gtk4WindowHost host && host.TryConcealForTransfer(concealed);
++            }
++
++        public static bool TryReadX11Position(MF.Form form, out Point position) {
++            position = Point.Empty;
++            return form.Backend is Gtk4WindowHost host && host.TryReadX11Position(out position);
++            }
++
++        public static void RestoreX11Position(MF.Form form, Point position) {
++            if (form.Backend is Gtk4WindowHost host) {
++                host.RestoreX11Position(position);
++                }
++            }
+     }
+ }
+diff --git a/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.TransferVisibility.cs b/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.TransferVisibility.cs
+new file mode 100644
+index 0000000..49b3a0a
+--- /dev/null
++++ b/src/Majorsilence.Forms.Gtk4/Gtk4WindowHost.TransferVisibility.cs
+@@ -0,0 +1,68 @@
++using System;
++using System.Drawing;
++using System.Runtime.InteropServices;
++
++namespace Majorsilence.Forms.Gtk4 {
++    internal sealed partial class Gtk4WindowHost {
++        private bool _transferConcealed;
++        private bool _sensitiveBeforeTransfer;
++
++        internal bool TryConcealForTransfer(bool concealed) {
++            IntPtr display = _window.GetDisplay().Handle.DangerousGetHandle();
++            if (Marshal.PtrToStringUTF8(NativeTypeName(display)) != "GdkWaylandDisplay"
++                || CurrentNativeSurface() is not Gdk.Surface surface) {
++                return false;
++                }
++            if (_transferConcealed == concealed) {
++                return true;
++                }
++            _transferConcealed = concealed;
++            if (concealed) {
++                // Keep the surface mapped so the compositor keeps its placement.
++                _sensitiveBeforeTransfer = _window.GetSensitive();
++                _window.SetSensitive(false);
++                _window.SetOpacity(0);
++                _nextInputRows.Clear();
++                ApplyNativeInputRegion(surface);
++                }
++            else {
++                _window.SetOpacity(_opacity);
++                _window.SetSensitive(_sensitiveBeforeTransfer);
++                surface.SetInputRegion(null!);
++                _inputRegionValid = false;
++                Invalidate();
++                }
++            return true;
++            }
++
++        internal bool TryReadX11Position(out Point position) {
++            position = Point.Empty;
++            if (!TryGetX11Window(out IntPtr display, out nuint window)
++                || XTranslateCoordinates(display, window, XDefaultRootWindow(display), 0, 0, out int x, out int y, out _) == 0) {
++                return false;
++                }
++            position = new Point(x, y);
++            return true;
++            }
++
++        internal void RestoreX11Position(Point position) {
++            if (TryGetX11Window(out IntPtr display, out nuint window)) {
++                XMoveWindow(display, window, position.X, position.Y);
++                XSync(display, 0);
++                }
++            }
++
++        private bool TryGetX11Window(out IntPtr display, out nuint window) {
++            display = IntPtr.Zero;
++            window = 0;
++            IntPtr nativeDisplay = _window.GetDisplay().Handle.DangerousGetHandle();
++            if (Marshal.PtrToStringUTF8(NativeTypeName(nativeDisplay)) != "GdkX11Display"
++                || CurrentNativeSurface() is not Gdk.Surface surface) {
++                return false;
++                }
++            display = XDisplay(nativeDisplay);
++            window = XSurface(surface.Handle.DangerousGetHandle());
++            return display != IntPtr.Zero && window != 0;
++            }
++        }
++    }

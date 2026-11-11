@@ -10,6 +10,11 @@ public sealed partial class MainForm {
             return;
             }
 
+        string[] openFilters = PluginOpenFilter().Split('|');
+        Require(openFilters[0] == "All supported archives"
+            && openFilters[1].Split(';').Contains("*.mnx")
+            && openFilters[1].Split(';').Contains("*.rpa"),
+            "The default archive picker filter must include built-in and plugin formats.");
         string archivePath = Path.Combine(work, "renamed-rpa.dat");
         DiskFile.Copy(fixture, archivePath);
         Require(await OpenArchive(archivePath, showErrors: false), "The plugin archive did not open by magic.");

@@ -22,7 +22,7 @@ partial class ArchiveDropForm {
         openArchiveButton = new Button();
         addArchiveButton = new Button();
         SuspendLayout();
-        Text = "Dropped MNX archive";
+        Text = "Dropped archive";
         Name = "ArchiveDropForm";
         ClientSize = new Size(430, 170);
         StartPosition = FormStartPosition.CenterParent;

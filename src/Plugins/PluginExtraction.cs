@@ -5,6 +5,7 @@ internal sealed class PluginExtraction {
     private readonly ArchivePlugin _module;
     private readonly string _archivePath;
     private readonly PluginOutput[] _outputs;
+    internal IReadOnlyList<string> RootPaths { get; }
 
     internal PluginExtraction(ArchivePlugin module, PluginArchive archive, Guid[] ids, string destination, bool singleFile) {
         _module = module;
@@ -19,14 +20,17 @@ internal sealed class PluginExtraction {
         StringComparer comparison = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         HashSet<string> outputPaths = new(comparison);
         List<PluginOutput> outputs = new();
+        List<string> rootPaths = new();
         foreach (Guid id in selected) {
             if (browser.Ancestors(id).SkipLast(1).Any(selected.Contains)) {
                 continue;
                 }
             ArchiveBrowser.Entry entry = browser.Get(id);
             ValidateDestinationName(singleFile ? Path.GetFileName(destination) : entry.Name);
+            string rootPath = singleFile ? destination : Path.Combine(destination, entry.Name);
+            rootPaths.Add(rootPath);
             Stack<(ArchiveBrowser.Entry Entry, string Output)> pending = new();
-            pending.Push((entry, singleFile ? destination : Path.Combine(destination, entry.Name)));
+            pending.Push((entry, rootPath));
             while (pending.TryPop(out (ArchiveBrowser.Entry Entry, string Output) current)) {
                 if (!outputPaths.Add(current.Output)) {
                     throw new IOException("Selected entries share an extraction destination: " + current.Output);
@@ -45,6 +49,7 @@ internal sealed class PluginExtraction {
                 }
             }
         _outputs = outputs.ToArray();
+        RootPaths = rootPaths;
         }
 
     private static void ValidateDestinationName(string name) {

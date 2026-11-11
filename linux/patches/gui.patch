@@ -20,15 +20,14 @@
              if (smoke && args.Length != 2) {
 --- a/MainForm.PreviewsAndDrag.cs
 +++ b/MainForm.PreviewsAndDrag.cs
-@@ -103,7 +103,7 @@
+@@ -264,5 +264,3 @@
+-    private static async Task<DragDropEffects> StartFileDrag(Control source, Func<CancellationToken, Task<string[]>> prepareFiles) {
+-        string[] paths = await prepareFiles(CancellationToken.None);
+-        DataObject data = new DataObject(DataFormats.FileDrop, paths);
+-        return source.DoDragDrop(data, DragDropEffects.Copy);
++    private static Task<DragDropEffects> StartFileDrag(Control source, Func<CancellationToken, Task<string[]>> prepareFiles) {
++        return source.StartStagedFileDrag(prepareFiles, DragDropEffects.Copy);
          }
- 
-     private void ConfigureDragAndDrop() {
--        foreach (Control control in new Control[] { this, folderTree, fileList }) {
-+        foreach (Control control in new Control[] { folderTree, fileList }) {
-             control.DragEnter += (_, args) => args.Effect = !_busy && !_draggingOut && args.Data?.GetDataPresent(DataFormats.FileDrop) == true ? DragDropEffects.Copy : DragDropEffects.None;
-             control.DragOver += (_, args) => args.Effect = !_busy && !_draggingOut && args.Data?.GetDataPresent(DataFormats.FileDrop) == true ? DragDropEffects.Copy : DragDropEffects.None;
-             control.DragDrop += async (_, args) => {
 --- a/MainForm.Smoke.cs
 +++ b/MainForm.Smoke.cs
 @@ -20,6 +20,8 @@
@@ -39,7 +38,7 @@
 +        CheckBackendOptions(directory);
          Require(folderTree.Nodes.Count == 1 && fileList.Items.Count > 0, "Preview layout was not populated.");
          SaveScreenshot(Path.Combine(directory, "01-layout.png"));
-         Require(browserSplit.SplitterDistance == 192, "The folder pane must start at 192 pixels.");
+         int initialFolderPaneWidth = browserSplit.SplitterDistance;
 @@ -136,8 +137,9 @@
          Require(rejected && _archive is not null, "Corrupt archive input was not rejected while preserving the previous view.");
          string diagnostic = ArchiveOpenError(bad, new InvalidDataException("Invalid MNX archive format"), ArchiveFile.ReturnCode.NotValidMNXFile);
