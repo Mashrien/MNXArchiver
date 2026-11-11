@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using Gtk;
 using Mash.UI.MNXFile.GUI.Icons;
+using Mash.UI.MNXFile.GUI.Plugins;
 using Mash.IO.Format.MNX.Archive.Codecs;
 using Mash.IO.Format.MNX.Archive;
 using Mash.IO.Format.MNX;
@@ -86,6 +87,7 @@ public sealed partial class MainWindow : IDisposable {
         ConfigurePreviews();
         ConfigureDragAndDrop();
         ConfigureExtractionMenu();
+        ConfigurePluginMenu();
         // Set the initial 30/70 split after GTK measures the actual client width.
         // Both panes grow on resize; moving the divider remains under the user's control.
         _split.SizeAllocated += (_, args) => {
@@ -160,7 +162,7 @@ public sealed partial class MainWindow : IDisposable {
                 if ((bool)_files.GetValue(row, 7)) {
                     Navigate(id);
                     }
-                else if (_settings.Trigger == "Double-Click") {
+                else if (_pluginArchive is null && _settings.Trigger == "Double-Click") {
                     PreviewEntry(id);
                     }
                 }
@@ -188,16 +190,38 @@ public sealed partial class MainWindow : IDisposable {
         ClosePreviews();
         _archive?.Dispose();
         _archive = null;
+        _pluginArchive = null;
         LoadBrowser(ArchiveBrowser.Preview());
         }
 
-    /// <summary>Open an archive using only MNX's front index. Failures leave the previous view intact.</summary>
+    /// <summary>Open a supported archive. Failures leave the previous view intact.</summary>
     public bool OpenArchive(string fileName, string? password = null, bool showErrors = true) {
         if (_operationActive) {
             return false;
             }
 
         fileName = FileTransfer.LocalPath(fileName);
+        try {
+            PluginMatch? match = PluginCatalog.Installed.Match(fileName);
+            if (match is not null) {
+                PluginArchive archive = RunPluginOperation("Opening archive", token => PluginArchive.Open(match, fileName, token));
+                LoadPluginArchive(archive);
+                return true;
+                }
+            }
+        catch (OperationCanceledException) {
+            _status.Text = "Opening archive cancelled.";
+            return false;
+            }
+        catch (Exception error) when (showErrors) {
+            Message("Could not open plugin archive", fileName + "\n\n" + error.Message, MessageType.Error);
+            return false;
+            }
+
+        return OpenMnxArchive(fileName, password, showErrors);
+        }
+
+    private bool OpenMnxArchive(string fileName, string? password, bool showErrors) {
         ArchiveFile next = new ArchiveFile();
         try {
             next.Open(fileName, password);
@@ -205,13 +229,14 @@ public sealed partial class MainWindow : IDisposable {
             ClosePreviews();
             _archive?.Dispose();
             _archive = next;
+            _pluginArchive = null;
             LoadBrowser(browser);
             return true;
             }
         catch (CryptographicException) when (password is null && showErrors) {
             next.Dispose();
             string? entered = AskPassword();
-            return entered is not null && OpenArchive(fileName, entered);
+            return entered is not null && OpenMnxArchive(fileName, entered, showErrors);
             }
         catch (Exception ex) {
             ArchiveFile.ReturnCode errorCode = next.ErrorStatus;
@@ -233,7 +258,7 @@ public sealed partial class MainWindow : IDisposable {
         return description;
         }
 
-    private void LoadBrowser(ArchiveBrowser browser) {
+    private void LoadBrowser(ArchiveBrowser browser, Guid? folder = null) {
         // Clear selection while its IDs still belong to the previous browser.
         // GTK emits change signals during model clearing.
         _list.Selection.UnselectAll();
@@ -248,9 +273,12 @@ public sealed partial class MainWindow : IDisposable {
         _folderRows[browser.Root] = rootRow;
         PopulateFolders(rootRow);
         _syncingTree = false;
-        _window.Title = browser.Title + " — MNX Archive Manager" + (_archive is null ? " (layout preview)" : "");
-        Navigate(browser.Root);
+        _window.Title = browser.Title + " — MNX Archive Manager" + (IsLayoutPreview ? " (layout preview)" : "");
+        UpdateDragSources();
+        Navigate(folder ?? browser.Root);
         }
+
+    private bool IsLayoutPreview => _archive is null && _pluginArchive is null;
 
     private void PopulateFolders(TreeIter parent) {
         if (_browser is null || !Guid.TryParse((string)_folders.GetValue(parent, 2), out Guid id) || !_populated.Add(id)) {
@@ -279,21 +307,22 @@ public sealed partial class MainWindow : IDisposable {
         _current = folder;
         _files.Clear();
         _path.Text = _browser.PathOf(folder);
+        bool plugin = _pluginArchive is not null;
         foreach (ArchiveBrowser.Entry entry in _browser.Children(folder)) {
             string flags = entry.IsDirectory ? "[   ]" : $"[{(_browser.Compressed ? 'C' : ' ')}{(_browser.Encrypted ? 'E' : ' ')} ]";
             _files.AppendValues(
                 OwnedIcons.Get(entry.IsDirectory ? "folder" : "file", 16),
                 entry.Name,
                 entry.IsDirectory ? "" : ArchiveBrowser.HumanSize(entry.Bytes),
-                flags,
+                plugin ? "" : flags,
                 entry.IsDirectory ? "" : entry.Bytes.ToString("N0", CultureInfo.InvariantCulture),
-                entry.CreatedUtc.ToLocalTime().ToString("dd-MM-yyyy", CultureInfo.InvariantCulture),
+                plugin && entry.CreatedUtc == default ? "" : entry.CreatedUtc.ToLocalTime().ToString("dd-MM-yyyy", CultureInfo.InvariantCulture),
                 entry.Id.ToString(),
                 entry.IsDirectory,
                 entry.Bytes,
                 entry.CreatedUtc.Ticks,
                 ArchiveBrowser.FileType(entry),
-                entry.IsDirectory ? "" : ArchiveBrowser.HumanChunks(entry.Chunks),
+                entry.IsDirectory || plugin ? "" : ArchiveBrowser.HumanChunks(entry.Chunks),
                 entry.Chunks
                 );
             }
@@ -315,7 +344,7 @@ public sealed partial class MainWindow : IDisposable {
             }
 
         int count = _browser.Children(folder).Count;
-        _status.Text = $"{count:N0} items in {_path.Text}" + (_archive is null ? " · Layout preview" : "");
+        _status.Text = $"{count:N0} items in {_path.Text}" + (IsLayoutPreview ? " · Layout preview" : "");
         _summary.Text = "0 selected";
         UpdateActions();
         }
@@ -358,6 +387,16 @@ public sealed partial class MainWindow : IDisposable {
                 enabled = loaded && _list.Selection.CountSelectedRows() > 0;
                 }
 
+            if (_pluginArchive is not null) {
+                enabled = action switch {
+                    ArchiveAction.New or ArchiveAction.Open or ArchiveAction.Info => true,
+                    ArchiveAction.Add => _pluginArchive.Supports(PluginActions.Add),
+                    ArchiveAction.Extract => _pluginArchive.Supports(PluginActions.Extract),
+                    ArchiveAction.Delete => _pluginArchive.Supports(PluginActions.Delete) && _list.Selection.CountSelectedRows() > 0,
+                    _ => false,
+                    };
+                }
+
             string suffix = action.ToString().ToLowerInvariant();
             enabled = enabled && !_operationActive;
             Widget<ToolButton>("action_" + suffix).Sensitive = enabled;
@@ -365,6 +404,10 @@ public sealed partial class MainWindow : IDisposable {
             }
 
         Widget<MenuItem>("menu_close").Sensitive = loaded && !_operationActive;
+        Widget<MenuItem>("menu_resume").Sensitive = !_operationActive && _pluginArchive is null;
+        foreach (MenuItem create in _pluginCreateItems) {
+            create.Sensitive = !_operationActive;
+            }
         Widget<MenuItem>("menu_options").Sensitive = !_operationActive;
         Widget<Button>("navigate_up").Sensitive = loaded && _current != _browser!.Root;
         Widget<Button>("navigate_root").Sensitive = loaded;
@@ -378,6 +421,11 @@ public sealed partial class MainWindow : IDisposable {
 
         if (action == ArchiveAction.Open) {
             ChooseArchive();
+            return;
+            }
+
+        if (_pluginArchive is not null && action != ArchiveAction.New) {
+            DispatchPluginAction(action);
             return;
             }
 
@@ -410,7 +458,7 @@ public sealed partial class MainWindow : IDisposable {
 
     private void ChooseArchive() {
         FileChooserDialog chooser = new FileChooserDialog(
-            "Open MNX archive",
+            "Open archive",
             _window,
             FileChooserAction.Open,
             "Cancel",
@@ -419,17 +467,19 @@ public sealed partial class MainWindow : IDisposable {
             ResponseType.Accept
             );
         GtkWindowAppearance.Apply(chooser);
-        FileFilter filter = new FileFilter {
-            Name = "MNX archives (*.mnx)"
-            };
-        filter.AddPattern("*.mnx");
-        filter.AddPattern("*.MNX");
-        chooser.AddFilter(filter);
+        AddArchiveFilter(chooser);
+        IReadOnlyList<ArchivePlugin> plugins = PluginCatalog.Installed.Modules;
+        foreach (ArchivePlugin plugin in plugins) {
+            AddPluginFilter(chooser, plugin);
+            }
         FileFilter all = new FileFilter {
             Name = "All files"
             };
         all.AddPattern("*");
         chooser.AddFilter(all);
+        if (plugins.Count > 0) {
+            chooser.Filter = all;
+            }
         if ((ResponseType)chooser.Run() == ResponseType.Accept) {
             string path = chooser.Filename;
             chooser.Hide();
@@ -483,6 +533,7 @@ public sealed partial class MainWindow : IDisposable {
         ClosePreviews();
         _archive?.Dispose();
         _archive = null;
+        _pluginArchive = null;
         _browser = null;
         _syncingTree = true;
         _folders.Clear();
@@ -495,6 +546,7 @@ public sealed partial class MainWindow : IDisposable {
         _window.Title = "MNX Archive Manager";
         _status.Text = "Open an archive to begin.";
         _summary.Text = "0 selected";
+        UpdateDragSources();
         UpdateActions();
         }
 

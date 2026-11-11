@@ -1,5 +1,6 @@
 using Gtk;
 using Mash.UI.MNXFile.GUI.Icons;
+using Mash.UI.MNXFile.GUI.Plugins;
 using Mash.IO.Format.MNX.Archive.Codecs;
 using Mash.IO.Format.MNX.Archive.Resume;
 using Mash.IO.Format.MNX.Archive;
@@ -43,7 +44,6 @@ public sealed partial class MainWindow {
             }
 
             ) {
-            view.EnableModelDragSource(Gdk.ModifierType.Button1Mask, FileTargets, Gdk.DragAction.Copy);
             view.DragBegin += OnArchiveDragBegin;
             view.DragDataGet += OnArchiveDragDataGet;
             view.DragEnd += (_, _) => {
@@ -51,6 +51,18 @@ public sealed partial class MainWindow {
                 _pressedSelection = [];
                 _dragUris = null;
                 };
+            }
+        UpdateDragSources();
+        }
+
+    private void UpdateDragSources() {
+        foreach (TreeView view in new[] { _tree, _list }) {
+            if (_pluginArchive is null) {
+                view.EnableModelDragSource(Gdk.ModifierType.Button1Mask, FileTargets, Gdk.DragAction.Copy);
+                }
+            else {
+                view.UnsetRowsDragSource();
+                }
             }
         }
 
@@ -85,14 +97,16 @@ public sealed partial class MainWindow {
                 return;
                 }
 
-            if (FileTransfer.IsArchiveDrop(paths)) {
+            bool pluginCandidate = paths.Length == 1 && DiskFile.Exists(paths[0]) && PluginCatalog.Installed.LooksLikeArchive(paths[0]);
+            if (pluginCandidate || FileTransfer.IsArchiveDrop(paths)) {
                 Drag.Finish(args.Context, true, false, args.Time);
-                ResponseType answer = AskArchiveDrop(paths[0]);
+                ResponseType answer = (pluginCandidate && IsLayoutPreview) || _pluginArchive?.Supports(PluginActions.Add) == false
+                    ? ResponseType.Yes : AskArchiveDrop(paths[0]);
                 if (answer == ResponseType.Yes) {
                     OpenArchive(paths[0]);
                     }
                 else if (answer == ResponseType.No) {
-                    if (_archive is null) {
+                    if (IsLayoutPreview) {
                         CreateFromInputs(paths);
                         }
                     else {
@@ -102,8 +116,11 @@ public sealed partial class MainWindow {
                 return;
                 }
 
-            if (_archive is null) {
-                throw new InvalidOperationException("Open an archive before adding files. You can drop an MNX archive here to open it.");
+            if (IsLayoutPreview) {
+                throw new InvalidOperationException("Open an archive before adding files. You can drop a supported archive here to open it.");
+                }
+            if (_pluginArchive?.Supports(PluginActions.Add) == false) {
+                throw new NotSupportedException("This archive format version does not support adding files.");
                 }
             }
         catch (Exception ex) {
@@ -119,7 +136,7 @@ public sealed partial class MainWindow {
         }
 
     private ResponseType AskArchiveDrop(string path) {
-        using Dialog question = new Dialog("Dropped MNX archive", _window, DialogFlags.Modal,
+        using Dialog question = new Dialog("Dropped archive", _window, DialogFlags.Modal,
             "Open Archive", ResponseType.Yes, "Add to Archive", ResponseType.No
             );
         GtkWindowAppearance.Apply(question);
@@ -225,6 +242,11 @@ public sealed partial class MainWindow {
         }
 
     private void ImportFiles(string[] paths, Guid folder) {
+        if (_pluginArchive is { } plugin) {
+            ImportPluginFiles(plugin, paths, folder);
+            return;
+            }
+
         ArchiveFile? archive = _archive!;
         string archivePath = archive.ArchivePath!;
         using TransferCancellation cancellation = new TransferCancellation();

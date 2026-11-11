@@ -1,3 +1,4 @@
+using Mash.UI.MNXFile.GUI.Plugins;
 using System.Globalization;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -202,6 +203,7 @@ public sealed partial class MainForm : MashWin.MWindow {
         TrackAction("Close", closeArchiveMenuItem);
         exitMenuItem.Click += (_, _) => Close();
         aboutMenuItem.Click += (_, _) => MessageBox.Show(this, "MNX Archive Manager " + Assembly.GetExecutingAssembly().GetName().Version + "\nWindows Forms / C#\nArchive creation, extraction, recovery and in-memory previews.", "About MNX");
+        ConfigurePluginActions();
         ContextMenuStrip menu = entryContextMenu;
         extractContextMenuItem.Click += async (_, _) => await Guard(() => ChooseExtraction(_contextSelection));
         previewContextMenuItem.Click += async (_, _) => {
@@ -222,9 +224,13 @@ public sealed partial class MainForm : MashWin.MWindow {
                     _contextSelection = folderTree.SelectedNode?.Tag is Guid selected && selected != _browser?.Root ? new Guid[] { selected } : Array.Empty<Guid>();
                     }
                 }
-            args.Cancel = _busy || _archive is null || _contextSelection.Length == 0;
+            args.Cancel = _busy || (_archive is null && _pluginArchive is null) || _contextSelection.Length == 0;
             if (!args.Cancel) {
-                menu.Items[1].Enabled = _contextSelection.Length == 1 && CanPreview(_contextSelection[0]);
+                previewContextMenuItem.Enabled = _contextSelection.Length == 1 && CanPreview(_contextSelection[0]);
+                deleteContextMenuItem.Enabled = _archive is not null || _pluginArchive?.Supports(PluginActions.Delete) == true;
+                extractContextMenuItem.Enabled = _pluginArchive is null || _pluginArchive.Supports(PluginActions.Extract);
+                _replacePluginEntry.Visible = _pluginArchive is not null;
+                _replacePluginEntry.Enabled = CanReplacePluginEntry(_contextSelection);
                 }
             };
         fileList.ContextMenuStrip = menu;
@@ -290,6 +296,15 @@ public sealed partial class MainForm : MashWin.MWindow {
     private void UpdateActions() {
         foreach (KeyValuePair<string, List<ToolStripItem>> action in _actions) {
             bool enabled = !_busy && (action.Key is "New" or "Open" or "Options" or "Resume" || _archive is not null);
+            if (_pluginArchive is not null) {
+                enabled = !_busy && (action.Key switch {
+                    "New" or "Open" or "Options" or "Close" or "Properties" => true,
+                    "Add" => _pluginArchive.Supports(PluginActions.Add),
+                    "Extract" => _pluginArchive.Supports(PluginActions.Extract),
+                    "Delete" => _pluginArchive.Supports(PluginActions.Delete),
+                    _ => false,
+                    });
+                }
             if (action.Key == "Delete") {
                 enabled = enabled && SelectedIds().Length > 0;
                 }
@@ -310,6 +325,25 @@ public sealed partial class MainForm : MashWin.MWindow {
 
     internal async Task<bool> OpenArchive(string path, string? password = null, bool showErrors = true) {
         if (_busy) {
+            return false;
+            }
+        path = FileTransfer.LocalPath(path);
+        try {
+            PluginMatch? match = PluginCatalog.Installed.Match(path);
+            if (match is not null) {
+                PluginArchive result = await RunPluginOperation("Opening archive", path, match.Module.Format.Name,
+                    token => PluginArchive.Open(match, path, token));
+                CloseArchive();
+                SetPluginArchive(result);
+                return true;
+                }
+            }
+        catch (OperationCanceledException) when (showErrors) {
+            statusMessage.Text = "Opening cancelled.";
+            return false;
+            }
+        catch (Exception error) when (showErrors) {
+            MessageBox.Show(this, error.Message, "Could not open plugin archive", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return false;
             }
         ArchiveFile next = new ArchiveFile();
@@ -349,6 +383,7 @@ public sealed partial class MainForm : MashWin.MWindow {
         ResetPreviews();
         _archive?.Dispose();
         _archive = null;
+        _pluginArchive = null;
         _browser = null;
         _folderNodes.Clear();
         folderTree.Nodes.Clear();
@@ -438,8 +473,8 @@ public sealed partial class MainForm : MashWin.MWindow {
             item.SubItems.Add(entry.IsDirectory ? "" : ArchiveBrowser.HumanSize(entry.Bytes));
             item.SubItems.Add(entry.IsDirectory ? "" : (_browser.Compressed ? "C" : "") + (_browser.Encrypted ? "E" : ""));
             item.SubItems.Add(entry.IsDirectory ? "" : entry.Bytes.ToString("N0", CultureInfo.InvariantCulture));
-            item.SubItems.Add(entry.IsDirectory ? "" : ArchiveBrowser.HumanChunks(entry.Chunks));
-            item.SubItems.Add(entry.CreatedUtc.ToLocalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            item.SubItems.Add(entry.IsDirectory || _pluginArchive is not null ? "" : ArchiveBrowser.HumanChunks(entry.Chunks));
+            item.SubItems.Add(entry.CreatedUtc == DateTime.MinValue ? "" : entry.CreatedUtc.ToLocalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
             if (search.Length > 0) {
                 item.ToolTipText = _browser.PathOf(entry.Id);
                 }

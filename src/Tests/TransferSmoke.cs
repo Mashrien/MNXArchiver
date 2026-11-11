@@ -273,6 +273,26 @@ internal static class TransferSmoke {
             }
         }
 
+    internal static void DropFile(TreeView view, string path) {
+        Window peer = new Window("Disposable file-manager drag peer");
+        EventBox source = new EventBox();
+        source.Add(new Label("Drag file"));
+        peer.Add(source);
+        peer.SetDefaultSize(200, 120);
+        peer.Move(1500, 50);
+        TargetEntry[] targets = [new TargetEntry("text/uri-list", 0, 1)];
+        Drag.SourceSet(source, Gdk.ModifierType.Button1Mask, targets, Gdk.DragAction.Copy);
+        source.DragDataGet += (_, args) => args.SelectionData.SetUris([new Uri(path).AbsoluteUri]);
+        peer.ShowAll();
+        try {
+            Pump();
+            DragGesture(Center(source), Point(view, 220, 180));
+            }
+        finally {
+            peer.Destroy();
+            }
+        }
+
     private static void Pump() {
         for (int i = 0; i < 12; i++) {
             while (Application.EventsPending()) {

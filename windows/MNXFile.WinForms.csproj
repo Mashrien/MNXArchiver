@@ -8,6 +8,7 @@
     <AssemblyName>mnx-gui</AssemblyName>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- The out-of-process WinForms designer needs real cultures to edit numeric
          properties. Windows supplies NLS, so this does not add an ICU dependency. -->
     <InvariantGlobalization>false</InvariantGlobalization>
@@ -37,6 +38,7 @@
     <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="3.119.4" GeneratePathProperty="true" />
     <Content Include="$(PkgSkiaSharp_NativeAssets_Win32)/LICENSE.txt" Link="THIRD-PARTY/SkiaSharp-3.119.4-LICENSE.txt" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="$(PkgSkiaSharp_NativeAssets_Win32)/THIRD-PARTY-NOTICES.txt" Link="THIRD-PARTY/SkiaSharp-3.119.4-THIRD-PARTY-NOTICES.txt" CopyToPublishDirectory="PreserveNewest" />
+    <Compile Include="../src/Plugins/*.cs" Link="Shared/Plugins/%(Filename)%(Extension)" />
     <PackageReference Include="Mash.MNXFile.Client" Version="1.2.0-alpha.3" />
     <Compile Include="../src/ArchiveBrowser.cs" Link="Shared/ArchiveBrowser.cs" />
     <Compile Include="../src/FileTransfer.cs" Link="Shared/FileTransfer.cs" />

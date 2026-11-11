@@ -26,6 +26,12 @@ Optional saved-password support also needs `secret-tool` and an unlocked desktop
 Secret Service. Windows10 x64 and later need no GTK. Neither platform needs an
 installed .NET runtime. See [packaging instructions](packaging/README.md).
 
+## Optional archive formats
+
+MNXArchiver 2.0 supports native archive modules. The first module adds Ren’Py
+RPA 3.0 browsing, extraction, add, replace, delete, and creation to the same GUI.
+See the [module installation and ABI guide](docs/ARCHIVE-PLUGINS.md).
+
 ## Features
 
 - Create/open archives; add, extract, delete, search, verify and compact entries.

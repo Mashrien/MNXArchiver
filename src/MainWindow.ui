@@ -60,7 +60,7 @@
             <property name="visible">True</property><property name="name">archive_toolbar</property>
             <property name="toolbar-style">both</property><property name="icon-size">6</property>
             <child><object class="GtkToolButton" id="action_new"><property name="visible">True</property><property name="label">New</property><property name="tooltip-text">Create a new archive</property></object></child>
-            <child><object class="GtkToolButton" id="action_open"><property name="visible">True</property><property name="label">Open</property><property name="tooltip-text">Open an MNX archive (Ctrl+O)</property></object></child>
+            <child><object class="GtkToolButton" id="action_open"><property name="visible">True</property><property name="label">Open</property><property name="tooltip-text">Open an archive (Ctrl+O)</property></object></child>
             <child><object class="GtkSeparatorToolItem"><property name="visible">True</property></object></child>
             <child><object class="GtkToolButton" id="action_add"><property name="visible">True</property><property name="label">Add</property><property name="tooltip-text">Add files or folders to the current folder</property></object></child>
             <child><object class="GtkToolButton" id="action_extract"><property name="visible">True</property><property name="label">Extract</property><property name="tooltip-text">Extract selected entries, or the entire archive</property></object></child>

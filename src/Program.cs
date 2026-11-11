@@ -2,12 +2,16 @@ using Gtk;
 using Mash.IO.Format.MNX.Archive.Codecs;
 using Mash.IO.Format.MNX.Archive;
 using Mash.IO.Format.MNX;
+using Mash.UI.MNXFile.GUI.Plugins;
 
 namespace Mash.UI.MNXFile.GUI;
 
 internal static class Program {
     internal static bool IsArchiveOpenRequest(string[] paths) {
-        return paths.Length == 1 && (Path.GetExtension(paths[0]).Equals(".mnx", StringComparison.OrdinalIgnoreCase) || FileTransfer.IsArchive(paths[0]));
+        return paths.Length == 1 && !Directory.Exists(paths[0])
+            && (Path.GetExtension(paths[0]).Equals(".mnx", StringComparison.OrdinalIgnoreCase)
+                || PluginCatalog.Installed.LooksLikeArchive(paths[0])
+                || FileTransfer.IsArchive(paths[0]));
         }
 
     [STAThread]
@@ -64,8 +68,14 @@ internal static class Program {
             window.Show();
             if (smokeTest) {
                 string screenshots = args.Length > 1 ? args[1] : Path.GetTempPath();
-                window.RunSmokeTest(screenshots);
-                Console.WriteLine("PASS: GTK navigation, drag/drop, extraction progress and cancellation, archive creation and recovery");
+                string? pluginFixture = Environment.GetEnvironmentVariable("MNX_GUI_PLUGIN_SMOKE_FIXTURE");
+                if (!string.IsNullOrEmpty(pluginFixture)) {
+                    PluginSmoke.Run(window, pluginFixture);
+                    }
+                else {
+                    window.RunSmokeTest(screenshots);
+                    Console.WriteLine("PASS: GTK navigation, drag/drop, extraction progress and cancellation, archive creation and recovery");
+                    }
                 return 0;
                 }
 

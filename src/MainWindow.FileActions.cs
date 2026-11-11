@@ -1,5 +1,6 @@
 using Gtk;
 using Mash.UI.MNXFile.GUI.Icons;
+using Mash.UI.MNXFile.GUI.Plugins;
 using Mash.IO.Format.MNX.Archive.Codecs;
 using Mash.IO.Format.MNX.Archive.Resume;
 using Mash.IO.Format.MNX.Archive;
@@ -25,7 +26,8 @@ public sealed partial class MainWindow {
                 return;
                 }
 
-            if (paths.Length == 1 && FileTransfer.IsArchive(paths[0])) {
+            if (paths.Length == 1 && DiskFile.Exists(paths[0]) &&
+                (PluginCatalog.Installed.LooksLikeArchive(paths[0]) || FileTransfer.IsArchive(paths[0]))) {
                 OpenArchive(paths[0]);
                 return;
                 }
@@ -130,7 +132,7 @@ public sealed partial class MainWindow {
 
     [GLib.ConnectBefore]
     private void OnEntryMenu(object sender, ButtonPressEventArgs args) {
-        if (args.Event.Button != 3 || _operationActive || _archive is null || _browser is null) {
+        if (args.Event.Button != 3 || _operationActive || IsLayoutPreview || _browser is null) {
             return;
             }
 
@@ -164,21 +166,30 @@ public sealed partial class MainWindow {
                 }
             }
 
-        _extractEntry.Sensitive = _contextSelection.Length > 0;
+        _extractEntry.Sensitive = _contextSelection.Length > 0 && (_pluginArchive?.Supports(PluginActions.Extract) ?? true);
         _previewEntry.Sensitive = _contextSelection.Length == 1 && CanPreview(_contextSelection[0]);
-        _deleteEntry.Sensitive = _contextSelection.Length > 0;
+        _deleteEntry.Sensitive = _contextSelection.Length > 0
+            && (_archive is not null || _pluginArchive?.Supports(PluginActions.Delete) == true);
+        _replaceEntry.Visible = _pluginArchive?.Supports(PluginActions.Replace) ?? false;
+        _replaceEntry.Sensitive = CanReplacePluginFile(_contextSelection);
         _infoEntry.Sensitive = _contextSelection.Length > 0;
         _entryMenu.PopupAtPointer(args.Event);
         args.RetVal = true;
         }
 
-    private void ExtractEntries(Guid[] ids) {
-        if (_operationActive || _archive is null || _browser is null || ids.Length == 0) {
+    private void ExtractEntries(Guid[] ids, bool entireArchive = false) {
+        if (_operationActive || IsLayoutPreview || _browser is null || _pluginArchive?.Supports(PluginActions.Extract) == false) {
             return;
             }
 
-        ArchiveFile? archive = _archive;
-        bool singleFile = ids.Length == 1 && !_browser.Get(ids[0]).IsDirectory;
+        if (ids.Length == 0) {
+            if (entireArchive) {
+                _status.Text = "The archive has no entries to extract.";
+                }
+            return;
+            }
+
+        bool singleFile = !entireArchive && ids.Length == 1 && !_browser.Get(ids[0]).IsDirectory;
         FileChooserDialog chooser = new FileChooserDialog(
             singleFile ? "Extract file" : "Extract to folder",
             _window,
@@ -191,7 +202,7 @@ public sealed partial class MainWindow {
         GtkWindowAppearance.Apply(chooser);
         if (singleFile) {
             chooser.CurrentName = _browser.Get(ids[0]).Name;
-            chooser.DoOverwriteConfirmation = true;
+            chooser.DoOverwriteConfirmation = _pluginArchive is null;
             }
 
         string? destination = null;
@@ -206,7 +217,7 @@ public sealed partial class MainWindow {
             }
 
         try {
-            ExtractSelection(ids, destination, singleFile, replacementConfirmed: singleFile);
+            ExtractSelection(ids, destination, singleFile, replacementConfirmed: singleFile && _pluginArchive is null);
             }
         catch (Exception ex) {
             Message("Could not extract selection", ex.Message, MessageType.Error);

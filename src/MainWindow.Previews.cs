@@ -62,6 +62,10 @@ public sealed partial class MainWindow {
         }
 
     private void OnListPointerEvent(object sender, WidgetEventAfterArgs args) {
+        if (_pluginArchive is not null) {
+            return;
+            }
+
         if (args.Event is Gdk.EventButton button && button.Button == 1) {
             if (button.Type == Gdk.EventType.ButtonPress) {
                 _singleClickFile = FileAt(button.X, button.Y, button.Window, out _);

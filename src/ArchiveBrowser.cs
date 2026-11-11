@@ -33,6 +33,9 @@ internal sealed class ArchiveBrowser {
         archive.Compression != ArchiveCompression.None,
         archive.IsEncrypted
         );
+    internal static ArchiveBrowser FromEntries(Guid root, string title, IEnumerable<Entry> entries) =>
+        new ArchiveBrowser(root, title, entries, compressed: false, encrypted: false);
+
     public IReadOnlyList<Entry> Children(Guid id) => _children.GetValueOrDefault(id) ?? [];
     public Entry Get(Guid id) => _entries[id];
     public Guid Parent(Guid id) => id == Root ? Root : Get(id).Parent;

@@ -6,6 +6,7 @@
     <AssemblyName>mnx-gui</AssemblyName>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <InvariantGlobalization>true</InvariantGlobalization>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
@@ -21,6 +22,7 @@
     <ProjectReference Include="Backends/MNXFile.Backends.csproj" />
     <ProjectReference Include="$(MNXPortableRoot)/vendor/Majorsilence.Forms/src/Majorsilence.Forms.Gtk4/Majorsilence.Forms.Gtk4.csproj" />
     <ProjectReference Include="$(MNXPortableRoot)/vendor/Majorsilence.Forms/src/Majorsilence.Forms.Headless/Majorsilence.Forms.Headless.csproj" />
+    <Compile Include="../src/Plugins/*.cs" Link="Shared/Plugins/%(Filename)%(Extension)" />
     <PackageReference Include="Mash.MNXFile.Client" Version="1.2.0-alpha.3" />
     <!-- Keep raw XML; compiling .resx images creates Windows resource type descriptors. -->
     <EmbeddedResource Include="$(MNXPortableRoot)/gui/**/*.resx.raw" LogicalName="Mash.UI.MNXFile.GUI.%(Filename)" />

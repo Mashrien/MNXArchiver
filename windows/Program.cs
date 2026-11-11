@@ -41,7 +41,7 @@ internal static class Program {
                                 form.Close();
                                 }
                             }
-                        else if (inputs.Length == 1 && (Path.GetExtension(inputs[0]).Equals(".mnx", StringComparison.OrdinalIgnoreCase) || FileTransfer.IsArchive(FileTransfer.LocalPath(inputs[0])))) {
+                        else if (inputs.Length == 1 && MainForm.ShouldOpenArchive(inputs[0])) {
                             if (!await form.OpenArchive(inputs[0])) {
                                 result = 1;
                                 form.Close();

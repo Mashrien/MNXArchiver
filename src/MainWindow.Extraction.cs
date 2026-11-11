@@ -1,4 +1,5 @@
 using Mash.UI.MNXFile.GUI.Icons;
+using Mash.UI.MNXFile.GUI.Plugins;
 using Gtk;
 using Mash.IO.Format.MNX.Archive.Codecs;
 using Mash.IO.Format.MNX.Archive;
@@ -17,12 +18,11 @@ public sealed partial class MainWindow {
 
         try {
             string archivePath = FileTransfer.LocalPath(fileName);
-            if (!FileTransfer.IsArchive(archivePath)) {
-                throw new InvalidDataException("The selected file is not an MNX archive.");
-                }
-
             if (!OpenArchive(archivePath)) {
                 return;
+                }
+            if (_pluginArchive?.Supports(PluginActions.Extract) == false) {
+                throw new NotSupportedException("This archive format version does not support extraction.");
                 }
 
             string destination = Path.GetDirectoryName(archivePath)!;
@@ -68,19 +68,18 @@ public sealed partial class MainWindow {
         }
 
     private void ExtractSelection(Guid[] ids, string destination, bool singleFile = false, bool replacementConfirmed = false) {
+        if (_pluginArchive is { } plugin) {
+            ExtractPluginSelection(plugin, ids, destination, singleFile, replacementConfirmed);
+            return;
+            }
+
         ArchiveFile? archive = _archive!;
         string directory = singleFile ? Path.GetDirectoryName(destination)! : destination;
         ExtractionPlan? plan = ExtractionPlan.Create(archive, ids, directory, singleFile ? destination : null);
         string[] existing = plan.ExistingFiles();
         bool overwrite = replacementConfirmed;
         if (existing.Length > 0 && !overwrite) {
-            string explanation = $"{existing.Length:N0} file(s) already exist in the destination. Replace them?";
-            using MessageDialog question = OwnedIcons.Dialog(_window, DialogFlags.Modal, MessageType.Question, ButtonsType.YesNo, explanation);
-            question.Title = "Replace existing files?";
-            question.DefaultResponse = ResponseType.No;
-            bool replace = (ResponseType)question.Run() == ResponseType.Yes;
-            question.Hide();
-            if (!replace) {
+            if (!ConfirmExtractionOverwrite(existing.Length)) {
                 _status.Text = "Extraction cancelled. Existing files were kept.";
                 return;
                 }
@@ -90,6 +89,44 @@ public sealed partial class MainWindow {
 
         if (RunExtraction(plan, overwrite)) {
             _status.Text = $"Extracted {ids.Length:N0} item(s) to {destination}.";
+            }
+        }
+
+    private bool ConfirmExtractionOverwrite(int existing) {
+        return ConfirmOverwrite("Replace existing files?", $"{existing:N0} file(s) already exist in the destination. Replace them?");
+        }
+
+    private bool ConfirmOverwrite(string title, string explanation) {
+        using MessageDialog question = OwnedIcons.Dialog(_window, DialogFlags.Modal, MessageType.Question, ButtonsType.YesNo, explanation);
+        question.Title = title;
+        question.DefaultResponse = ResponseType.No;
+        bool replace = (ResponseType)question.Run() == ResponseType.Yes;
+        question.Hide();
+        return replace;
+        }
+
+    private void ExtractPluginSelection(PluginArchive archive, Guid[] ids, string destination, bool singleFile, bool replacementConfirmed) {
+        if (ids.Length == 0) {
+            _status.Text = "The archive has no entries to extract.";
+            return;
+            }
+
+        PluginExtraction plan = archive.PlanExtraction(ids, destination, singleFile);
+        string[] existing = plan.ExistingFiles();
+        if (existing.Length > 0 && !replacementConfirmed && !ConfirmExtractionOverwrite(existing.Length)) {
+            _status.Text = "Extraction cancelled. Existing files were kept.";
+            return;
+            }
+
+        try {
+            RunPluginOperation("Extracting files", token => {
+                plan.Extract(replacementConfirmed || existing.Length > 0, token);
+                return true;
+                });
+            _status.Text = $"Extracted {ids.Length:N0} item(s) to {destination}.";
+            }
+        catch (OperationCanceledException) {
+            _status.Text = "Extraction cancelled.";
             }
         }
 

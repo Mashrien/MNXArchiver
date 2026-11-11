@@ -104,7 +104,7 @@ public sealed partial class MainForm {
         }
 
     private async Task HandleDroppedFiles(string[] paths, Guid target) {
-        if (FileTransfer.IsArchiveDrop(paths)) {
+        if (paths.Length == 1 && System.IO.File.Exists(paths[0]) && ShouldOpenArchive(paths[0])) {
             using ArchiveDropForm question = new ArchiveDropForm(paths[0]);
             DialogResult answer = question.ShowDialog(this);
             if (answer == DialogResult.Yes) {
@@ -115,7 +115,7 @@ public sealed partial class MainForm {
                 return;
                 }
             }
-        if (_archive is null) {
+        if (_archive is null && _pluginArchive is null) {
             // Explicit Add must not run through OpenInputs' archive auto-detection.
             await CreateFromInputs(paths);
             }

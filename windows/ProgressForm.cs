@@ -9,6 +9,7 @@ namespace Mash.UI.MNXFile.GUI;
 public sealed partial class ProgressForm : MnxDialog {
     private readonly TransferTracker? _tracker;
     private readonly TransferCancellation? _cancellation;
+    private readonly CancellationTokenSource? _pluginCancellation;
     private readonly bool _extraction;
     private readonly bool _existingArchive;
     private readonly bool _encrypted;
@@ -22,18 +23,22 @@ public sealed partial class ProgressForm : MnxDialog {
         AllowClose = true;
         }
 
-    internal ProgressForm(string title, string archivePath, string codec, bool encrypted, TransferTracker? tracker, TransferCancellation? cancellation, bool extraction, bool existingArchive) : this() {
+    internal ProgressForm(string title, string archivePath, string codec, bool encrypted, TransferTracker? tracker, TransferCancellation? cancellation, bool extraction, bool existingArchive,
+        CancellationTokenSource? pluginCancellation = null, string? pluginFormat = null) : this() {
         _title = title;
         _tracker = tracker;
         _cancellation = cancellation;
+        _pluginCancellation = pluginCancellation;
         _extraction = extraction;
         _existingArchive = existingArchive;
         _encrypted = encrypted;
         Text = title;
         archivePathLabel.Text = archivePath;
-        archiveSettingsLabel.Text = "Compression: " + codec + "    -    Encrypted: " + (encrypted ? "Yes" : "No");
+        archiveSettingsLabel.Text = pluginFormat is null
+            ? "Compression: " + codec + "    -    Encrypted: " + (encrypted ? "Yes" : "No")
+            : "Format: " + pluginFormat;
         AllowClose = false;
-        cancelButton.Enabled = cancellation is not null;
+        cancelButton.Enabled = cancellation is not null || pluginCancellation is not null;
         cancelButton.Click += (_, _) => ChooseCancellation();
         FormClosing += (_, args) => {
             if (!AllowClose) {
@@ -44,6 +49,14 @@ public sealed partial class ProgressForm : MnxDialog {
         }
 
     internal void UpdateProgress(OperationProgressArgs? progress) {
+        if (_pluginCancellation is not null) {
+            currentFileLabel.Text = _pluginCancellation.IsCancellationRequested ? "Stopping…" : "Working…";
+            filePiecesLabel.Text = "";
+            archiveProgressLabel.Text = "";
+            SetFileProgress(0, 0, true);
+            totalProgressBar.UpdateValue(0, 0, true);
+            return;
+            }
         TransferSnapshot? snapshot = _tracker?.Snapshot;
         currentFileLabel.Text = snapshot?.File ?? progress?.FileName ?? "Working…";
         if (snapshot is not null && !snapshot.Scanning) {
@@ -71,6 +84,11 @@ public sealed partial class ProgressForm : MnxDialog {
         }
 
     private void ChooseCancellation() {
+        if (_pluginCancellation is not null && !AllowClose && cancelButton.Enabled) {
+            cancelButton.Enabled = false;
+            _pluginCancellation.Cancel();
+            return;
+            }
         if (_cancellation is null || !cancelButton.Enabled || AllowClose) {
             return;
             }

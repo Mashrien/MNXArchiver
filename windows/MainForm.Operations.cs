@@ -10,14 +10,14 @@ using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
 namespace Mash.UI.MNXFile.GUI;
 
 public sealed partial class MainForm {
-    private async Task<T> RunOperation<T>(string title, Func<T> operation, ArchiveFile? target = null, TransferTracker? tracker = null, TransferCancellation? cancellation = null, bool extraction = false, string? displayPath = null, bool showProgress = true, bool encrypted = false) {
+    private async Task<T> RunOperation<T>(string title, Func<T> operation, ArchiveFile? target = null, TransferTracker? tracker = null, TransferCancellation? cancellation = null, bool extraction = false, string? displayPath = null, bool showProgress = true, bool encrypted = false, CancellationTokenSource? pluginCancellation = null, string? pluginFormat = null) {
         if (_busy) {
             throw new InvalidOperationException("An archive operation is already running.");
             }
         _busy = true;
         CancelHover();
         UpdateActions();
-        ArchiveFile? archive = target ?? _archive;
+        ArchiveFile? archive = pluginCancellation is null ? target ?? _archive : null;
         CancellationToken previous = archive?.Options.CancellationToken ?? CancellationToken.None;
         OperationProgressArgs? progress = null;
         void Report(object? sender, OperationProgressArgs args) {
@@ -34,7 +34,7 @@ public sealed partial class MainForm {
         if (archive?.Compression == ArchiveCompression.Brotli) {
             codec += ", level " + archive.CompressionLevel;
             }
-        using ProgressForm dialog = new ProgressForm(title, displayPath ?? archive?.ArchivePath ?? "MNX archive", codec, archive?.IsEncrypted == true || encrypted, tracker, cancellation, extraction, target is null);
+        using ProgressForm dialog = new ProgressForm(title, displayPath ?? archive?.ArchivePath ?? "MNX archive", codec, archive?.IsEncrypted == true || encrypted, tracker, cancellation, extraction, target is null, pluginCancellation, pluginFormat);
         using System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer { Interval = 100 };
         timer.Tick += (_, _) => {
             OperationProgressArgs? current = Volatile.Read(ref progress);
@@ -74,7 +74,7 @@ public sealed partial class MainForm {
         }
 
     private async Task ChooseArchive() {
-        using OpenFileDialog chooser = new OpenFileDialog { Title = "Open MNX archive", Filter = "MNX archives (*.mnx)|*.mnx|All files (*.*)|*.*" };
+        using OpenFileDialog chooser = new OpenFileDialog { Title = "Open archive", Filter = PluginOpenFilter() };
         if (chooser.ShowDialog(this) == DialogResult.OK) {
             await OpenArchive(chooser.FileName);
             }
@@ -85,7 +85,7 @@ public sealed partial class MainForm {
         if (paths.Length == 0 || _busy) {
             return;
             }
-        if (paths.Length == 1 && (Path.GetExtension(paths[0]).Equals(".mnx", StringComparison.OrdinalIgnoreCase) || FileTransfer.IsArchive(paths[0]))) {
+        if (paths.Length == 1 && ShouldOpenArchive(paths[0])) {
             await OpenArchive(paths[0]);
             }
         else if (paths.Length == 1 && DiskFile.Exists(paths[0]) && (Path.GetExtension(paths[0]).Equals(".mnq", StringComparison.OrdinalIgnoreCase) || RemainingQueue.IsQueue(new FileInfo(paths[0])))) {
@@ -105,7 +105,7 @@ public sealed partial class MainForm {
         if (paths.Length == 0) {
             return;
             }
-        if (add && _archive is not null) {
+        if (add && (_archive is not null || _pluginArchive is not null)) {
             await ImportFiles(paths, _current);
             }
         else {
@@ -162,6 +162,10 @@ public sealed partial class MainForm {
         }
 
     private async Task ImportFiles(string[] paths, Guid parent) {
+        if (_pluginArchive is not null) {
+            await AddPluginFiles(paths, parent);
+            return;
+            }
         ArchiveFile archive = _archive!;
         string archivePath = archive.ArchivePath!;
         using TransferCancellation cancellation = new TransferCancellation();
@@ -204,14 +208,14 @@ public sealed partial class MainForm {
         }
 
     private async Task ChooseExtraction(Guid[] ids) {
-        if (_archive is null || ids.Length == 0) {
+        if ((_archive is null && _pluginArchive is null) || ids.Length == 0) {
             return;
             }
         bool singleFile = ids.Length == 1 && !_browser!.Get(ids[0]).IsDirectory;
         if (singleFile) {
-            using SaveFileDialog chooser = new SaveFileDialog { Title = "Extract file", FileName = _browser!.Get(ids[0]).Name, Filter = "All files (*.*)|*.*", OverwritePrompt = true };
+            using SaveFileDialog chooser = new SaveFileDialog { Title = "Extract file", FileName = _browser!.Get(ids[0]).Name, Filter = "All files (*.*)|*.*", OverwritePrompt = _pluginArchive is null };
             if (chooser.ShowDialog(this) == DialogResult.OK) {
-                await ExtractSelection(ids, chooser.FileName, true, true);
+                await ExtractSelection(ids, chooser.FileName, singleFile: true, overwrite: _pluginArchive is null);
                 }
             }
         else {
@@ -223,6 +227,10 @@ public sealed partial class MainForm {
         }
 
     private async Task ExtractSelection(Guid[] ids, string destination, bool singleFile = false, bool overwrite = false) {
+        if (_pluginArchive is not null) {
+            await ExtractPluginEntries(ids, destination, singleFile, overwrite);
+            return;
+            }
         ExtractionPlan plan = ExtractionPlan.Create(_archive!, ids, singleFile ? Path.GetDirectoryName(destination)! : destination, singleFile ? destination : null);
         string[] existing = plan.ExistingFiles();
         if (existing.Length > 0 && !overwrite) {
@@ -250,13 +258,12 @@ public sealed partial class MainForm {
         }
 
     private async Task DeleteEntries(Guid[] ids, bool confirmed = false) {
-        if (_archive is null || ids.Length == 0) {
+        if ((_archive is null && _pluginArchive?.Supports(Plugins.PluginActions.Delete) != true) || ids.Length == 0) {
             return;
             }
         if (!confirmed && MessageBox.Show(this, $"Delete {ids.Length:N0} selected archive entries and their descendants?\nThis cannot be undone. Source files on disk are unaffected.", "Delete archive entries", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) {
             return;
             }
-        ArchiveFile archive = _archive;
         Guid location = _current;
         foreach (Guid ancestor in _browser!.Ancestors(_current)) {
             if (ids.Contains(ancestor)) {
@@ -264,6 +271,11 @@ public sealed partial class MainForm {
                 break;
                 }
             }
+        if (_pluginArchive is not null) {
+            await DeletePluginEntries(ids, location);
+            return;
+            }
+        ArchiveFile archive = _archive!;
         try {
             await RunOperation("Deleting archive entries", () => {
                 foreach (Guid id in ids) {
@@ -365,6 +377,10 @@ public sealed partial class MainForm {
         }
 
     private void ShowProperties(Guid[] ids) {
+        if (_pluginArchive is not null && !_busy) {
+            ShowPluginProperties(ids);
+            return;
+            }
         if (_archive is null || _busy) {
             return;
             }

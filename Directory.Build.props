@@ -4,7 +4,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/Mashrien/MNXArchiver</PackageProjectUrl>
     <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
-    <MNXVersionPrefix>1.4.2</MNXVersionPrefix>
+    <MNXVersionPrefix>2.0.0</MNXVersionPrefix>
     <MNXCounterFile>$(MSBuildThisFileDirectory)BuildNumber.txt</MNXCounterFile>
     <MNXBuildNumberReserved Condition="'$(MNXBuildNumber)' != ''">true</MNXBuildNumberReserved>
     <MNXBuildNumber Condition="'$(MNXBuildNumber)' == ''">$([System.IO.File]::ReadAllText('$(MNXCounterFile)').Trim())</MNXBuildNumber>

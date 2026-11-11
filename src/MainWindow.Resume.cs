@@ -9,7 +9,7 @@ namespace Mash.UI.MNXFile.GUI;
 
 public sealed partial class MainWindow {
     private void ChooseResumeQueue() {
-        if (_operationActive) {
+        if (_operationActive || _pluginArchive is not null) {
             return;
             }
 

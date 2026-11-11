@@ -72,33 +72,18 @@ public sealed partial class MainWindow {
         archive.ProgressReport += OnProgress;
         try {
             Task<T>? task = Task.Run(action);
-            Stopwatch refresh = Stopwatch.StartNew();
-            while (!task.IsCompleted) {
-                for (int i = 0; i < 32 && Application.EventsPending(); i++) {
-                    Application.RunIteration(false);
+            T result = WaitForTransfer(task, () => {
+                OperationProgressArgs? current = Volatile.Read(ref _transferProgress);
+                dialog.Update(current);
+                if (current is not null) {
+                    progress.Fraction = current.BytesMax > 0 ? Math.Clamp((double)current.BytesComplete / current.BytesMax, 0, 1) : 0;
+                    progress.Text = $"{current.BytesComplete:N0} / {current.BytesMax:N0} bytes";
+                    _status.Text = description + ": " + current.FileName;
                     }
-
-                // Keep pumping input for cancellation, but render progress on a fixed cadence.
-                // The worker only publishes state and never waits for a widget update.
-                if (refresh.ElapsedMilliseconds >= 100) {
-                    OperationProgressArgs? current = Volatile.Read(ref _transferProgress);
-                    dialog.Update(current);
-                    if (current is not null) {
-                        progress.Fraction = current.BytesMax > 0 ? Math.Clamp((double)current.BytesComplete / current.BytesMax, 0, 1) : 0;
-                        progress.Text = $"{current.BytesComplete:N0} / {current.BytesMax:N0} bytes";
-                        _status.Text = description + ": " + current.FileName;
-                        }
-                    else {
-                        progress.Pulse();
-                        }
-
-                    refresh.Restart();
+                else {
+                    progress.Pulse();
                     }
-
-                Thread.Sleep(10);
-                }
-
-            T result = task.GetAwaiter().GetResult();
+                });
             dialog.Update(Volatile.Read(ref _transferProgress));
             return result;
             }
@@ -116,5 +101,25 @@ public sealed partial class MainWindow {
                 RequestQuit();
                 }
             }
+        }
+
+    private static T WaitForTransfer<T>(Task<T> task, System.Action updateProgress) {
+        Stopwatch refresh = Stopwatch.StartNew();
+        while (!task.IsCompleted) {
+            for (int i = 0; i < 32 && Application.EventsPending(); i++) {
+                Application.RunIteration(false);
+                }
+
+            // Keep pumping input for cancellation and redraw on a fixed cadence.
+            // Workers never wait for widget updates.
+            if (refresh.ElapsedMilliseconds >= 100) {
+                updateProgress();
+                refresh.Restart();
+                }
+
+            Thread.Sleep(10);
+            }
+
+        return task.GetAwaiter().GetResult();
         }
     }
