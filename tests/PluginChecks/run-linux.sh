@@ -8,7 +8,7 @@ trap 'rm -rf -- "$workspace"' EXIT
 cp -- "$module" "$workspace/ext.format.RPA.mnxp"
 extra_checks=()
 if [[ -n "${3:-}" ]]; then
-    cp -- "$3" "$workspace/ext.image.WEBP.mnxp"
+    cp -- "$3" "$workspace/ext.gui.image.webp.mnxp"
     extra_checks+=(--check-webp)
     fi
 printf 'Not an ELF library.\n' > "$workspace/bad-magic.mnxp"

@@ -1,12 +1,13 @@
 # Image preview providers
 
-Native extensions use the `ext.<aspect>.<FORMAT>.mnxp` filename convention. For example,
-`ext.format.RPA.mnxp` handles archive operations and `ext.image.WEBP.mnxp` decodes WebP previews.
+Archive extensions use `ext.format.<FORMAT>.mnxp`. GUI image providers use
+`ext.gui.image.<format>.mnxp`. For example,
+`ext.format.RPA.mnxp` handles archive operations and `ext.gui.image.webp.mnxp` decodes WebP previews.
 MNXArchiver uses the exports to identify the interface supported by a library.
 Each aspect can have its own interface.
 
-Place the platform build of `ext.image.WEBP.mnxp` in the
-[per-user plugins directory](ARCHIVE-PLUGINS.md) and restart MNXArchiver.
+Place the platform build of `ext.gui.image.webp.mnxp` in the
+[per-user plugins directory](ARCHIVE-PLUGINS.md) and restart MNXArchiver. When upgrading, replace the earlier WebP plugin file.
 **Help → About** lists loaded image providers. Enable static image previews in
 Options. The WebP provider reads static lossy and lossless images, including
 alpha, and uses the SkiaSharp native library shipped with MNXArchiver.
@@ -24,7 +25,7 @@ The UTF-8 JSON descriptor describes the provider and the host versions it accept
 {
   "id": "webp",
   "name": "WebP",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "minHostVersion": "2.0.0",
   "maxHostVersion": "2.1.999",
   "extensions": [".webp"]
@@ -61,7 +62,7 @@ still images.
 Build the reference provider with the .NET 10 SDK and the NativeAOT toolchain:
 
 ```sh
-dotnet publish plugins/Webp/ext.image.WEBP.csproj -c Release -r linux-x64 -o /tmp/mnx-webp
+dotnet publish plugins/Webp/ext.gui.image.webp.csproj -c Release -r linux-x64 -o /tmp/mnx-webp
 ```
 
 Use `win-x64` with the Windows NativeAOT toolchain or `linux-arm64` on an ARM64

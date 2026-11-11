@@ -13,6 +13,12 @@ internal static class ImageProviderChecks {
         CheckPixels(provider, encoded, 3, tolerance: 0);
         CheckPixels(provider, encoded, 2, tolerance: 1);
         ExpectInvalidImage(() => provider.Inspect(encoded[..^1]));
+        byte[] wrongRiff = (byte[])encoded.Clone();
+        wrongRiff[0] = (byte)'X';
+        ExpectInvalidImage(() => provider.Inspect(wrongRiff));
+        byte[] wrongWebp = (byte[])encoded.Clone();
+        wrongWebp[8] = (byte)'X';
+        ExpectInvalidImage(() => provider.Inspect(wrongWebp));
 
         byte[] animated = Convert.FromBase64String(
             "UklGRsAAAABXRUJQVlA4WAoAAAACAAAAAQAAAQAAQU5JTQYAAAD/////AABBTk1GSAAAAAAAAAAAAAEAAAEAAGQAAAJWUDggMAAAANABAJ0BKgIAAgACADQloAJ0ugH4AAOwAP7wxAv/ILlhdcjX/yA/5Af8gP/48gAAAEFOTUZEAAAAAAAAAAAAAQAAAQAAZAAAAFZQOCAsAAAAlAEAnQEqAgACAAAANCWgAnS6AAOYAP75k2//kB//kB//kB//ID/iF3sgMAA="
