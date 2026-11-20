@@ -70,6 +70,7 @@ public sealed partial class MainForm : MashWin.MWindow {
         rootButton.Click += (_, _) => NavigateRoot();
         upButton.Click += (_, _) => NavigateUp();
         _settings = settings ?? LoadSettings();
+        ApplyDrawingAppearance();
         ApplyWindowAppearance();
         _previews = new PreviewManager(this, _settings);
         using Stream? iconStream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Mash.GUI.MNXArchiver.archive.ico");
@@ -96,7 +97,8 @@ public sealed partial class MainForm : MashWin.MWindow {
                 if (_browser.Get(ids[0]).IsDirectory) {
                     Navigate(ids[0]);
                     }
-                else if (_settings.Trigger == "Double-Click") {
+                else if (_settings.Trigger == "Double-Click" || (_settings.Trigger == "Mouse-Over With Delay"
+                    && VideoProviderFor(_browser.Get(ids[0]).Name) is not null)) {
                     await PreviewEntry(ids[0], false);
                     }
                 }
@@ -146,10 +148,7 @@ public sealed partial class MainForm : MashWin.MWindow {
         UpdateActions();
         }
 
-    partial void ApplyPlatformAppearance();
-
     private void ApplyWindowAppearance() {
-        ApplyPlatformAppearance();
         double opacity = _settings.OpacityPercent / 100.0;
         MnxDialog.ConfiguredOpacity = opacity;
         Opacity = opacity;

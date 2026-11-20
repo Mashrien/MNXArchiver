@@ -155,24 +155,69 @@ try {
         "KDE desktop colors were not imported exactly.");
     MWinColors created = MWinColors.LoadOrCreate(paletteWork, () => imported);
     string paletteFile = Path.Combine(paletteWork, MWinColors.FileName);
-    Require(System.IO.File.ReadAllText(paletteFile).Contains("[MNX.Display.MWin]"), "The palette must use INI format.");
+    string generated = System.IO.File.ReadAllText(paletteFile);
+    Require(Path.GetFileName(paletteFile) == "gui.mwin.drawing.conf", "The drawing palette filename is incorrect.");
+    Require(generated.Contains("[mnx.display.mwin.window]") && generated.Contains("Color.wmBack=#202326") &&
+        generated.Contains("[mnx.display.mwin.buttons]") && generated.Contains("[mnx.display.mwin.text]") &&
+        generated.Contains("[mnx.display.mwin.files]") && generated.Contains("BackColor=#141618"),
+        "The drawing file must use the requested sections and desktop colors.");
     Require(created["TitleText"] == 0xFFF0F1F2, "Title colors did not survive creation.");
+    Require(created.GetString(MWinColors.FilesSection, "Font", "") == "Segoe UI" &&
+        created.GetFloat(MWinColors.FilesSection, "Size", 0, 6, 48) == 9f &&
+        created.GetString(MWinColors.FilesSection, "ColumnHeaders.Font", "") == "Segoe UI" &&
+        created.GetFloat(MWinColors.FilesSection, "ColumnHeaders.Size", 0, 6, 48) == 9f &&
+        created.GetColor(MWinColors.FilesSection, "ColumnHeaders.BackColor", 0) == created["ButtonBackground"] &&
+        created.GetColor(MWinColors.FilesSection, "ColumnHeaders.HighlightColor", 0) == created["Accent"] &&
+        created.GetColor(MWinColors.FilesSection, "ColumnHeaders.Color", 0) == created["ButtonText"],
+        "The drawing file must supply the default file and column header fonts and header palette.");
     Require(created["MenuBackground"] == imported["WindowBackground"], "Menu backgrounds must inherit the desktop palette.");
-    Require(System.IO.File.ReadAllText(paletteFile).Contains("[MNX.Display.MWin.Menus]"), "New palettes must include editable menu settings.");
-    System.IO.File.WriteAllText(paletteFile, "[MNX.Display.MWin]\nWindowBackground=#202326\nWindowText=#FCFCFC\nSelectionBackground=#334455\nSelectionText=#EEEEEE\n[MNX.Display.MWin.Menus]\nBackground=#112233\nText=240,241,242\nHoverText=invalid\n");
+    Require(generated.Contains("[mnx.display.mwin.menus]"), "New palettes must include editable menu settings.");
+    const string legacy = "[MNX.Display.MWin]\nWindowBackground=#202326\nWindowText=#FCFCFC\nSelectionBackground=#334455\nSelectionText=#EEEEEE\nTitleBackground=#334455\n[MNX.Display.MWin.Menus]\nBackground=#112233\nText=240,241,242\nHoverText=invalid\n";
+    string legacyFile = Path.Combine(paletteWork, "mnx.mwin-colors.conf");
+    System.IO.File.WriteAllText(legacyFile, legacy);
+    System.IO.File.Delete(paletteFile);
+    MWinColors.LoadOrCreate(paletteWork, () => throw new Exception("Migrating a palette must not read the desktop."));
+    Require(System.IO.File.ReadAllText(legacyFile) == legacy, "Migrating colors changed the original palette.");
+    Require(System.IO.File.ReadAllText(paletteFile).Contains("Color.wtBack=#334455"), "The legacy title background was not migrated.");
     MWinColors menuColors = MWinColors.Read(paletteFile);
     Require(menuColors["MenuBackground"] == 0xFF112233 && menuColors["MenuText"] == 0xFFF0F1F2,
         "Menu overrides did not load from their INI section.");
+    Require(menuColors.GetColor(MWinColors.TextSection, "Color", 0) == 0xFFF0F1F2,
+        "The legacy menu text override did not migrate to the drawing text color.");
     Require(menuColors["MenuBarBackground"] == 0xFF202326 && menuColors["MenuHoverText"] == 0xFFEEEEEE,
         "Missing or invalid menu colors must inherit the configured palette, not light defaults.");
-    System.IO.File.WriteAllText(paletteFile, "[MNX.Display.MWin]\nWindowBackground=#123456\nWindowText=250,249,248\nViewBackground=invalid\nAccent=999,0,0\n");
+    System.IO.File.WriteAllText(paletteFile, """
+        [mnx.display.mwin.window]
+        Color.wmBack=#123456
+        Color.wmfColor=250,249,248
+        Accent=999,0,0
+        controlBox.Exit.Colors.Highlight=#ABCDEF, #235689 ; center, edge
+        controlBox.Exit.Colors.Pressed=#873412
+        controlBox.MinMax.Colors.Pressed=#112233,invalid
+        dividerMargin=8
+        wmTitleHeight=-1
+
+        [mnx.display.mwin.files]
+        BackColor=invalid
+        Size=10.5
+        ColumnHeaders.Size=NaN
+        """);
     MWinColors edited = MWinColors.LoadOrCreate(paletteWork, () => throw new Exception("Existing palette must not read the desktop."));
     Require(edited["WindowBackground"] == 0xFF123456 && edited["WindowText"] == 0xFFFAF9F8,
         "Existing manual palette edits must take precedence.");
     Require(edited["ViewBackground"] == 0xFFFFFFFF && edited["Accent"] == 0xFF0078D7,
         "Invalid individual colors must retain readable fallbacks.");
-    Require(System.IO.File.ReadAllText(paletteFile).Contains("ViewBackground=invalid"), "Reading a palette must never rewrite user edits.");
-    Console.WriteLine("PASS: editable INI palette creation, KDE import, custom precedence and malformed color fallbacks.");
+    Require(edited.GetColorPair(MWinColors.WindowSection, "controlBox.Exit.Colors.Highlight", 0) == (0xFFABCDEFu, 0xFF235689u) &&
+        edited.GetColorPair(MWinColors.WindowSection, "controlBox.Exit.Colors.Pressed", 0) == (0xFF873412u, (uint?)null) &&
+        edited.GetColorPair(MWinColors.WindowSection, "controlBox.MinMax.Colors.Pressed", 1, 2) == (1u, 2u),
+        "Caption buttons must accept a solid color or a center/edge pair and reject malformed pairs.");
+    Require(edited.GetInt(MWinColors.WindowSection, "dividerMargin", 6, 0, 64) == 8 &&
+        edited.GetInt(MWinColors.WindowSection, "wmTitleHeight", 26, 18, 256) == 26 &&
+        edited.GetFloat(MWinColors.FilesSection, "Size", 9f, 6f, 48f) == 10.5f &&
+        edited.GetFloat(MWinColors.FilesSection, "ColumnHeaders.Size", 9f, 6f, 48f) == 9f,
+        "Drawing dimensions must respect numeric ranges and default when invalid.");
+    Require(System.IO.File.ReadAllText(paletteFile).Contains("BackColor=invalid"), "Reading a palette must never rewrite user edits.");
+    Console.WriteLine("PASS: drawing INI creation, KDE import, legacy migration, custom precedence and malformed color fallbacks.");
     }
 finally {
     Directory.Delete(paletteWork, true);

@@ -1,5 +1,4 @@
 using System.Drawing.Drawing2D;
-using System.Globalization;
 using Mash.GUI.MNXArchiver.Previews;
 using Mash.GUI.MNXArchiver.Settings;
 
@@ -36,12 +35,12 @@ public sealed partial class PreviewForm : MnxDialog {
     internal PreviewForm(Form owner, PreviewData data, string name, AppSettings settings, Point anchor, bool hover, ImagePreflight.ImageInfo? imageInfo, long memoryCost) : this() {
         _data = data;
         MemoryCost = memoryCost;
-        Independent = settings.IndependentWindows;
-        bool customized = settings.Flag("Presentation", "Customize");
-        IsTooltip = customized && settings.Get("Presentation", "Mode", "Window") == "Tooltip";
+        PreviewPresentation presentation = new PreviewPresentation(settings);
+        Independent = presentation.Independent;
+        IsTooltip = presentation.Tooltip;
         _hoverTooltip = IsTooltip && hover;
-        _dialog = !IsTooltip && (!customized || settings.Get("Presentation", "WindowType", "Dialog") == "Dialog");
-        _scaleMode = settings.Choice("Presentation", "ScaleMode", "Scale", "Scale", "Zoom", "Stretch", "Center");
+        _dialog = presentation.Dialog;
+        _scaleMode = presentation.ScaleMode;
         Text = "Preview — " + name;
         StartPosition = FormStartPosition.Manual;
         ShowInTaskbar = Independent;
@@ -58,7 +57,7 @@ public sealed partial class PreviewForm : MnxDialog {
             Settings.Frame.CornerRadius = 0;
             ShowIcon = false;
             }
-        if (!IsTooltip && customized && settings.Get("Presentation", "Origin", "Center") == "Right of Main Window") {
+        if (presentation.BesideParent) {
             // The GTK4 adapter uses a parent-relative surface for this owned dialog.
             Tag = _dialog ? "MNX.Preview.RightDialog" : "MNX.Preview.RightWindow";
             }
@@ -146,7 +145,7 @@ public sealed partial class PreviewForm : MnxDialog {
                     Close();
                     }
                 };
-            Place(owner, settings, anchor);
+            Place(owner, presentation, anchor);
             }
         catch {
             Dispose();
@@ -251,62 +250,17 @@ public sealed partial class PreviewForm : MnxDialog {
         args.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
         args.Graphics.DrawImage(_image, bounds);
         }
-    private void Place(Form owner, AppSettings settings, Point anchor) {
+    private void Place(Form owner, PreviewPresentation presentation, Point anchor) {
         Rectangle screen = Screen.FromPoint(anchor).WorkingArea;
         Rectangle parent = owner.Bounds;
-        int width = Math.Min(800, Math.Max(64, parent.Width * 2 / 3));
-        int height = Math.Min(640, Math.Max(64, parent.Height * 2 / 3));
-        if (settings.Flag("Presentation", "LimitSize")) {
-            if (settings.Get("Presentation", "SizeMode", "Ratio") == "Pixels") {
-                width = Resolution(settings, "MaxX", 800);
-                height = Resolution(settings, "MaxY", 640);
-                }
-            else {
-                double.TryParse(settings.Get("Presentation", "Percent", "66"), CultureInfo.InvariantCulture, out double percent);
-                if (!AppSettings.Percentages.Contains(percent)) {
-                    percent = 66;
-                    }
-                Rectangle relative = settings.Get("Presentation", "SizeRelativeTo", "Main Window") == "Current Screen" ? screen : parent;
-                width = (int)(relative.Width * percent / 100);
-                height = (int)(relative.Height * percent / 100);
-                }
-            }
-        width = Math.Clamp(width, 64, Math.Max(64, screen.Width - 32));
-        height = Math.Clamp(height, 64, Math.Max(64, screen.Height - 64));
-        if (IsTooltip) {
-            width = Math.Min(width, parent.Width);
-            height = Math.Min(height, parent.Height);
-            }
-        Size = new Size(width, height);
+        Size = presentation.SizeLimit(parent, screen);
         if (_dialog) {
             TrimImageContent();
             }
         else {
             TrimPlatformImage();
             }
-        bool customized = settings.Flag("Presentation", "Customize");
-        Rectangle origin = customized && settings.Get("Presentation", "RelativeTo", "Program Window") == "Current Screen" ? screen : parent;
-        int x = origin.X;
-        int y = origin.Y;
-        if (!customized || settings.Get("Presentation", "Origin", "Center") == "Center") {
-            x += (origin.Width - Width) / 2;
-            y += (origin.Height - Height) / 2;
-            }
-        if (IsTooltip) {
-            string location = settings.Get("Presentation", "Anchor", "File");
-            Point position = location == "Cursor" ? Cursor.Position : location == "Bottom-Right" ? new Point(parent.Right - Width - 16, parent.Bottom - Height - 16) : anchor;
-            x = position.X;
-            y = position.Y;
-            }
-        if (!IsTooltip && customized && settings.Get("Presentation", "Origin", "Center") == "Right of Main Window") {
-            Location = new Point(parent.Right, parent.Top);
-            return;
-            }
-        Rectangle limits = IsTooltip ? Rectangle.Intersect(screen, parent) : screen;
-        if (limits.Width <= 0 || limits.Height <= 0) {
-            limits = parent;
-            }
-        Location = new Point(Math.Clamp(x, limits.Left, Math.Max(limits.Left, limits.Right - Width)), Math.Clamp(y, limits.Top, Math.Max(limits.Top, limits.Bottom - Height)));
+        Location = presentation.Position(Size, parent, screen, anchor, Cursor.Position);
         }
     private void TrimImageContent() {
         if (_image is null || (_scaleMode != "Scale" && _scaleMode != "Center")) {
@@ -321,10 +275,6 @@ public sealed partial class PreviewForm : MnxDialog {
         PerformLayout();
         }
 
-    private static int Resolution(AppSettings settings, string key, int fallback) {
-        int value = settings.Number("Presentation", key, fallback, 64, 3072);
-        return AppSettings.Resolutions.Contains(value) ? value : fallback;
-        }
     protected override void Dispose(bool disposing) {
         if (disposing && !_released) {
             _released = true;

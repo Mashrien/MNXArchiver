@@ -15,6 +15,10 @@ namespace MashWin {
                 return;
                 }
             field = value;
+            OnPropertyChanged(propertyName);
+            }
+
+        protected void OnPropertyChanged(string propertyName) {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
             }
         }
@@ -106,6 +110,19 @@ namespace MashWin {
         private bool maximizeBox = true;
         private bool minimizeBox = true;
 
+        public CaptionButtonSettings() {
+            MinMax.PropertyChanged += (sender, arguments) => OnPropertyChanged(nameof(MinMax) + "." + arguments.PropertyName);
+            Exit.PropertyChanged += (sender, arguments) => OnPropertyChanged(nameof(Exit) + "." + arguments.PropertyName);
+            }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Content)]
+        [NotifyParentProperty(true)]
+        public CaptionButtonColors MinMax { get; } = new CaptionButtonColors(Color.LightBlue, Color.CornflowerBlue);
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Content)]
+        [NotifyParentProperty(true)]
+        public ExitCaptionButtonColors Exit { get; } = new ExitCaptionButtonColors();
+
         [Browsable(true)]
         [NotifyParentProperty(true)]
         [EditorBrowsable(EditorBrowsableState.Always)]
@@ -146,9 +163,108 @@ namespace MashWin {
             }
         }
 
+    public class CaptionButtonColors : CustomizationGroup {
+        private readonly Color defaultHighlight;
+        private readonly Color defaultPressed;
+        private Color background = Color.Empty;
+        private Color foreground = Color.LightSlateGray;
+        private Color highlight;
+        private Color pressed;
+
+        internal CaptionButtonColors(Color defaultHighlight, Color defaultPressed) {
+            this.defaultHighlight = defaultHighlight;
+            this.defaultPressed = defaultPressed;
+            highlight = defaultHighlight;
+            pressed = defaultPressed;
+            }
+
+        [DefaultValue(typeof(Color), "")]
+        [NotifyParentProperty(true)]
+        public Color Background {
+            get { return background; }
+            set { SetValue(ref background, value); }
+            }
+
+        [DefaultValue(typeof(Color), "LightSlateGray")]
+        [NotifyParentProperty(true)]
+        public Color Foreground {
+            get { return foreground; }
+            set { SetValue(ref foreground, value); }
+            }
+
+        [NotifyParentProperty(true)]
+        public Color Highlight {
+            get { return highlight; }
+            set { SetValue(ref highlight, value); }
+            }
+
+        [NotifyParentProperty(true)]
+        public Color Pressed {
+            get { return pressed; }
+            set { SetValue(ref pressed, value); }
+            }
+
+        public void ResetHighlight() {
+            Highlight = defaultHighlight;
+            }
+
+        public void ResetPressed() {
+            Pressed = defaultPressed;
+            }
+
+        private bool ShouldSerializeHighlight() {
+            return Highlight != defaultHighlight;
+            }
+
+        private bool ShouldSerializePressed() {
+            return Pressed != defaultPressed;
+            }
+
+        // Keep the original gradient for untouched minimize/maximize colors.
+        internal virtual Color HighlightOuterColor => highlight == defaultHighlight ? Color.Transparent : Color.Empty;
+        internal virtual Color PressedOuterColor => pressed == defaultPressed ? Color.Black : Color.Empty;
+        }
+
+    public sealed class ExitCaptionButtonColors : CaptionButtonColors {
+        private Color highlightOuter = Color.Transparent;
+        private Color pressedOuter = Color.Black;
+
+        internal ExitCaptionButtonColors() : base(Color.PaleVioletRed, Color.Red) {
+            }
+
+        [DefaultValue(typeof(Color), "Transparent")]
+        [Description("Outer color of the highlight gradient. Empty uses a solid fill.")]
+        [NotifyParentProperty(true)]
+        public Color HighlightOuter {
+            get { return highlightOuter; }
+            set { SetValue(ref highlightOuter, value); }
+            }
+
+        [DefaultValue(typeof(Color), "Black")]
+        [Description("Outer color of the pressed gradient. Empty uses a solid fill.")]
+        [NotifyParentProperty(true)]
+        public Color PressedOuter {
+            get { return pressedOuter; }
+            set { SetValue(ref pressedOuter, value); }
+            }
+
+        internal override Color HighlightOuterColor => highlightOuter;
+        internal override Color PressedOuterColor => pressedOuter;
+        }
+
     public sealed class TitleSettings : CustomizationGroup {
+        internal const int DefaultHeight = 26;
+
+        private int height = DefaultHeight;
         private Color textColor = Color.FromArgb(190, Color.DarkCyan);
         private Color backgroundColor = Color.Empty;
+
+        [DefaultValue(DefaultHeight)]
+        [NotifyParentProperty(true)]
+        public int Height {
+            get { return height; }
+            set { SetValue(ref height, Math.Max(18, Math.Min(256, value))); }
+            }
 
         // Empty preserves the form background; a desktop theme can supply chrome color.
         [NotifyParentProperty(true)]
@@ -225,8 +341,12 @@ namespace MashWin {
 
     public sealed class MenuSeparatorSettings : CustomizationGroup {
         private bool enabled = true;
-        private Color color = Color.Gray;
+        private Color color = Color.Empty;
         private int thickness = 1;
+
+        internal Color TitleDividerColor(Color frameColor) {
+            return color.IsEmpty ? frameColor : color;
+            }
 
         [Browsable(true)]
         [NotifyParentProperty(true)]
@@ -247,7 +367,7 @@ namespace MashWin {
         [DefaultValue(typeof(Color), "Gray")]
         public Color Color {
             get {
-                return color;
+                return color.IsEmpty ? Color.Gray : color;
                 }
             set {
                 SetValue(ref color, value);

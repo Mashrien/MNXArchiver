@@ -67,7 +67,11 @@ internal static class Program {
             if (smokeTest) {
                 string screenshots = args.Length > 1 ? args[1] : Path.GetTempPath();
                 string? pluginFixture = Environment.GetEnvironmentVariable("MNX_GUI_PLUGIN_SMOKE_FIXTURE");
-                if (!string.IsNullOrEmpty(pluginFixture)) {
+                string? videoFixture = Environment.GetEnvironmentVariable("MNX_GUI_VIDEO_SMOKE_FIXTURE");
+                if (!string.IsNullOrEmpty(videoFixture)) {
+                    VideoPreviewSmoke.Run(window, videoFixture);
+                    }
+                else if (!string.IsNullOrEmpty(pluginFixture)) {
                     PluginSmoke.Run(window, pluginFixture);
                     }
                 else {

@@ -106,6 +106,39 @@ class RpaModuleTests(unittest.TestCase):
         self.assertFalse(response["cancelled"])
         return response
 
+    def stream_open(self, entry_path, entry_size, *, callback=None, **fields):
+        self.assertTrue(hasattr(module, "mnx_plugin_open_entry_stream"),
+                        "The RPA module has no entry stream export.")
+        request = dict(NEGOTIATION, operation="openEntryStream", archivePath=str(self.archive),
+                       entryPath=entry_path, entrySize=entry_size)
+        request.update(fields)
+        payload = json.dumps(request).encode("utf-8")
+        handle = ctypes.c_void_p()
+        response = ctypes.c_void_p()
+        length = ctypes.c_int()
+        cancel = CANCEL(callback) if callback is not None else None
+        status = module.mnx_plugin_open_entry_stream(
+            payload, len(payload), ctypes.cast(cancel, ctypes.c_void_p), None,
+            ctypes.byref(handle), ctypes.byref(response), ctypes.byref(length))
+        if handle.value:
+            self.addCleanup(module.mnx_plugin_close_entry_stream, handle)
+        try:
+            self.assertEqual(status, 0)
+            self.assertTrue(response.value)
+            return json.loads(ctypes.string_at(response, length.value)), handle
+        finally:
+            if response.value:
+                module.mnx_plugin_release(response)
+
+    def stream_read(self, handle, position, capacity, *, callback=None):
+        destination = ctypes.create_string_buffer(capacity)
+        count = ctypes.c_int()
+        cancel = CANCEL(callback) if callback is not None else None
+        status = module.mnx_plugin_read_entry_at(
+            handle, position, destination if capacity else None, capacity,
+            ctypes.cast(cancel, ctypes.c_void_p), None, ctypes.byref(count))
+        return status, destination.raw[:count.value]
+
     def write_source(self, name, data):
         path = self.root / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -116,15 +149,15 @@ class RpaModuleTests(unittest.TestCase):
         self.assertEqual(module.mnx_plugin_abi_version(), 1)
         description = self.assert_success(self.send(b'{"operation":"describe"}'))["format"]
         self.assertEqual(description, {
-            "id": "renpy.rpa", "name": "Ren'Py RPA", "version": "1.0.2",
+            "id": "renpy.rpa", "name": "Ren'Py RPA", "version": "1.0.3",
             "minHostVersion": "2.0.0", "maxHostVersion": "2.1.999",
             "extensions": [".rpa"], "versions": [{
-                "version": "3.0", "magicHex": "5250412D332E3020", "actions": 63,
+                "version": "3.0", "magicHex": "5250412D332E3020", "actions": 127,
             }], "currentVersion": "3.0",
         })
         for host_version in ["2.0.0", "2.0.999", "2.1.0", "2.1.999"]:
             self.assert_success(self.request("negotiate", hostVersion=host_version))
-        for field, value in [("hostVersion", "2.2.0"), ("minPluginVersion", "1.0.3"),
+        for field, value in [("hostVersion", "2.2.0"), ("minPluginVersion", "1.0.4"),
                              ("maxPluginVersion", "0.9.999"), ("hostVersion", None)]:
             for operation in ["negotiate", "open", "create", "add", "replace", "delete", "extract"]:
                 response = self.request(operation, **{field: value})
@@ -177,6 +210,71 @@ class RpaModuleTests(unittest.TestCase):
             "entryPath": "images/café.txt", "destination": str(destination),
         }]))
         self.assertEqual(destination.read_bytes(), b"\x80\xffABC")
+
+    def test_entry_stream_reads_discontiguous_segments_at_logical_positions(self):
+        make_archive(self.archive, b"ABskipxyz", {
+            "video/sample.mp4": [segment(40, 3, b"!"), segment(34, 0, b""),
+                                 segment(34, 2, b"\x00\xff"), segment(36, 0, b".")],
+            "empty.mp4": [segment(34, 0)],
+        })
+        opened, handle = self.stream_open("video/sample.mp4", 9)
+        self.assert_success(opened)
+        self.assertTrue(handle.value)
+        self.assertEqual(self.stream_read(handle, 3, 4), (0, b"z\x00\xffA"))
+        self.assertEqual(self.stream_read(handle, 0, 12), (0, b"!xyz\x00\xffAB."))
+        self.assertEqual(self.stream_read(handle, 7, 8), (0, b"B."))
+        self.assertEqual(self.stream_read(handle, 9, 1), (0, b""))
+        self.assertEqual(self.stream_read(handle, 2**40, 1), (0, b""))
+        self.assertEqual(self.stream_read(handle, 0, 0), (0, b""))
+        opened, empty = self.stream_open("empty.mp4", 0)
+        self.assert_success(opened)
+        self.assertEqual(self.stream_read(empty, 0, 1), (0, b""))
+        self.assertEqual(self.stream_read(handle, -1, 4), (1, b""))
+
+    def test_entry_stream_reuses_the_opened_file_after_path_replacement(self):
+        make_archive(self.archive, b"old", {"video.mp4": [segment(34, 3)]})
+        opened, handle = self.stream_open("video.mp4", 3)
+        self.assert_success(opened)
+        replacement = self.root / "replacement.rpa"
+        make_archive(replacement, b"new", {"video.mp4": [segment(34, 3)]})
+        os.replace(replacement, self.archive)
+        self.assertEqual(self.stream_read(handle, 0, 3), (0, b"old"))
+        reopened, replacement_handle = self.stream_open("video.mp4", 3)
+        self.assert_success(reopened)
+        self.assertEqual(self.stream_read(replacement_handle, 0, 3), (0, b"new"))
+
+    @unittest.skipUnless(os.name == "posix", "uses a sparse archive")
+    def test_entry_stream_uses_64_bit_offsets_for_large_entries(self):
+        data_length = 2**32
+        index_offset = HEADER_LENGTH + data_length
+        index = {"large.mp4": [segment(HEADER_LENGTH, data_length, b"!")]}
+        with self.archive.open("wb") as archive:
+            archive.write(f"RPA-3.0 {index_offset:016x} {KEY:08x}\n".encode("ascii"))
+            archive.seek(index_offset - 3)
+            archive.write(b"XYZ")
+            archive.write(zlib.compress(pickle.dumps(index, 5)))
+        response, handle = self.stream_open("large.mp4", data_length + 1)
+        self.assert_success(response)
+        self.assertEqual(self.stream_read(handle, data_length - 2, 8), (0, b"XYZ"))
+
+    def test_entry_stream_open_and_reads_validate_the_request_and_cancel(self):
+        make_archive(self.archive, b"ABC", {"video.mp4": [segment(34, 3)]})
+        for fields, message in [
+            ({"entrySize": 4}, "size changed"), ({"entryPath": "../video.mp4"}, "relative"),
+            ({"entryPath": "missing.mp4"}, "no longer exists"), ({"hostVersion": "2.2.0"}, "range"),
+            ({"minPluginVersion": "1.0.4"}, "range"), ({"operation": "open"}, "stream"),
+        ]:
+            with self.subTest(fields=fields):
+                response, handle = self.stream_open("video.mp4", 3, **fields)
+                self.assertIn(message, response["error"])
+                self.assertFalse(handle.value)
+        response, handle = self.stream_open("video.mp4", 3, callback=lambda _: 1)
+        self.assertTrue(response["cancelled"])
+        self.assertFalse(handle.value)
+        opened, handle = self.stream_open("video.mp4", 3)
+        self.assert_success(opened)
+        self.assertEqual(self.stream_read(handle, 0, 3, callback=lambda _: 1), (2, b""))
+        self.assertEqual(self.stream_read(handle, 0, 3), (0, b"ABC"))
 
     def test_create_add_and_replace_cross_read_with_python(self):
         first = self.write_source("first.txt", b"First")
@@ -458,6 +556,19 @@ if __name__ == "__main__":
         ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(ctypes.c_int),
     ]
     module.mnx_plugin_read_entry.restype = ctypes.c_int
+    if hasattr(module, "mnx_plugin_open_entry_stream"):
+        module.mnx_plugin_open_entry_stream.argtypes = [
+            ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(ctypes.c_int),
+        ]
+        module.mnx_plugin_open_entry_stream.restype = ctypes.c_int
+        module.mnx_plugin_read_entry_at.argtypes = [
+            ctypes.c_void_p, ctypes.c_int64, ctypes.c_void_p, ctypes.c_int,
+            ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_int),
+        ]
+        module.mnx_plugin_read_entry_at.restype = ctypes.c_int
+        module.mnx_plugin_close_entry_stream.argtypes = [ctypes.c_void_p]
+        module.mnx_plugin_close_entry_stream.restype = None
     module.mnx_plugin_release.argtypes = [ctypes.c_void_p]
     module.mnx_plugin_release.restype = None
     unittest.main()

@@ -53,10 +53,10 @@ public sealed partial class MainForm {
         entryContextMenu.Items.Add(_replacePluginEntry);
         }
 
-    private async Task<T> RunPluginOperation<T>(string title, string path, string formatName, Func<CancellationToken, T> operation) {
+    private async Task<T> RunPluginOperation<T>(string title, string path, string formatName, Func<CancellationToken, T> operation, bool changesArchive = false) {
         using CancellationTokenSource cancellation = new();
         return await RunOperation(title, () => operation(cancellation.Token), displayPath: path,
-            pluginCancellation: cancellation, pluginFormat: formatName);
+            pluginCancellation: cancellation, pluginFormat: formatName, changesArchive: changesArchive);
         }
 
     private void SetPluginArchive(OpenedModuleArchive archive, Guid? location = null) {
@@ -94,7 +94,7 @@ public sealed partial class MainForm {
 
     private async Task CreatePluginArchive(NativeArchiveModule module, string path, string[] sources, bool overwrite) {
         OpenedModuleArchive result = await RunPluginOperation("Creating archive", path, module.Format.Name,
-            token => OpenedModuleArchive.Create(module, path, sources, overwrite, token));
+            token => OpenedModuleArchive.Create(module, path, sources, overwrite, token), changesArchive: true);
         CloseArchive();
         SetPluginArchive(result);
         statusMessage.Text = "Created " + module.Format.Name + " archive.";
@@ -104,7 +104,7 @@ public sealed partial class MainForm {
         OpenedModuleArchive archive = _pluginArchive!;
         string target = archive.Browser.PathOf(folder);
         OpenedModuleArchive result = await RunPluginOperation("Adding files", archive.Path, archive.Format.Name,
-            token => archive.Add(sources, target, token));
+            token => archive.Add(sources, target, token), changesArchive: true);
         SetPluginArchive(result, folder);
         statusMessage.Text = "Files added.";
         }
@@ -136,7 +136,7 @@ public sealed partial class MainForm {
         OpenedModuleArchive archive = _pluginArchive!;
         Guid folder = _current;
         OpenedModuleArchive result = await RunPluginOperation("Replacing file", archive.Path, archive.Format.Name,
-            token => archive.Replace(source, id, token));
+            token => archive.Replace(source, id, token), changesArchive: true);
         SetPluginArchive(result, folder);
         statusMessage.Text = "Archived file replaced.";
         }
@@ -162,7 +162,7 @@ public sealed partial class MainForm {
     private async Task DeletePluginEntries(Guid[] ids, Guid location) {
         OpenedModuleArchive archive = _pluginArchive!;
         OpenedModuleArchive result = await RunPluginOperation("Deleting entries", archive.Path, archive.Format.Name,
-            token => archive.Delete(ids, token));
+            token => archive.Delete(ids, token), changesArchive: true);
         SetPluginArchive(result, location);
         statusMessage.Text = "Entries deleted.";
         }

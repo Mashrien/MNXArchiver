@@ -8,6 +8,9 @@ namespace Mash.GUI.MNXArchiver.Plugins;
 internal sealed unsafe class NativeArchiveModule {
     private readonly delegate* unmanaged[Cdecl]<byte*, int, nint, nint, byte**, int*, int> _request;
     private readonly delegate* unmanaged[Cdecl]<byte*, int, nint, nint, byte*, int, byte**, int*, int> _readEntry;
+    private readonly delegate* unmanaged[Cdecl]<byte*, int, nint, nint, nint*, byte**, int*, int> _openEntryStream;
+    private readonly delegate* unmanaged[Cdecl]<nint, long, byte*, int, nint, nint, int*, int> _readEntryAt;
+    private readonly delegate* unmanaged[Cdecl]<nint, void> _closeEntryStream;
     private readonly delegate* unmanaged[Cdecl]<byte*, void> _release;
     private readonly (PluginFormatVersion Version, byte[] Magic)[] _signatures;
     internal string LibraryName { get; }
@@ -15,18 +18,25 @@ internal sealed unsafe class NativeArchiveModule {
     internal PluginFormatVersion Current { get; }
     internal int SignatureLength { get; }
 
-    internal NativeArchiveModule(string path, nint library) {
+    internal NativeArchiveModule(string path, PluginLibrary library) {
         LibraryName = Path.GetFileName(path);
-        delegate* unmanaged[Cdecl]<uint> abi = (delegate* unmanaged[Cdecl]<uint>)NativeLibrary.GetExport(library, "mnx_plugin_abi_version");
+        delegate* unmanaged[Cdecl]<uint> abi = (delegate* unmanaged[Cdecl]<uint>)library.GetExport("mnx_plugin_abi_version");
         uint version = abi();
         if (version != PluginProtocol.AbiVersion) {
             throw new NotSupportedException($"Plugin ABI {version} is unsupported (expected {PluginProtocol.AbiVersion}).");
             }
 
-        _request = (delegate* unmanaged[Cdecl]<byte*, int, nint, nint, byte**, int*, int>)NativeLibrary.GetExport(library, "mnx_plugin_request");
-        _release = (delegate* unmanaged[Cdecl]<byte*, void>)NativeLibrary.GetExport(library, "mnx_plugin_release");
-        if (NativeLibrary.TryGetExport(library, "mnx_plugin_read_entry", out nint readEntry)) {
+        _request = (delegate* unmanaged[Cdecl]<byte*, int, nint, nint, byte**, int*, int>)library.GetExport("mnx_plugin_request");
+        _release = (delegate* unmanaged[Cdecl]<byte*, void>)library.GetExport("mnx_plugin_release");
+        if (library.TryGetExport("mnx_plugin_read_entry", out nint readEntry)) {
             _readEntry = (delegate* unmanaged[Cdecl]<byte*, int, nint, nint, byte*, int, byte**, int*, int>)readEntry;
+            }
+        if (library.TryGetExport("mnx_plugin_open_entry_stream", out nint openEntryStream)
+            && library.TryGetExport("mnx_plugin_read_entry_at", out nint readEntryAt)
+            && library.TryGetExport("mnx_plugin_close_entry_stream", out nint closeEntryStream)) {
+            _openEntryStream = (delegate* unmanaged[Cdecl]<byte*, int, nint, nint, nint*, byte**, int*, int>)openEntryStream;
+            _readEntryAt = (delegate* unmanaged[Cdecl]<nint, long, byte*, int, nint, nint, int*, int>)readEntryAt;
+            _closeEntryStream = (delegate* unmanaged[Cdecl]<nint, void>)closeEntryStream;
             }
 
         Format = Invoke(new PluginRequest { Operation = "describe" }).Format
@@ -34,6 +44,9 @@ internal sealed unsafe class NativeArchiveModule {
         PluginDescriptorValidation.Validate(Format);
         if (_readEntry == null && Format.Versions.Any(entry => entry.Actions.HasFlag(PluginActions.ReadEntry))) {
             throw new InvalidDataException("The module advertises entry reads but does not export mnx_plugin_read_entry.");
+            }
+        if (_openEntryStream == null && Format.Versions.Any(entry => entry.Actions.HasFlag(PluginActions.StreamEntry))) {
+            throw new InvalidDataException("The module advertises entry streams but is missing an entry stream export.");
             }
         Current = Format.Versions.Single(entry => entry.Version == Format.CurrentVersion);
         _signatures = Format.Versions.Select(entry => (entry, Convert.FromHexString(entry.MagicHex))).ToArray();
@@ -75,7 +88,33 @@ internal sealed unsafe class NativeArchiveModule {
         return Invoke(input, cancellation, null);
         }
 
-    private PluginResponse Invoke(PluginRequest input, CancellationToken cancellation, byte[]? entryBuffer) {
+    internal Stream OpenEntryStream(PluginRequest request, CancellationToken cancellation) {
+        if (_openEntryStream == null) {
+            throw new NotSupportedException("This module does not support entry streams.");
+            }
+        long length = request.EntrySize ?? throw new ArgumentException("An entry size is required.", nameof(request));
+
+        nint handle = 0;
+        try {
+            Invoke(request, cancellation, null, &handle);
+            cancellation.ThrowIfCancellationRequested();
+            if (handle == 0) {
+                throw new IOException("The archive module did not return an entry stream handle.");
+                }
+
+            Stream stream = new NativeModuleEntryStream(handle, _readEntryAt, _closeEntryStream, length, cancellation);
+            handle = 0;
+            return stream;
+            }
+        finally {
+            if (handle != 0) {
+                _closeEntryStream(handle);
+                }
+            }
+        }
+
+    private PluginResponse Invoke(PluginRequest input, CancellationToken cancellation, byte[]? entryBuffer,
+        nint* entryStream = null) {
         cancellation.ThrowIfCancellationRequested();
         PluginRequest request = input with {
             HostVersion = PluginProtocol.HostVersion,
@@ -100,7 +139,10 @@ internal sealed unsafe class NativeArchiveModule {
             nint cancelState = state.IsAllocated ? GCHandle.ToIntPtr(state) : 0;
             int status;
             fixed (byte* bytes = json, destination = entryBuffer) {
-                if (entryBuffer is null) {
+                if (entryStream != null) {
+                    status = _openEntryStream(bytes, json.Length, cancel, cancelState, entryStream, &response, &length);
+                    }
+                else if (entryBuffer is null) {
                     status = _request(bytes, json.Length, cancel, cancelState, &response, &length);
                     }
                 else {
@@ -135,7 +177,7 @@ internal sealed unsafe class NativeArchiveModule {
         }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static int IsCancelled(nint state) {
+    internal static int IsCancelled(nint state) {
         try {
             return GCHandle.FromIntPtr(state).Target is CancellationToken token && token.IsCancellationRequested ? 1 : 0;
             }

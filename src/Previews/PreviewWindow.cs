@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Runtime.InteropServices;
 using Gtk;
 using Mash.GUI.MNXArchiver.Plugins;
@@ -20,7 +19,6 @@ internal sealed class PreviewWindow : IDisposable {
     internal bool IsAnimating => !_closed && (_frames is not null || _cachedImage?.FrameCount > 1 && _timer != 0);
     internal (int Width, int Height) ImageSize => (_image?.Width ?? 0, _image?.Height ?? 0);
     private readonly int _border = 8;
-    private readonly bool _relativeDialog;
     private readonly PreviewData _data;
     private readonly string _fileName;
     private readonly AppSettings _settings;
@@ -41,25 +39,13 @@ internal sealed class PreviewWindow : IDisposable {
         _fileName = title;
         _settings = settings;
         _availableMemory = availableMemory;
-        Independent = settings.IndependentWindows;
-        bool customized = settings.Flag("Presentation", "Customize");
-        IsPopup = customized && settings.Get("Presentation", "Mode", "Window") == "Tooltip";
-        bool dialog = !IsPopup && (!customized || settings.Get("Presentation", "WindowType", "Dialog") == "Dialog");
-        _relativeDialog = dialog && customized && settings.Get("Presentation", "Origin", "Center") == "Right of Main Window";
-        Window = new Gtk.Window(IsPopup || _relativeDialog ? WindowType.Popup : WindowType.Toplevel) {
-            Title = "Preview — " + title,
-            Decorated = !IsPopup && !dialog,
-            Resizable = !IsPopup && !dialog,
-            SkipTaskbarHint = !Independent,
-            TypeHint = IsPopup ? Gdk.WindowTypeHint.Tooltip : dialog ? Gdk.WindowTypeHint.Dialog : Gdk.WindowTypeHint.Normal,
-            AcceptFocus = !IsPopup,
-            DestroyWithParent = !Independent
-            };
+        PreviewPresentation presentation = new PreviewPresentation(settings);
+        GtkPreviewPlacement placement = new GtkPreviewPlacement(parent, presentation);
+        Independent = presentation.Independent;
+        IsPopup = presentation.Tooltip;
+        bool dialog = presentation.Dialog;
+        Window = placement.CreateWindow(title);
         _border = dialog ? 0 : 8;
-        GtkWindowAppearance.Apply(Window);
-        if (!Independent) {
-            Window.TransientFor = parent;
-            }
         Window.DeleteEvent += (_, args) => {
             args.RetVal = true;
             Dispose();
@@ -93,14 +79,7 @@ internal sealed class PreviewWindow : IDisposable {
                 Window.Add(layout);
                 }
             if (dialog) {
-                Box titleBar = new Box(Orientation.Horizontal, 0);
-                titleBar.StyleContext.AddClass("titlebar");
-                Label titleText = new Label(Window.Title) { Xalign = 0, Ellipsize = Pango.EllipsizeMode.End, Hexpand = true, MarginStart = 8 };
-                Button closeTitle = new Button("×") { TooltipText = "Close preview", WidthRequest = 28, HeightRequest = 28 };
-                closeTitle.Clicked += (_, _) => Dispose();
-                titleBar.PackStart(titleText, true, true, 0);
-                titleBar.PackEnd(closeTitle, false, false, 0);
-                layout.PackStart(titleBar, false, false, 0);
+                layout.PackStart(GtkPreviewPlacement.CreateTitleBar(Window.Title, Dispose), false, false, 0);
                 layout.Spacing = 0;
                 }
             if (data.Kind == PreviewKind.Text) {
@@ -130,7 +109,7 @@ internal sealed class PreviewWindow : IDisposable {
                 close.Clicked += (_, _) => Dispose();
                 layout.PackEnd(close, false, false, 0);
                 }
-            Place(parent, anchor, cursorX, cursorY);
+            Place(placement, anchor, cursorX, cursorY);
             }
         catch {
             Dispose();
@@ -359,35 +338,10 @@ internal sealed class PreviewWindow : IDisposable {
         args.RetVal = true;
         }
 
-    private void Place(Gtk.Window parent, Gdk.Rectangle anchor, int cursorX, int cursorY) {
-        Gdk.Rectangle monitor = parent.Display.GetMonitorAtWindow(parent.Window).Workarea;
-        // GTK's GetPosition includes the window-manager title bar on X11.
-        // All preview anchors use client coordinates, including the bottom-right.
-        parent.Window.GetOrigin(out int parentX, out int parentY);
-        parent.GetSize(out int parentWidth, out int parentHeight);
-        int width = Math.Min(800, Math.Max(64, parentWidth * 2 / 3));
-        int height = Math.Min(640, Math.Max(64, parentHeight * 2 / 3));
-        if (_settings.Flag("Presentation", "LimitSize")) {
-            if (_settings.Get("Presentation", "SizeMode", "Ratio") == "Pixels") {
-                width = ValidResolution("MaxX", 800);
-                height = ValidResolution("MaxY", 640);
-                }
-            else {
-                double.TryParse(_settings.Get("Presentation", "Percent", "66"), CultureInfo.InvariantCulture, out double percent);
-                if (!AppSettings.Percentages.Contains(percent)) {
-                    percent = 66;
-                    }
-                bool useScreen = _settings.Get("Presentation", "SizeRelativeTo", "Main Window") == "Current Screen";
-                width = (int)((useScreen ? monitor.Width : parentWidth) * percent / 100);
-                height = (int)((useScreen ? monitor.Height : parentHeight) * percent / 100);
-                }
-            }
-        width = Math.Clamp(width, 64, Math.Max(64, monitor.Width - 32));
-        height = Math.Clamp(height, 64, Math.Max(64, monitor.Height - 64));
-        if (IsPopup) {
-            width = Math.Min(width, parentWidth);
-            height = Math.Min(height, parentHeight);
-            }
+    private void Place(GtkPreviewPlacement placement, Gdk.Rectangle anchor, int cursorX, int cursorY) {
+        System.Drawing.Size size = placement.SizeLimit;
+        int width = size.Width;
+        int height = size.Height;
         if (_image is not null && _canvas is not null) {
             string scaleMode = _settings.Choice("Presentation", "ScaleMode", "Scale", "Scale", "Zoom", "Stretch", "Center");
             if (scaleMode == "Scale" || scaleMode == "Center") {
@@ -412,72 +366,11 @@ internal sealed class PreviewWindow : IDisposable {
                 height = canvasHeight + decoration.Height;
                 }
             }
-        Window.SetDefaultSize(width, height);
-        bool relativeScreen = _settings.Flag("Presentation", "Customize") && _settings.Get("Presentation", "RelativeTo", "Program Window") == "Current Screen";
-        int x = relativeScreen ? monitor.X : parentX;
-        int y = relativeScreen ? monitor.Y : parentY;
-        bool centered = !_settings.Flag("Presentation", "Customize") || _settings.Get("Presentation", "Origin", "Center") == "Center";
-        if (centered) {
-            x += ((relativeScreen ? monitor.Width : parentWidth) - width) / 2;
-            y += ((relativeScreen ? monitor.Height : parentHeight) - height) / 2;
-            }
-        if (IsPopup) {
-            string location = _settings.Get("Presentation", "Anchor", "File");
-            x = location == "Cursor" ? cursorX : location == "Bottom-Right" ? parentX + parentWidth - width - 16 : anchor.X;
-            y = location == "Cursor" ? cursorY : location == "Bottom-Right" ? parentY + parentHeight - height - 16 : anchor.Y;
-            }
-        bool rightOfMain = !IsPopup && _settings.Flag("Presentation", "Customize") && _settings.Get("Presentation", "Origin", "Center") == "Right of Main Window";
-        if (rightOfMain) {
-            x = parentX + parentWidth;
-            y = parentY;
-            }
-        if (IsPopup || _relativeDialog) {
-            if (IsPopup) {
-                x = Math.Clamp(x, parentX, Math.Max(parentX, parentX + parentWidth - width));
-                y = Math.Clamp(y, parentY, Math.Max(parentY, parentY + parentHeight - height));
-                }
-            Window.Realize();
-            if (UsesWayland) {
-                // Wayland positions popups relative to their parent surface.
-                // Global monitor offsets can push them offscreen; the compositor
-                // slides the parent-relative anchor back into view when necessary.
-                int localX = x - parentX;
-                int localY = y - parentY;
-                if (IsPopup && _settings.Get("Presentation", "Anchor", "File") == "Bottom-Right") {
-                    // GTK can include invisible shadows and a client-side title
-                    // bar in the native surface. Anchor to the actual content box.
-                    Gdk.Rectangle clientArea = parent.Child.Allocation;
-                    localX = clientArea.X + clientArea.Width - width - 16;
-                    localY = clientArea.Y + clientArea.Height - height - 16;
-                    }
-                Gdk.Rectangle localAnchor = new Gdk.Rectangle(localX, localY, 1, 1);
-                Window.Window.TransientFor = parent.Window;
-                const int slideBothAxes = (1 << 2) | (1 << 3);
-                gdk_window_move_to_rect(Window.Window.Handle, ref localAnchor,
-                    Gdk.Gravity.NorthWest, Gdk.Gravity.NorthWest, slideBothAxes, 0, 0
-                    );
-                return;
-                }
-            }
-        if (rightOfMain) {
-            Window.Move(x, y);
-            return;
-            }
-        Window.Move(Math.Clamp(x, monitor.X, Math.Max(monitor.X, monitor.X + monitor.Width - width)), Math.Clamp(y, monitor.Y, Math.Max(monitor.Y, monitor.Y + monitor.Height - height)));
+        placement.Place(Window, new System.Drawing.Size(width, height), anchor, cursorX, cursorY);
         }
-    // GtkSharp 3.24 does not bind move_to_rect. GDK's parent-relative popup
-    // API is required on Wayland, where arbitrary global window moves are absent.
+
     [DllImport("libgobject-2.0.so.0", CallingConvention = CallingConvention.Cdecl)]
     private static extern IntPtr g_type_name_from_instance(IntPtr instance);
-    [DllImport("libgdk-3.so.0", CallingConvention = CallingConvention.Cdecl)]
-    private static extern void gdk_window_move_to_rect(IntPtr window, ref Gdk.Rectangle anchor,
-        Gdk.Gravity rectangleAnchor, Gdk.Gravity windowAnchor, int hints, int offsetX, int offsetY
-        );
-
-    private int ValidResolution(string key, int fallback) {
-        int number = _settings.Number("Presentation", key, fallback, 64, 3072);
-        return AppSettings.Resolutions.Contains(number) ? number : fallback;
-        }
     internal void Show() {
         if (IsPopup && _settings.Trigger == "Mouse-Over With Delay") {
             Window.Realize();

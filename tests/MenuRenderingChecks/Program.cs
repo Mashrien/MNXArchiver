@@ -3,9 +3,11 @@ using System.Reflection;
 using Majorsilence.Forms;
 using Majorsilence.Forms.Drawing;
 using MashWin;
+using MashWin.Settings;
 
 Majorsilence.Forms.Headless.HeadlessRenderer.Use();
 Application.SetDefaultFont(new Font("Noto Sans", 9));
+CheckUserColors();
 string evidence = args.Length == 1 ? args[0] : Path.Combine(Path.GetTempPath(), "mnx-menu-checks");
 Directory.CreateDirectory(evidence);
 using MWindow window = new MWindow();
@@ -137,4 +139,58 @@ void Require(bool success, string message) {
     if (!success) {
         throw new InvalidOperationException(message);
         }
+    }
+
+void CheckUserColors() {
+    using MWindow window = new MWindow { Size = new Size(620, 380) };
+    using ToolStrip toolbar = new ToolStrip { Dock = DockStyle.Top };
+    toolbar.Items.Add(new ToolStripButton("Toolbar"));
+    using TableLayoutPanel navigation = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 2 };
+    navigation.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 12));
+    navigation.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+    using Label label = new Label { Text = "Navigation" };
+    navigation.Controls.Add(label, 0, 0);
+    using Button home = new Button { Text = "Home" };
+    navigation.Controls.Add(home, 1, 0);
+    window.Controls.Add(navigation);
+    window.Controls.Add(toolbar);
+
+    UserColors.Theme theme = new UserColors.Theme {
+        Window = new UserColors.WindowTheme { Border = Color.DarkOrange, DividerMargin = 11 },
+        Buttons = new UserColors.ToolbarTheme {
+            Background = Color.Teal,
+            Foreground = Color.White,
+            Border = Color.Blue,
+            BorderThickness = 3,
+            RoundedCorners = ExtendedButtonSettings.RoundedCorners.Top,
+            Font = new UserColors.FontSpec("Noto Sans", 13),
+            },
+        Text = new UserColors.TextTheme { Font = new UserColors.FontSpec("Noto Sans", 11), Foreground = Color.Maroon },
+        };
+    UserColors.Targets targets = new UserColors.Targets {
+        Toolbar = toolbar,
+        Navigation = navigation,
+        NavigationLabels = new Control[] { label },
+        StatusDivider = true,
+        };
+    UserColors.Apply(theme, window, targets);
+    int navigationHeight = navigation.Height;
+    UserColors.Apply(theme, window, targets);
+    window.Show();
+    Application.DoEvents();
+    Require(Math.Abs(toolbar.Font.SizeInPoints - 13) < 0.01 && Math.Abs(home.Font.SizeInPoints - 11) < 0.01
+        && home.ForeColor.ToArgb() == Color.Maroon.ToArgb(),
+        $"Unexpected toolbar font {toolbar.Font.SizeInPoints}, navigation font {home.Font.SizeInPoints}, or navigation color {home.ForeColor}.");
+    Require(navigation.Padding.Left == 11 && navigation.ColumnStyles[0].Width > 12 && navigation.Height == navigationHeight,
+        "The divider margin, label width, or idempotent layout failed.");
+    using Bitmap pixels = new Bitmap(toolbar.Width, toolbar.Height);
+    toolbar.DrawToBitmap(pixels, toolbar.ClientRectangle);
+    Require(pixels.GetPixel(toolbar.Width / 2, toolbar.Height - 1).ToArgb() == Color.DarkOrange.ToArgb(),
+        "The primary toolbar divider did not inherit the frame border color.");
+    int fillPixels = CountPixels(pixels, Color.Teal);
+    int borderPixels = CountPixels(pixels, Color.Blue);
+    Require(fillPixels > 10 && borderPixels > 10,
+        $"The primary toolbar had {fillPixels} fill pixels and {borderPixels} border pixels; button bounds {toolbar.Items[0].Bounds}.");
+    Require(window.StatusBar.ShowSeparator, "The custom status targets did not enable the status divider.");
+    Console.WriteLine("PASS: MWin UserColors applies distinct toolbar/nav styles and draws the frame-colored divider.");
     }

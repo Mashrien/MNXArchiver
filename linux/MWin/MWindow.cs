@@ -22,12 +22,13 @@ namespace MashWin {
         private GraphicsPath WindowGP;
         private bool HasBeenResized;
         private Size LastSize;
-        private Rectangle SrcRect, DestRect, _WindowRect, _StatusTextRect, _TitleTextRect;
+        private Rectangle SrcRect, DestRect, _WindowRect, _TitleTextRect;
 
         private MWindowSettings settings = new MWindowSettings();
 
         private Pen AppPenBorder = Pens.DarkCyan;
         private Pen AppPenSeparator = Pens.DarkCyan;
+        private Pen AppPenTitleDivider = Pens.DarkCyan;
         public Pen BorderPen {
             get {
                 return AppPenBorder;
@@ -58,9 +59,8 @@ namespace MashWin {
             AppBrushBackground = new SolidBrush(this.BackColor);
             AppPenBorder = new Pen(this.Settings.Frame.BorderColor);
             AppPenSeparator = new Pen(this.Settings.MenuSeparator.Color);
+            AppPenTitleDivider = new Pen(this.Settings.Frame.BorderColor);
             AppPenSizeGrip = new Pen(this.Settings.Frame.BorderColor);
-
-            DestRect = new Rectangle(1 + this.Settings.Frame.BorderThickness, 1 + this.Settings.Frame.BorderThickness, 26 - this.Settings.Frame.BorderThickness, 26 - this.Settings.Frame.BorderThickness);
 
             List<Control> cs = new List<Control>();
             foreach (Control c in this.Controls) {
@@ -100,66 +100,30 @@ namespace MashWin {
 
                 // .NET port: assign caption controls to the fields used during resize/disposal.
                 rbExit = new RoundButton();
-                rbExit.Height = 20;
-                rbExit.Width = 30;
                 rbExit.Name = "rbExit";
                 rbExit.Text = "X";
                 // DrawContent now honors TextAlign; the legacy default was BottomRight.
                 rbExit.TextAlign = ContentAlignment.MiddleCenter;
                 rbExit.UseCompatibleTextRendering = false;
-                if (MinimizeBox || MaximizeBox) {
-                    rbExit.ExtendedSettings.RoundCorners = ExtendedButtonSettings.RoundedCorners.BottomRight;
-                    } else {
-                    rbExit.ExtendedSettings.RoundCorners = ExtendedButtonSettings.RoundedCorners.Bottom;
-                    }
-                rbExit.ExtendedSettings.MouseOverBackColor = Color.PaleVioletRed;
-                rbExit.ExtendedSettings.MouseDownBackColor = Color.Red;
-                rbExit.ExtendedSettings.MouseDownBackColorAlt = Color.Black;
-                rbExit.ForeColor = Color.LightSlateGray;
                 rbExit.ExtendedSettings.VistaStyleGradientBackground = true;
                 rbExit.Click += rbExit_Click;
                 this.Controls.Add(rbExit);
                 }
             if (Settings.CaptionButtons.MaximizeBox) {
                 rbMaximize = new RoundButton();
-                rbMaximize.Height = 20;
-                rbMaximize.Width = 30;
                 rbMaximize.Name = "rbMaximize";
                 rbMaximize.Text = "□";
                 rbMaximize.TextAlign = ContentAlignment.MiddleCenter;
-                // This font's square sits below its line box center. Balance the
-                // visible glyph, rather than the font's unused ascent/descent.
-                rbMaximize.TextDrawingOffset = new Point(0, -3);
-                rbMaximize.ForeColor = Color.LightSlateGray;
-                rbMaximize.Font = new Font(rbMaximize.Font.FontFamily, 14f);
-                rbMaximize.ExtendedSettings.MouseDownBackColor = Color.CornflowerBlue;
-                rbMaximize.ExtendedSettings.MouseDownBackColorAlt = Color.Black;
                 rbMaximize.ExtendedSettings.VistaStyleGradientBackground = true;
-                if (!Settings.CaptionButtons.MinimizeBox) {
-                    rbMaximize.ExtendedSettings.RoundCorners = ExtendedButtonSettings.RoundedCorners.BottomLeft;
-                    } else {
-                    rbMaximize.ExtendedSettings.RoundCorners = ExtendedButtonSettings.RoundedCorners.None;
-                    }
                 rbMaximize.Click += rbMaximize_Click;
                 this.Controls.Add(rbMaximize);
                 }
             if (Settings.CaptionButtons.MinimizeBox) {
                 rbMinimize = new RoundButton();
-                rbMinimize.Height = 20;
-                rbMinimize.Width = 30;
                 rbMinimize.Name = "rbMinimize";
                 rbMinimize.ExtendedSettings.VistaStyleGradientBackground = true;
-                rbMinimize.ExtendedSettings.MouseDownBackColor = Color.CornflowerBlue;
-                rbMinimize.ExtendedSettings.MouseDownBackColorAlt = Color.Black;
                 rbMinimize.Text = "__";
                 rbMinimize.TextAlign = ContentAlignment.BottomCenter;
-                rbMinimize.ForeColor = Color.LightSlateGray;
-                //rbMinimize.ExtendedSettings.RoundCorners = ExtendedButtonSettings.RoundedCorners.BottomLeft;
-                if (Settings.CaptionButtons.ExitBox || MaximizeBox) {
-                    rbMinimize.ExtendedSettings.RoundCorners = ExtendedButtonSettings.RoundedCorners.BottomLeft;
-                    } else {
-                    rbMinimize.ExtendedSettings.RoundCorners = ExtendedButtonSettings.RoundedCorners.Bottom;
-                    }
                 rbMinimize.Click += rbMinimize_Click;
                 this.Controls.Add(rbMinimize);
                 }
@@ -168,39 +132,79 @@ namespace MashWin {
             InitializePortableFrameInput();
             StartToolStripStyling();
             settings.PropertyChanged += SettingsChanged;
+            ApplyCaptionColors();
             ApplySettings();
             }
         #endregion constructor
 
         #region wincontrols
+        private void ApplyCaptionColors() {
+            rbExit?.SetCaptionColors(settings.CaptionButtons.Exit);
+            ApplyMinMaxColors();
+            }
+
+        private void ApplyMinMaxColors() {
+            rbMaximize?.SetCaptionColors(settings.CaptionButtons.MinMax);
+            rbMinimize?.SetCaptionColors(settings.CaptionButtons.MinMax);
+            }
+
         private void MoveButtons() {
-
-            // Keep caption visibility reversible when Settings.CaptionButtons is edited.
-            if (rbExit != null) {
-                rbExit.Visible = Settings.Frame.ShowChrome && ControlBox && Settings.CaptionButtons.ExitBox;
-                rbExit.Top = Settings.Frame.BorderThickness - 1;
-                rbExit.Left = Width - (Settings.Frame.CornerRadius + Settings.Frame.BorderThickness) - 30;
-                rbExit.ExtendedSettings.RoundCorners = Settings.CaptionButtons.MaximizeBox || Settings.CaptionButtons.MinimizeBox
-                    ? ExtendedButtonSettings.RoundedCorners.BottomRight
-                    : ExtendedButtonSettings.RoundedCorners.Bottom;
-                }
-            if (rbMaximize != null) {
-                rbMaximize.Visible = Settings.Frame.ShowChrome && ControlBox && MaximizeBox && Settings.CaptionButtons.MaximizeBox;
-                rbMaximize.Top = Settings.Frame.BorderThickness - 1;
-                rbMaximize.Left = Width - (Settings.Frame.CornerRadius + Settings.Frame.BorderThickness) - 59;
-                }
-            if (rbMinimize != null) {
-                rbMinimize.Visible = Settings.Frame.ShowChrome && ControlBox && MinimizeBox && Settings.CaptionButtons.MinimizeBox;
-                rbMinimize.Top = Settings.Frame.BorderThickness - 1;
-                int leftOffset = Settings.CaptionButtons.MaximizeBox ? 88 : 59;
-                rbMinimize.Left = Width - (Settings.Frame.CornerRadius + Settings.Frame.BorderThickness) - leftOffset;
+            if (rbExit == null || rbMaximize == null || rbMinimize == null) {
+                return;
                 }
 
-            foreach (Control c in this.Controls) {
-                if (c is RoundButton) {
-                    c.Invalidate();
-                    }
+            bool show = settings.Frame.ShowChrome && ControlBox;
+            bool showExit = show && settings.CaptionButtons.ExitBox;
+            bool showMaximize = show && MaximizeBox && settings.CaptionButtons.MaximizeBox;
+            bool showMinimize = show && MinimizeBox && settings.CaptionButtons.MinimizeBox;
+            rbExit.Visible = showExit;
+            rbMaximize.Visible = showMaximize;
+            rbMinimize.Visible = showMinimize;
+            if (!showExit && !showMaximize && !showMinimize) {
+                return;
                 }
+
+            double scale = settings.Title.Height / (double)TitleSettings.DefaultHeight;
+            int height = (int)Math.Round(20 * scale);
+            int border = Math.Max(0, settings.Frame.BorderThickness);
+            int top = border - 1;
+            int right = ClientSize.Width - Math.Max(0, settings.Frame.CornerRadius) - border;
+            int count = (showExit ? 1 : 0) + (showMaximize ? 1 : 0) + (showMinimize ? 1 : 0);
+            int availableWidth = Math.Max(1, (right - border + count - 1) / count);
+            int width = Math.Min(availableWidth, (int)Math.Round(30 * scale));
+            int step = Math.Max(1, width - 1);
+
+            if (showExit) {
+                SetCaptionBounds(rbExit, right, top, width, height, !showMaximize && !showMinimize, true);
+                rbExit.SetCaptionFont(Font, (float)(Font.SizeInPoints * scale));
+                right -= step;
+                }
+            if (showMaximize) {
+                SetCaptionBounds(rbMaximize, right, top, width, height, !showMinimize, !showExit);
+                // Balance the visible square within the font's larger line box.
+                rbMaximize.TextDrawingOffset = new Point(0, (int)Math.Round(-3 * scale));
+                rbMaximize.SetCaptionFont(Font, (float)(14 * scale));
+                right -= step;
+                }
+            if (showMinimize) {
+                SetCaptionBounds(rbMinimize, right, top, width, height, true, !showExit && !showMaximize);
+                rbMinimize.SetCaptionFont(Font, (float)(Font.SizeInPoints * scale));
+                }
+            }
+
+        private static void SetCaptionBounds(RoundButton button, int right, int top, int width, int height,
+            bool roundLeft, bool roundRight) {
+            ExtendedButtonSettings.RoundedCorners corners = ExtendedButtonSettings.RoundedCorners.None;
+            if (roundLeft) {
+                corners |= ExtendedButtonSettings.RoundedCorners.BottomLeft;
+                }
+            if (roundRight) {
+                corners |= ExtendedButtonSettings.RoundedCorners.BottomRight;
+                }
+
+            button.ExtendedSettings.RoundCorners = corners;
+            button.SetBounds(right - width, top, width, height);
+            button.Invalidate();
             }
 
         protected void ForceIcoIcon() {
@@ -319,6 +323,7 @@ namespace MashWin {
                 settings = value;
                 settings.PropertyChanged += SettingsChanged;
                 UpdateSettingsIcon();
+                ApplyCaptionColors();
                 ApplySettings();
                 }
             }
@@ -339,6 +344,12 @@ namespace MashWin {
         private void SettingsChanged(object sender, PropertyChangedEventArgs arguments) {
             if (arguments.PropertyName == "Title.Icon") {
                 UpdateSettingsIcon();
+                }
+            if (arguments.PropertyName.StartsWith("CaptionButtons.Exit.", StringComparison.Ordinal)) {
+                rbExit?.SetCaptionColors(settings.CaptionButtons.Exit);
+                }
+            else if (arguments.PropertyName.StartsWith("CaptionButtons.MinMax.", StringComparison.Ordinal)) {
+                ApplyMinMaxColors();
                 }
             if (arguments.PropertyName == "StatusBar.Text") {
                 ApplyStatusBarSettings();
@@ -381,14 +392,13 @@ namespace MashWin {
             AppPenBorder.Width = settings.Frame.BorderThickness;
             AppPenSeparator.Color = settings.MenuSeparator.Color;
             AppPenSeparator.Width = settings.MenuSeparator.Thickness;
+            AppPenTitleDivider.Color = settings.MenuSeparator.TitleDividerColor(settings.Frame.BorderColor);
+            AppPenTitleDivider.Width = settings.Frame.BorderThickness;
             AppPenSizeGrip.Color = settings.Frame.BorderColor;
             pUpdateAlignment();
-            DestRect = new Rectangle(
-                1 + settings.Frame.BorderThickness,
-                1 + settings.Frame.BorderThickness,
-                Math.Max(1, 26 - settings.Frame.BorderThickness),
-                Math.Max(1, 26 - settings.Frame.BorderThickness)
-                );
+            int border = Math.Max(0, settings.Frame.BorderThickness);
+            int iconSize = Math.Max(1, settings.Title.Height - border);
+            DestRect = new Rectangle(1 + border, 1 + border, iconSize, iconSize);
             ApplyStatusBarSettings();
             MoveButtons();
             PerformLayout();
@@ -422,7 +432,7 @@ namespace MashWin {
                 Point loc = PointToClient(new Point(unchecked((short)coordinates),
                     unchecked((short)(coordinates >> 16))));
 
-                if (loc.Y <= 26 + Settings.Frame.BorderThickness) {
+                if (loc.Y <= TitleDividerY) {
                     m.Result = (IntPtr)2;
                     }
 
@@ -445,7 +455,7 @@ namespace MashWin {
                             }
                         }
 
-                if (loc.X < 30 && loc.Y < 30) {
+                if (loc.X < DestRect.Right && loc.Y <= TitleDividerY) {
                     m.Result = (IntPtr)3;
                     return;
                     }
@@ -566,8 +576,7 @@ namespace MashWin {
 
                 pUpdateAlignment();
                 _WindowRect = new Rectangle(0, 0, Width, Height);
-                _StatusTextRect = new Rectangle(0, (Height - (24 + Settings.Frame.BorderThickness)), Width, 30);
-                _TitleTextRect = new Rectangle(0, 0, Width, 30);
+                _TitleTextRect = new Rectangle(0, 0, Width, Settings.Title.Height + 4);
 
                 }
 
@@ -601,14 +610,22 @@ namespace MashWin {
                 g.DrawLine(AppPenSizeGrip, this.Width - (this.Settings.Frame.BorderThickness + 2), this.Height - 20 - t, this.Width - 20 - t, this.Height - (this.Settings.Frame.BorderThickness + 2));
                 }
 
-            if (Settings.MenuSeparator.Enabled) g.DrawLine(AppPenSeparator, 1, 52 + t, this.Width - 1, 52 + t);
-            if (Settings.StatusBar.Visible && Settings.StatusBar.ShowSeparator) {
-                g.DrawLine(AppPenSeparator, 1, this.Height - Settings.StatusBar.Height - t, this.Width - 1, this.Height - Settings.StatusBar.Height - t);
+            if (Settings.MenuSeparator.Enabled && Settings.MenuSeparator.Thickness > 0) {
+                int menuDividerY = TitleDividerY + TitleSettings.DefaultHeight;
+                g.DrawLine(AppPenSeparator, 1, menuDividerY, ClientSize.Width - 1, menuDividerY);
                 }
 
-            // title separator
+            int border = Math.Max(0, Settings.Frame.BorderThickness);
+            int statusTop = StatusBarTop;
+            int separatorTop = Math.Max(TitleContentTop, statusTop - StatusSeparatorHeight);
+            if (separatorTop < statusTop && ClientSize.Width > 2 * border) {
+                using (SolidBrush separator = new SolidBrush(Settings.MenuSeparator.Color)) {
+                    g.FillRectangle(separator, border, separatorTop, ClientSize.Width - 2 * border, statusTop - separatorTop);
+                    }
+                }
+
             if (Settings.Frame.BorderThickness > 0) {
-                g.DrawLine(AppPenBorder, 1, TitleDividerY, this.Width - 1, TitleDividerY);
+                g.DrawLine(AppPenTitleDivider, 1, TitleDividerY, ClientSize.Width - 1, TitleDividerY);
                 }
 
 

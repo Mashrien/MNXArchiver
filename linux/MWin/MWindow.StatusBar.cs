@@ -38,16 +38,34 @@ namespace MashWin {
             }
 
         private int TitleDividerY {
-            get { return 26 + Math.Max(0, settings.Frame.BorderThickness); }
+            get { return settings.Title.Height + Math.Max(0, settings.Frame.BorderThickness); }
             }
 
         private int TitleContentTop {
             get { return TitleDividerY + (Math.Max(0, settings.Frame.BorderThickness) + 1) / 2 + 1; }
             }
 
+        private int StatusSeparatorHeight {
+            get {
+                return settings.StatusBar.Visible && settings.StatusBar.ShowSeparator
+                    ? Math.Max(0, settings.MenuSeparator.Thickness) : 0;
+                }
+            }
+
+        private int StatusBarBottom {
+            get { return Math.Max(0, ClientSize.Height - Math.Max(0, settings.Frame.BorderThickness)); }
+            }
+
+        private int StatusBarTop {
+            get {
+                int earliestTop = Math.Min(StatusBarBottom, TitleContentTop + StatusSeparatorHeight);
+                return Math.Max(earliestTop, StatusBarBottom - settings.StatusBar.Height);
+                }
+            }
+
         private int BottomChromeHeight {
             get {
-                int height = settings.StatusBar.Visible ? settings.StatusBar.Height : 0;
+                int height = settings.StatusBar.Visible ? settings.StatusBar.Height + StatusSeparatorHeight : 0;
                 // A resize corner needs a clear hit-test surface even when its
                 // diagonal hint is hidden or the status bar is disabled.
                 return settings.Frame.Resizable ? Math.Max(height, 22) : height;
@@ -179,8 +197,9 @@ namespace MashWin {
                 Resizeable = settings.Frame.Resizable;
                 int leftInset = Math.Max(border, settings.Frame.CornerRadius);
                 int rightInset = Math.Max(leftInset, settings.Frame.Resizable ? 22 + border : border);
-                statusBarControls.SetBounds(leftInset, ClientSize.Height - border - settings.StatusBar.Height,
-                    Math.Max(0, ClientSize.Width - leftInset - rightInset), settings.StatusBar.Height);
+                int statusTop = StatusBarTop;
+                statusBarControls.SetBounds(leftInset, statusTop,
+                    Math.Max(0, ClientSize.Width - leftInset - rightInset), StatusBarBottom - statusTop);
                 if (rbExit != null) {
                     MoveButtons();
                     }

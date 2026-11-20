@@ -47,9 +47,12 @@
     <Compile Include="../src/TransferTracker.cs" Link="Shared/TransferTracker.cs" />
     <Compile Include="../src/Settings/INI_Config.cs" Link="Shared/Settings/INI_Config.cs" />
     <Compile Include="../src/Settings/AppSettings.cs" Link="Shared/Settings/AppSettings.cs" />
+    <Compile Include="../src/Settings/MWinColors.cs" Link="Shared/Settings/MWinColors.cs" />
     <Compile Include="../src/Settings/DefaultKeyStore.cs" Link="Shared/Settings/DefaultKeyStore.cs" />
     <Compile Include="../src/Previews/CachedImageDecoder.cs" Link="Shared/Previews/CachedImageDecoder.cs" />
     <Compile Include="../src/Previews/PreviewData.cs" Link="Shared/Previews/PreviewData.cs" />
+    <Compile Include="../src/Previews/VideoPlayback.cs" Link="Shared/Previews/VideoPlayback.cs" />
+    <Compile Include="../src/Previews/PreviewPresentation.cs" Link="Shared/Previews/PreviewPresentation.cs" />
     <EmbeddedResource Include="../src/Icons/Rendered/32/*.png" Link="Resources/Icons/32/%(Filename)%(Extension)" LogicalName="Mash.GUI.MNXArchiver.Icons.32.%(Filename)%(Extension)" />
     <EmbeddedResource Include="../src/Icons/Rendered/16/*.png" Link="Resources/Icons/16/%(Filename)%(Extension)" LogicalName="Mash.GUI.MNXArchiver.Icons.16.%(Filename)%(Extension)" />
     <EmbeddedResource Include="../src/archive.ico" Link="Resources/archive.ico" LogicalName="Mash.GUI.MNXArchiver.archive.ico" />

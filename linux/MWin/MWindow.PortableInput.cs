@@ -27,7 +27,7 @@ namespace MashWin {
                 if (edge.HasValue) {
                     BeginResizeDrag(edge.Value);
                     }
-                else if (arguments.Y < 30) {
+                else if (arguments.Y <= TitleDividerY) {
                     BeginMoveDrag();
                     }
                 };

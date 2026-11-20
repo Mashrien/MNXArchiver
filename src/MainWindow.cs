@@ -168,7 +168,8 @@ public sealed partial class MainWindow : IDisposable {
                 if ((bool)_files.GetValue(row, 7)) {
                     Navigate(id);
                     }
-                else if (_pluginArchive is null && _settings.Trigger == "Double-Click") {
+                else if ((_pluginArchive is null && _settings.Trigger == "Double-Click")
+                    || (_settings.Trigger != "Single-Click" && IsVideoEntry(id))) {
                     PreviewEntry(id);
                     }
                 }

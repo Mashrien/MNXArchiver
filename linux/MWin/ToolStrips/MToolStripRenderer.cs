@@ -5,6 +5,7 @@ using System.Drawing;
 using Majorsilence.Forms.Drawing;
 using Majorsilence.Forms.Drawing.Drawing2D;
 using Majorsilence.Forms;
+using RoundedCorners = MashWin.ExtendedButtonSettings.RoundedCorners;
 
 namespace MashWin {
     // Style drawing belongs here; WinForms still owns layout, hit testing,
@@ -13,6 +14,35 @@ namespace MashWin {
         private ToolStripSettings settings;
         private readonly List<WeakReference<ToolStrip>> strips = new List<WeakReference<ToolStrip>>();
         private bool disposed;
+
+        private ToolStrip primaryToolbar;
+        private Color toolbarButtonBackground;
+        private Color toolbarButtonText;
+        private Color toolbarButtonBorder;
+        private Color toolbarDivider;
+        private int toolbarBorderThickness;
+        private int toolbarCornerRadius;
+        private int toolbarDividerThickness;
+        private RoundedCorners toolbarCorners;
+
+        public void ConfigureToolbar(ToolStrip toolbar, Color background, Color foreground, Color border,
+            int borderThickness, int cornerRadius, Color divider, int dividerThickness, RoundedCorners corners) {
+            primaryToolbar = toolbar;
+            toolbarButtonBackground = background;
+            toolbarButtonText = foreground;
+            toolbarButtonBorder = border;
+            toolbarBorderThickness = borderThickness;
+            toolbarCornerRadius = cornerRadius;
+            toolbarDivider = divider;
+            toolbarDividerThickness = dividerThickness;
+            toolbarCorners = corners;
+            toolbar.Invalidate();
+            }
+
+        private bool IsPrimaryToolbar(ToolStrip strip) {
+            return primaryToolbar != null && ReferenceEquals(strip, primaryToolbar);
+            }
+
         internal MenuSeparatorSettings MenuSeparator { get; set; }
 
         public MToolStripRenderer() : this(new ToolStripSettings()) {
@@ -158,6 +188,7 @@ namespace MashWin {
 
         private void DrawItemSurface(ToolStripItemRenderEventArgs arguments, bool drawNormalBorder) {
             ToolStripItem item = arguments.Item;
+            bool primaryButton = item is ToolStripButton && IsPrimaryToolbar(arguments.ToolStrip);
             bool isChecked = item is ToolStripButton button && button.Checked;
             if (item is ToolStripMenuItem menuItem && menuItem.Checked) {
                 isChecked = true;
@@ -170,6 +201,9 @@ namespace MashWin {
                 return;
                 }
             Color color = arguments.ToolStrip is MenuDropDown ? settings.MenuBackgroundColor : settings.BackgroundColor;
+            if (primaryButton) {
+                color = toolbarButtonBackground;
+                }
             if (active) {
                 if (item.Enabled && (item.Pressed || item.IsDropDownOpened)) {
                     color = settings.PressedColor;
@@ -182,21 +216,24 @@ namespace MashWin {
                     }
                 }
             float scale = arguments.ToolStrip.DeviceDpi / 96f;
-            float thickness = settings.BorderThickness * scale;
+            float thickness = (primaryButton ? toolbarBorderThickness : settings.BorderThickness) * scale;
             float inset = Math.Max(1f, thickness / 2f);
+            Size deviceSize = arguments.ToolStrip.LogicalToDeviceUnits(item.Bounds.Size);
             RectangleF bounds = new RectangleF(inset, inset,
-                item.Width - inset * 2f, item.Height - inset * 2f);
+                deviceSize.Width - inset * 2f, deviceSize.Height - inset * 2f);
             if (bounds.Width <= 0 || bounds.Height <= 0) {
                 return;
                 }
-            float radius = Math.Min(settings.CornerRadius * scale, Math.Min(bounds.Width, bounds.Height) / 2f);
+            float radius = Math.Min((primaryButton ? toolbarCornerRadius : settings.CornerRadius) * scale, Math.Min(bounds.Width, bounds.Height) / 2f);
             GraphicsState state = arguments.Graphics.Save();
             try {
                 // This backend supplies strip coordinates, while WinForms item painting
                 // starts at the item's origin. Restore that origin for custom surfaces.
-                arguments.Graphics.TranslateTransform(item.Bounds.X, item.Bounds.Y);
+                arguments.Graphics.TranslateTransform(
+                    arguments.ToolStrip.LogicalToDeviceUnits(item.Bounds.X),
+                    arguments.ToolStrip.LogicalToDeviceUnits(item.Bounds.Y));
                 arguments.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                using (GraphicsPath path = RoundedOutline(bounds, radius)) {
+                using (GraphicsPath path = RoundedOutline(bounds, radius, primaryButton ? toolbarCorners : RoundedCorners.All)) {
                     if (active && settings.UseGradients) {
                         Color lighter = Color.FromArgb(color.A,
                             Math.Min(255, color.R + 32), Math.Min(255, color.G + 32), Math.Min(255, color.B + 32));
@@ -210,7 +247,7 @@ namespace MashWin {
                             }
                         }
                     if (thickness > 0) {
-                        using (Pen pen = new Pen(settings.BorderColor, thickness)) {
+                        using (Pen pen = new Pen(primaryButton ? toolbarButtonBorder : settings.BorderColor, thickness)) {
                             arguments.Graphics.DrawPath(pen, path);
                             }
                         }
@@ -223,20 +260,30 @@ namespace MashWin {
             arguments.Handled = true;
             }
 
-        private static GraphicsPath RoundedOutline(RectangleF bounds, float radius) {
+        private static GraphicsPath RoundedOutline(RectangleF bounds, float radius, RoundedCorners corners) {
             GraphicsPath path = new GraphicsPath();
-            if (radius <= 0) {
+            if (radius <= 0 || corners == RoundedCorners.None) {
                 path.AddRectangle(bounds);
+                return path;
                 }
-            else {
-                float diameter = radius * 2f;
-                path.AddArc(bounds.Left, bounds.Top, diameter, diameter, 180, 90);
-                path.AddArc(bounds.Right - diameter, bounds.Top, diameter, diameter, 270, 90);
-                path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
-                path.AddArc(bounds.Left, bounds.Bottom - diameter, diameter, diameter, 90, 90);
-                path.CloseFigure();
-                }
+            float diameter = radius * 2f;
+            AddCorner(path, corners, RoundedCorners.TopLeft, bounds.Left, bounds.Top, diameter, 180);
+            AddCorner(path, corners, RoundedCorners.TopRight, bounds.Right, bounds.Top, diameter, 270);
+            AddCorner(path, corners, RoundedCorners.BottomRight, bounds.Right, bounds.Bottom, diameter, 0);
+            AddCorner(path, corners, RoundedCorners.BottomLeft, bounds.Left, bounds.Bottom, diameter, 90);
+            path.CloseFigure();
             return path;
+            }
+
+        private static void AddCorner(GraphicsPath path, RoundedCorners corners, RoundedCorners corner,
+            float x, float y, float diameter, int angle) {
+            if ((corners & corner) == 0) {
+                path.AddLine(x, y, x, y);
+                return;
+                }
+            float left = corner is RoundedCorners.TopRight or RoundedCorners.BottomRight ? x - diameter : x;
+            float top = corner is RoundedCorners.BottomRight or RoundedCorners.BottomLeft ? y - diameter : y;
+            path.AddArc(left, top, diameter, diameter, angle, 90);
             }
 
         private Color ItemTextColor(ToolStripItem item) {
@@ -251,6 +298,9 @@ namespace MashWin {
                 }
             if (item is ToolStripMenuItem menuItem && menuItem.Checked || item is ToolStripButton button && button.Checked) {
                 return settings.CheckedTextColor;
+                }
+            if (item is ToolStripButton && IsPrimaryToolbar(item.Owner)) {
+                return toolbarButtonText;
                 }
             return settings.TextColor;
             }
@@ -285,6 +335,15 @@ namespace MashWin {
                 return;
                 }
             ToolStrip strip = arguments.ToolStrip;
+            if (IsPrimaryToolbar(strip)) {
+                Rectangle bounds = arguments.AffectedBounds;
+                float height = Math.Min(bounds.Height, toolbarDividerThickness * (strip.DeviceDpi / 96f));
+                using (SolidBrush divider = new SolidBrush(toolbarDivider)) {
+                    arguments.Graphics.FillRectangle(divider, bounds.Left, bounds.Bottom - height, bounds.Width, height);
+                    }
+                return;
+                }
+
             if (strip is MenuStrip && MenuSeparator != null) {
                 if (MenuSeparator.Enabled && MenuSeparator.Thickness > 0) {
                     float dividerHeight = MenuSeparator.Thickness * (strip.DeviceDpi / 96f);

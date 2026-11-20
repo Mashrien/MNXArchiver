@@ -63,10 +63,6 @@ public sealed partial class MainWindow {
         }
 
     private void OnListPointerEvent(object sender, WidgetEventAfterArgs args) {
-        if (_pluginArchive is not null) {
-            return;
-            }
-
         if (args.Event is Gdk.EventButton button && button.Button == 1) {
             if (button.Type == Gdk.EventType.ButtonPress) {
                 _singleClickFile = FileAt(button.X, button.Y, button.Window, out _);
@@ -77,7 +73,9 @@ public sealed partial class MainWindow {
                 Guid pressed = _singleClickFile;
                 _singleClickFile = Guid.Empty;
                 Guid released = FileAt(button.X, button.Y, button.Window, out _);
-                if (_settings.Trigger == "Single-Click" && pressed != Guid.Empty && released == pressed && !Drag.CheckThreshold(_list, _singleClickX, _singleClickY, (int)button.X, (int)button.Y)) {
+                if (_settings.Trigger == "Single-Click" && pressed != Guid.Empty && released == pressed
+                    && (_pluginArchive is null || IsVideoEntry(pressed))
+                    && !Drag.CheckThreshold(_list, _singleClickX, _singleClickY, (int)button.X, (int)button.Y)) {
                     PreviewEntry(pressed);
                     }
                 }
@@ -120,12 +118,12 @@ public sealed partial class MainWindow {
         }
 
     private void UpdatePreviewHover(double x, double y, Gdk.Window eventWindow, Gdk.ModifierType state, int cursorX, int cursorY) {
-        if (!_settings.Previews || _settings.Trigger != "Mouse-Over With Delay" || _operationActive || _loadingPreview || _stoppingPreviews || (state & Gdk.ModifierType.Button1Mask) != 0) {
+        if (_pluginArchive is not null || !_settings.Previews || _settings.Trigger != "Mouse-Over With Delay" || _operationActive || _loadingPreview || _stoppingPreviews || (state & Gdk.ModifierType.Button1Mask) != 0) {
             return;
             }
         StartHoverWatch();
         Guid id = FileAt(x, y, eventWindow, out Gdk.Rectangle anchor);
-        if (id != Guid.Empty && !CanPreview(id)) {
+        if (id != Guid.Empty && !CanPreview(id, allowVideo: false)) {
             id = Guid.Empty;
             }
         if (id == _hoveredFile) {
@@ -167,52 +165,63 @@ public sealed partial class MainWindow {
             }
         }
 
-    private bool CanPreview(Guid id) {
+    private bool CanPreview(Guid id, bool allowVideo = true) {
         if (!_settings.Previews || _operationActive || _browser is null || id == Guid.Empty) {
             return false;
+            }
+        ArchiveBrowser.Entry entry = _browser.Get(id);
+        if (allowVideo && VideoProviderForEntry(entry) is not null) {
+            return true;
             }
         if (_archive is null && _pluginArchive?.Supports(PluginActions.ReadEntry) != true) {
             return false;
             }
 
-        ArchiveBrowser.Entry entry = _browser.Get(id);
         if (entry.IsDirectory || entry.Bytes > (ulong)_settings.PreviewBufferBytes) {
             return false;
             }
         return PreviewData.Classify(entry.Name, _settings) != PreviewKind.Unsupported;
         }
 
-    internal void PreviewEntry(Guid id, Gdk.Rectangle anchor = default, int cursorX = 0, int cursorY = 0, bool hoverRequest = false) {
-        if (!CanPreview(id) || _previewRead is not null || _stoppingPreviews || _loadingPreview) {
+    internal void PreviewEntry(Guid id, Gdk.Rectangle anchor = default, int cursorX = 0, int cursorY = 0, bool hoverRequest = false,
+        bool tryVideo = true) {
+        if (!CanPreview(id, allowVideo: tryVideo && !hoverRequest) || _previewRead is not null || _openingVideo is not null || _stoppingPreviews || _loadingPreview) {
             _status.Text = "Preview unavailable: enable a supported type in Options; files must fit the configured preview buffer.";
             return;
             }
-        if (!_settings.IndependentWindows) {
-            foreach (PreviewWindow preview in _previews.ToArray()) {
-                if (!preview.Independent) {
-                    preview.Dispose();
-                    }
+        ArchiveBrowser.Entry entry = _browser!.Get(id);
+        if (anchor.Width == 0 && anchor.Height == 0) {
+            anchor = PreviewAnchor(id);
+            Gdk.Device? pointer = _list.Display.DefaultSeat?.Pointer;
+            if (pointer is not null) {
+                _window.Window.GetDevicePosition(pointer, out int pointerX, out int pointerY, out _);
+                _window.Window.GetOrigin(out int originX, out int originY);
+                cursorX = originX + pointerX;
+                cursorY = originY + pointerY;
+                }
+            else {
+                cursorX = anchor.X;
+                cursorY = anchor.Y;
                 }
             }
-        if (_previews.Count >= MaxPreviewWindows) {
+        if (tryVideo && !hoverRequest && VideoProviderForEntry(entry) is NativeVideoProvider videoProvider) {
+            System.Action? fallback = CanPreview(id, allowVideo: false)
+                ? () => PreviewEntry(id, anchor, cursorX, cursorY, tryVideo: false)
+                : null;
+            OpenVideoPreview(id, entry, videoProvider, fallback, anchor, cursorX, cursorY);
+            return;
+            }
+        CloseOwnedPreviews(_settings.IndependentWindows);
+        if (PreviewWindowCount() >= MaxPreviewWindows) {
             _status.Text = "Close a preview first: at most 10 preview windows may be open.";
             return;
             }
-        if (_previews.Sum(preview => preview.MemoryCost) >= _settings.TotalPreviewBytes) {
+        if (PreviewMemoryUsed() >= _settings.TotalPreviewBytes) {
             _status.Text = "Close a preview first: the combined preview memory limit has been reached.";
             return;
             }
-        if (anchor.Width == 0 && anchor.Height == 0) {
-            anchor = PreviewAnchor(id);
-            Gdk.Device pointer = _list.Display.DefaultSeat.Pointer;
-            _window.Window.GetDevicePosition(pointer, out int pointerX, out int pointerY, out _);
-            _window.Window.GetOrigin(out int originX, out int originY);
-            cursorX = originX + pointerX;
-            cursorY = originY + pointerY;
-            }
         Archive? archive = _archive;
         OpenedModuleArchive? moduleArchive = _pluginArchive;
-        ArchiveBrowser.Entry entry = _browser!.Get(id);
         AppSettings settings = _settings.Copy();
         PreviewKind kind = PreviewData.Classify(entry.Name, settings);
         long hoverGeneration = _hoverGeneration;
@@ -246,7 +255,11 @@ public sealed partial class MainWindow {
                 if (hoverRequest && hoverGeneration != _hoverGeneration) {
                     return false;
                     }
-                long availableMemory = settings.TotalPreviewBytes - _previews.Sum(open => open.MemoryCost);
+                if (data.IsMpegTransportDisguisedAsText(entry.Name)) {
+                    _status.Text = "Open MPEG transport stream previews explicitly.";
+                    return false;
+                    }
+                long availableMemory = settings.TotalPreviewBytes - PreviewMemoryUsed();
                 PreviewWindow preview = new PreviewWindow(_window, entry.Name, data, settings, anchor, cursorX, cursorY, availableMemory);
                 data = null; // ownership moves into the preview window
                 _previews.Add(preview);
@@ -296,6 +309,7 @@ public sealed partial class MainWindow {
             _hoverWatch = 0;
             }
         try {
+            StopVideoPreview();
             CancelHover(closePopups: true);
             if (_previewPoll != 0) {
                 GLib.Source.Remove(_previewPoll);

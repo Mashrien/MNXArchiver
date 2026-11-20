@@ -6,9 +6,11 @@
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <DefineConstants>$(DefineConstants);MWIN_PORTABLE</DefineConstants>
     <MNXPortableRoot Condition="'$(MNXPortableRoot)' == ''">$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)', '..', '..', '..', 'mnx_clutter', 'build', 'mnx-gui-port'))</MNXPortableRoot>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../windows/MashWin/MWin/Settings/UserColors.cs" Link="Settings/UserColors.cs" />
     <ProjectReference Include="$(MNXPortableRoot)/vendor/Majorsilence.Forms/src/Majorsilence.Forms/Majorsilence.Forms.csproj" />
   </ItemGroup>
 </Project>

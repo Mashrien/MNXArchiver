@@ -178,6 +178,7 @@ public sealed partial class MainForm {
         evidence.Add("PASS: options and preview smoke assertions");
         SaveScreenshot(Path.Combine(directory, "04-complete.png"));
         await RunPluginSmoke(work, evidence);
+        await RunVideoPreviewSmoke(work, evidence);
         FinishPlatformSmoke(directory);
         DiskFile.WriteAllLines(Path.Combine(directory, "PASS.txt"), evidence);
         }

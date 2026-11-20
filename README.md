@@ -14,8 +14,9 @@ see **[mnx-cli](https://github.com/Mashrien/mnx-cli)**.
 
 ## Downloads and installation
 
-Recent source changes include Linux MWin menu colors, portable library lookup,
-Options layout fixes and the testing-only preview overrides described below.
+Version 2.1.1 adds optional streamed video previews, seekable archive-module
+entries, and the shared MWin drawing settings. It also includes Linux menu color,
+Options layout and portable library lookup fixes.
 
 [Releases](https://github.com/Mashrien/MNXArchiver/releases) provide **mnx-gui**
 RPM/DEB/portable Linux packages and a Windows x64 ZIP. Install the separate
@@ -33,6 +34,10 @@ RPA 3.0 browsing, text and image previews, extraction, add, replace, delete, and
 See the [module installation and ABI guide](docs/ARCHIVE-PLUGINS.md).
 The [`ext.gui.image.webp.mnxp` extension](https://github.com/Mashrien/ext.gui.image.webp/releases) adds static WebP previews through the
 [image provider interface](docs/IMAGE-PROVIDERS.md).
+The [`ext.gui.video.ffmpeg.mnxp` extension](https://github.com/Mashrien/ext.gui.video.ffmpeg/releases)
+adds silent video previews with play, pause and seek controls in MNXArchiver 2.1.1.
+Video reads stream from MNX entries; RPA video previews require RPA module 1.0.3
+or newer, which provides seekable entry streams.
 
 ## Features
 
@@ -141,7 +146,7 @@ Do not edit generated sources under `mnx_clutter/build/`.
 
 ## Outputs and versions
 
-Current GUI version is **`2.1.0.N`**; `BuildNumber.txt` supplies an automatic build
+Current GUI version is **`2.1.1.N`**; `BuildNumber.txt` supplies an automatic build
 counter. Set `MNXBuildNumber=N` to reproduce a specific counter. Output remains:
 
 - `../MNX_Builds/mnx-gui/linux-x64/` or `win-x64/`: component release.
@@ -156,7 +161,7 @@ Builds do not install programs or register context menus.
 
 Settings are plain INI under `~/.config/mnxarchiver/` on Linux or
 `%APPDATA%\mnxarchiver\` on Windows. The main file is `mnxarchiver.conf`; MWin's
-editable palette is `mnx.mwin-colors.conf`. See [INI-CONFIG.md](docs/INI-CONFIG.md).
+editable palette is `gui.mwin.drawing.conf`. See [INI-CONFIG.md](docs/INI-CONFIG.md).
 
 For example:
 

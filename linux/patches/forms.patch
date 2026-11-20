@@ -1151,7 +1151,7 @@ diff --git a/src/Majorsilence.Forms/WinFormsCompat.cs b/src/Majorsilence.Forms/W
                  if (ReferenceEquals (renderer, value))
                      return;
 diff --git a/src/Majorsilence.Forms/ListView.cs b/src/Majorsilence.Forms/ListView.cs
-index 0b03515..6e92632 100644
+index 0b03515..a104d0b 100644
 --- a/src/Majorsilence.Forms/ListView.cs
 +++ b/src/Majorsilence.Forms/ListView.cs
 @@ -31,7 +31,7 @@ public ListView ()
@@ -1180,7 +1180,75 @@ index 0b03515..6e92632 100644
          {
              var lines = LineCount;
              var visible = VisibleLineCount;
-@@ -261,7 +262,7 @@ internal Rectangle ItemArea {
+@@ -158,15 +159,64 @@ namespace Majorsilence.Forms
+         // Measured from the font the renderer will actually draw with, so a themed or scaled font
+         // gets rows that fit its text rather than a constant that used to.
+         private int RowHeight
+-            => Math.Max ((int)TextMeasurer.MeasureText ("The quick brown Fox", this).Height + 4,
+-                         Theme.ItemFontSize + 6);
++            => HasOwnFont
++                ? Math.Max (Font.Height + 4, GetEffectiveFontSize () + 6)
++                : Math.Max ((int)TextMeasurer.MeasureText ("The quick brown Fox", this).Height + 4,
++                            Theme.ItemFontSize + 6);
+
+         /// <summary>The height of the Details header band, in device pixels; zero when it is hidden.</summary>
+         internal int ScaledHeaderHeight
+             => View == View.Details && HeaderStyle != ColumnHeaderStyle.None
+-                ? LogicalToDeviceUnits (RowHeight + 2)
++                ? LogicalToDeviceUnits (HeaderFont is { } font ? font.Height + 6 : RowHeight + 2)
+                 : 0;
+
++        internal Majorsilence.Forms.Drawing.Font? HeaderFont { get; private set; }
++        internal Color HeaderBackColor { get; private set; }
++        internal Color HeaderHighlightColor { get; private set; }
++        internal Color HeaderForeColor { get; private set; }
++        private Point? header_pointer;
++
++        /// <summary>Sets colors and font for Details headers independently of the file rows.</summary>
++        public void SetHeaderAppearance (Color background, Color highlight, Majorsilence.Forms.Drawing.Font font, Color text)
++        {
++            HeaderBackColor = background;
++            HeaderHighlightColor = highlight;
++            HeaderFont = font;
++            HeaderForeColor = text;
++            Invalidate ();
++        }
++
++        internal int HotHeaderColumn {
++            get {
++                if (header_pointer is not Point pointer || ScaledHeaderHeight <= 0)
++                    return -1;
++
++                var location = ToDevice (pointer);
++                var area = ItemArea;
++                var band = new Rectangle (area.Left, area.Top - ScaledHeaderHeight, area.Width, ScaledHeaderHeight);
++                if (!band.Contains (location))
++                    return -1;
++
++                foreach (var (column, left, width) in ColumnCells (area.Left + ScaledCheckWidth, area.Right)) {
++                    if (location.X >= left && location.X < left + width)
++                        return column.Index;
++                }
++
++                return -1;
++            }
++        }
++
++        private void UpdateHeaderPointer (Point? location)
++        {
++            if (HeaderFont is null)
++                return;
++
++            var previous = HotHeaderColumn;
++            header_pointer = location;
++            if (previous != HotHeaderColumn)
++                Invalidate ();
++        }
++
+         /// <summary>The width of a large-icon tile, in device pixels.</summary>
+         /// <remarks>
+         /// Honours <see cref="TileSize"/> when the application set one. It used to be a hard-coded 70
+@@ -261,7 +311,7 @@ internal Rectangle ItemArea {
                  var width = bounds.Width - (vscrollbar.Visible ? vscrollbar.ScaledWidth : 0);
 
                  return new Rectangle (bounds.Left, bounds.Top + ScaledHeaderHeight,
@@ -1189,7 +1257,7 @@ index 0b03515..6e92632 100644
              }
          }
 
-@@ -287,20 +288,16 @@ private void LayoutSubItems (ListViewItem item)
+@@ -287,20 +337,16 @@ private void LayoutSubItems (ListViewItem item)
              // Device pixels throughout -- ScaledCheckWidth and ScaledColumnWidth are scaled, and so is
              // the item rectangle this is laid out inside (LAY-38). The public Bounds converts out.
              var device = item.DeviceBounds;
@@ -1213,7 +1281,7 @@ index 0b03515..6e92632 100644
              }
          }
 
-@@ -402,7 +399,7 @@ internal int HeaderDividerAt (Point location)
+@@ -402,7 +448,7 @@ internal int HeaderDividerAt (Point location)
          internal IEnumerable<(ColumnHeader Column, int Left, int Width)> ColumnCells (int left, int right)
          {
              var mirrored = MirrorsColumns;
@@ -1222,7 +1290,7 @@ index 0b03515..6e92632 100644
 
              foreach (var column in DisplayColumns) {
                  var width = ScaledColumnWidth (column);
-@@ -443,6 +440,7 @@ internal override bool TakesFocusOnPress (MouseButtons button)
+@@ -443,6 +489,7 @@ internal override bool TakesFocusOnPress (MouseButtons button)
          /// <inheritdoc/>
          protected override void OnMouseDown (MouseEventArgs e)
          {
@@ -1230,7 +1298,7 @@ index 0b03515..6e92632 100644
              base.OnMouseDown (e);
 
              LayoutItems ();
-@@ -453,7 +451,6 @@ protected override void OnMouseDown (MouseEventArgs e)
+@@ -453,7 +500,6 @@ protected override void OnMouseDown (MouseEventArgs e)
              if (!in_header) {
                  drag_candidate = Items.FirstOrDefault (i => i.DeviceBounds.Contains (device));
                  drag_origin = e.Location;
@@ -1238,7 +1306,7 @@ index 0b03515..6e92632 100644
              }
 
              if (e.Button != MouseButtons.Left)
-@@ -530,6 +527,7 @@ private void TrackItemDrag (MouseEventArgs e)
+@@ -530,6 +576,7 @@ private void TrackItemDrag (MouseEventArgs e)
                  return;
 
              item_drag_raised = true;
@@ -1246,7 +1314,7 @@ index 0b03515..6e92632 100644
              OnItemDrag (new ItemDragEventArgs (e.Button, drag_candidate));
          }
 
-@@ -557,6 +555,11 @@ private void TrackHeaderResize (MouseEventArgs e)
+@@ -557,6 +604,11 @@ private void TrackHeaderResize (MouseEventArgs e)
          /// <inheritdoc/>
          protected override void OnMouseUp (MouseEventArgs e)
          {
@@ -1258,7 +1326,7 @@ index 0b03515..6e92632 100644
              base.OnMouseUp (e);
 
              if (resize_column >= 0) {
-@@ -567,7 +570,6 @@ protected override void OnMouseUp (MouseEventArgs e)
+@@ -567,7 +619,6 @@ protected override void OnMouseUp (MouseEventArgs e)
              EndHeaderReorder (e);
 
              drag_candidate = null;
@@ -1266,7 +1334,23 @@ index 0b03515..6e92632 100644
          }
 
          // The item under the pointer, for HotTracking's hot colour (W6). Tracked here rather than in the
-@@ -647,6 +649,8 @@ internal void BeginLabelEdit (ListViewItem item)
+@@ -582,6 +633,7 @@ namespace Majorsilence.Forms
+             TrackHeaderReorder (e);
+             TrackItemDrag (e);
+             UpdateDividerCursor (e.Location);
++            UpdateHeaderPointer (e.Location);
+             SetHotItem (HotTracking ? GetItemAt (e.X, e.Y) : null);
+         }
+
+@@ -604,6 +656,7 @@ namespace Majorsilence.Forms
+         protected override void OnMouseLeave (EventArgs e)
+         {
+             base.OnMouseLeave (e);
++            UpdateHeaderPointer (null);
+             SetHotItem (null);
+
+             if (showing_divider_cursor && resize_column < 0) {
+@@ -647,6 +700,8 @@ internal void BeginLabelEdit (ListViewItem item)
                  return;
 
              EndLabelEdit (commit: true);
@@ -1275,7 +1359,7 @@ index 0b03515..6e92632 100644
 
              var before = new LabelEditEventArgs (item.Index);
              OnBeforeLabelEdit (before);
-@@ -679,8 +683,10 @@ private Rectangle LabelDeviceBounds (ListViewItem item)
+@@ -679,8 +734,10 @@ private Rectangle LabelDeviceBounds (ListViewItem item)
              var bounds = item.DeviceBounds;
              var left = bounds.Left + ScaledCheckWidth;
 
@@ -1288,7 +1372,7 @@ index 0b03515..6e92632 100644
 
              if (IsRowView) {
                  if (View == View.SmallIcon && item.ImageSK is not null)
-@@ -730,6 +736,9 @@ protected override void OnMouseClick (MouseEventArgs e)
+@@ -730,6 +787,9 @@ protected override void OnMouseClick (MouseEventArgs e)
          {
              base.OnMouseClick (e);
 
@@ -1298,7 +1382,7 @@ index 0b03515..6e92632 100644
              LayoutItems ();
 
              var location = ToDevice (e.Location);
-@@ -758,16 +767,26 @@ protected override void OnMouseClick (MouseEventArgs e)
+@@ -758,16 +818,26 @@ protected override void OnMouseClick (MouseEventArgs e)
                  return;
              }
 
@@ -1327,7 +1411,7 @@ index 0b03515..6e92632 100644
                  clicked_item.Checked = !clicked_item.Checked;
                  return;
              }
-@@ -889,6 +908,9 @@ protected override void OnDoubleClick (MouseEventArgs e)
+@@ -889,6 +959,9 @@ protected override void OnDoubleClick (MouseEventArgs e)
          {
              base.OnDoubleClick (e);
 
@@ -1337,7 +1421,7 @@ index 0b03515..6e92632 100644
              LayoutItems ();
 
              var clicked_item = Items.FirstOrDefault (tp => tp.DeviceBounds.Contains (ToDevice (e.Location)));
-@@ -924,21 +946,14 @@ protected override void OnPaint (PaintEventArgs e)
+@@ -924,21 +997,14 @@ protected override void OnPaint (PaintEventArgs e)
          public ListViewItem? SelectedItem {
              get => Items.FirstOrDefault (i => i.Selected);
              set {
@@ -1364,7 +1448,7 @@ index 0b03515..6e92632 100644
 
                      if (value != null)
                          value.Selected = true;
-@@ -1315,6 +1330,8 @@ public void EnsureVisible (int index)
+@@ -1315,6 +1381,8 @@ public void EnsureVisible (int index)
              LayoutItems ();
 
              var location = ToDevice (new Point (x, y));
@@ -1410,10 +1494,44 @@ index 0b03515..6e92632 100644
  
 
 diff --git a/src/Majorsilence.Forms/Renderers/ListViewRenderer.cs b/src/Majorsilence.Forms/Renderers/ListViewRenderer.cs
-index 5f5ae1a..3de2fcb 100644
+index 5f5ae1a..7c5af77 100644
 --- a/src/Majorsilence.Forms/Renderers/ListViewRenderer.cs
 +++ b/src/Majorsilence.Forms/Renderers/ListViewRenderer.cs
-@@ -240,9 +240,9 @@ protected virtual void RenderDetailsRow (ListView control, ListViewItem item, Pa
+@@ -77,9 +77,13 @@ namespace Majorsilence.Forms.Renderers
+             var height = control.ScaledHeaderHeight;
+             var area = control.ItemArea;
+             var band = new Rectangle (area.Left, area.Top - height, area.Width, height);
+-            var font_size = e.LogicalToDeviceUnits (Theme.ItemFontSize);
++            var font = control.HeaderFont;
++            var typeface = font?.GetSKTypeface () ?? Theme.UIFont;
++            var font_size = e.LogicalToDeviceUnits (font is null ? Theme.ItemFontSize : (int)Math.Round (font.PixelSize));
++            var foreground = font is null ? Theme.ForegroundColor : control.HeaderForeColor.ToSKColor ();
++            var hot_column = control.HotHeaderColumn;
+
+-            e.Canvas.FillRectangle (band, Theme.ControlMidColor);
++            e.Canvas.FillRectangle (band, font is null ? Theme.ControlMidColor : control.HeaderBackColor.ToSKColor ());
+             e.Canvas.DrawLine (band.Left, band.Bottom - 1, band.Right, band.Bottom - 1, Theme.BorderMidColor);
+
+             e.Canvas.Save ();
+@@ -94,8 +98,15 @@ namespace Majorsilence.Forms.Renderers
+                 if (control.OwnerDraw && !control.RaiseDrawColumnHeader (column, cell, e))
+                     continue;
+
+-                e.Canvas.DrawText (column.Text ?? string.Empty, Theme.UIFont, font_size,
+-                    Padded (cell, e), Theme.ForegroundColor, Align (column.TextAlign), maxLines: 1);
++                if (column.Index == hot_column)
++                    e.Canvas.FillRectangle (new Rectangle (cell.X, cell.Y, cell.Width, cell.Height - 1),
++                        control.HeaderHighlightColor.ToSKColor ());
++
++                e.Canvas.Save ();
++                e.Canvas.Clip (cell);
++                e.Canvas.DrawText (column.Text ?? string.Empty, typeface, font_size,
++                    Padded (cell, e), foreground, Align (column.TextAlign), maxLines: 1);
++                e.Canvas.Restore ();
+
+                 var divider = control.MirrorsColumns ? cell.Left : cell.Right - 1;
+                 e.Canvas.DrawLine (divider, cell.Top + e.LogicalToDeviceUnits (2),
+@@ -240,9 +251,9 @@ protected virtual void RenderDetailsRow (ListView control, ListViewItem item, Pa
                  var highlight = control.FullRowSelect || display.Count == 0
                      ? item.DeviceBounds
                      : control.MirrorsColumns
@@ -1425,7 +1543,17 @@ index 5f5ae1a..3de2fcb 100644
                              control.ScaledCheckWidth + control.ScaledColumnWidth (display[0]), item.DeviceBounds.Height);
 
                  e.Canvas.FillRectangle (highlight, ListView.DefaultSelectionStyle.GetBackgroundColor ());
-@@ -274,7 +274,9 @@ protected virtual void RenderDetailsCell (ListView control, ListViewItem item, C
+@@ -265,7 +276,8 @@ namespace Majorsilence.Forms.Renderers
+         /// <summary>Renders one Details cell: the column's text for the item, and its grid line.</summary>
+         protected virtual void RenderDetailsCell (ListView control, ListViewItem item, ColumnHeader column, Rectangle cell, PaintEventArgs e)
+         {
+-            var font_size = e.LogicalToDeviceUnits (Theme.ItemFontSize);
++            var font = control.HasOwnFont ? control.GetEffectiveFont () : Theme.UIFont;
++            var font_size = e.LogicalToDeviceUnits (control.HasOwnFont ? control.GetEffectiveFontSize () : Theme.ItemFontSize);
+             var i = column.Index;
+
+             // Column 0 is the item's own Text; the rest are its subitems -- which is why every
+@@ -274,7 +286,9 @@ protected virtual void RenderDetailsCell (ListView control, ListViewItem item, C
                  ? item.Text
                  : i < item.SubItems.Count ? item.SubItems[i].Text : string.Empty;
 
@@ -1436,7 +1564,7 @@ index 5f5ae1a..3de2fcb 100644
                  var text_cell = Padded (cell, e);
 
                  // IndentCount (W6 mechanisms): the first cell's content starts that many small-image
-@@ -288,8 +290,24 @@ protected virtual void RenderDetailsCell (ListView control, ListViewItem item, C
+@@ -288,8 +302,25 @@ protected virtual void RenderDetailsCell (ListView control, ListViewItem item, C
 
                  e.Canvas.Save ();
                  e.Canvas.Clip (cell);
@@ -1457,13 +1585,14 @@ index 5f5ae1a..3de2fcb 100644
 +                }
 +
 +                if (text_cell.Width > 0 && !string.IsNullOrEmpty (text))
-+                    e.Canvas.DrawText (text, Theme.UIFont, font_size, text_cell,
-+                        ItemForeColour (control, item, Foreground (item, i, ShowsSelection (control, item))), Align (column.TextAlign), maxLines: 1);
++                    e.Canvas.DrawText (text, font, font_size, text_cell,
++                        ItemForeColour (control, item, Foreground (item, i, ShowsSelection (control, item), control.GetEffectiveForegroundColor ())),
++                        Align (column.TextAlign), maxLines: 1);
 +
                  e.Canvas.Restore ();
              }
 
-@@ -299,6 +317,22 @@ protected virtual void RenderDetailsCell (ListView control, ListViewItem item, C
+@@ -299,6 +330,22 @@ protected virtual void RenderDetailsCell (ListView control, ListViewItem item, C
              }
          }
 
@@ -1486,7 +1615,7 @@ index 5f5ae1a..3de2fcb 100644
          // An owner-drawn item whose handler declined the default: each cell is offered to DrawSubItem,
          // and painted by the default path only when that handler asks for it.
          private void RenderOwnerDrawnCells (ListView control, ListViewItem item, PaintEventArgs e)
-@@ -385,7 +419,7 @@ protected virtual void RenderCheckBox (ListView control, ListViewItem item, Pain
+@@ -385,7 +432,7 @@ protected virtual void RenderCheckBox (ListView control, ListViewItem item, Pain
                  return;
 
              var size = e.LogicalToDeviceUnits (13);
@@ -1495,6 +1624,26 @@ index 5f5ae1a..3de2fcb 100644
                  item.DeviceBounds.Top + (item.DeviceBounds.Height - size) / 2, size, size);
 
              // A state image replaces the glyph when the list has a StateImageList and the item names an
+@@ -413,7 +460,7 @@ namespace Majorsilence.Forms.Renderers
+             => images is { } list && index >= 0 && index < list.Images.Count ? list.Images.GetBitmap (index) : null;
+
+         // A per-item or per-subitem ForeColor overrides the theme; Color.Empty means "use the theme".
+-        private static SkiaSharp.SKColor Foreground (ListViewItem item, int column, bool selected)
++        private static SkiaSharp.SKColor Foreground (ListViewItem item, int column, bool selected, SkiaSharp.SKColor? foreground = null)
+         {
+             // UseItemStyleForSubItems (the WinForms default, true) means the sub-items take the item's
+             // appearance and their own is ignored; false lets each sub-item colour itself. It was read
+@@ -429,7 +476,9 @@ namespace Majorsilence.Forms.Renderers
+                 return color.ToSKColor ();
+
+             // A `ListView::selection { color }` rule recolours selected items' text.
+-            return selected && ListView.DefaultSelectionStyle.ForegroundColor is { } selection_fg ? selection_fg : Theme.ForegroundColor;
++            return selected
++                ? ListView.DefaultSelectionStyle.ForegroundColor ?? Theme.ForegroundColor
++                : foreground ?? Theme.ForegroundColor;
+         }
+
+         /// <summary>Whether <paramref name="item"/> should be drawn as selected right now.</summary>
 --- /dev/null
 +++ b/src/Majorsilence.Forms/ListView.Scrolling.cs
 @@ -0,0 +1,113 @@
@@ -2059,3 +2208,46 @@ index 0000000..49b3a0a
 +            }
 +        }
 +    }
+diff --git a/src/Majorsilence.Forms/Renderers/TreeViewRenderer.cs b/src/Majorsilence.Forms/Renderers/TreeViewRenderer.cs
+index 061dc69..29bcd2b 100644
+--- a/src/Majorsilence.Forms/Renderers/TreeViewRenderer.cs
++++ b/src/Majorsilence.Forms/Renderers/TreeViewRenderer.cs
+@@ -73,7 +73,8 @@ namespace Majorsilence.Forms.Renderers
+                 : item.ForeColor != System.Drawing.Color.Empty ? item.ForeColor.ToSKColor ()
+                 : is_selected && TreeView.DefaultSelectionStyle.ForegroundColor is { } selection_fg ? selection_fg
+                 : control.HotTracking && ReferenceEquals (control.HotNode, item) ? SystemColors.HotTrack.ToSKColor () // W6
+-                : Theme.ForegroundColor;
++                : is_selected ? Theme.ForegroundColor
++                : control.GetEffectiveForegroundColor ();
+
+             if (item.BackColor != System.Drawing.Color.Empty && !is_selected)
+                 e.Canvas.FillRectangle (item.Bounds, item.BackColor.ToSKColor ());
+@@ -143,7 +144,7 @@ namespace Majorsilence.Forms.Renderers
+             var font = item.NodeFont is { } node_font ? node_font.GetSKTypeface () : control.GetEffectiveFont ();
+             var font_size = item.NodeFont is { } sized
+                 ? (int)System.Math.Round (sized.PixelSize)
+-                : e.LogicalToDeviceUnits (Theme.FontSize);
++                : e.LogicalToDeviceUnits (control.HasOwnFont ? control.GetEffectiveFontSize () : Theme.FontSize);
+
+             e.Canvas.DrawText (item.Text.Trim (), font, font_size, text_bounds, foreground_color, ContentAlignment.MiddleLeft, maxLines: 1);
+         }
+diff --git a/src/Majorsilence.Forms/TreeViewItem.cs b/src/Majorsilence.Forms/TreeViewItem.cs
+index a5815aa..91ec521 100644
+--- a/src/Majorsilence.Forms/TreeViewItem.cs
++++ b/src/Majorsilence.Forms/TreeViewItem.cs
+@@ -221,12 +221,13 @@ namespace Majorsilence.Forms
+             // at the measured height and the scroll maths disagreeing with them (LST-26). 20 is the
+             // default, so a caller has to mean it.
+             // A derived tree's extra spacing goes on every row (Telerik's SpacingBetweenNodes).
+-            var spacing = TreeView is { } owner ? LogicalToDeviceUnits (owner.ItemSpacing) : 0;
++            var owner = TreeView;
++            var spacing = owner is null ? 0 : LogicalToDeviceUnits (owner.ItemSpacing);
+
+             if (TreeView is { ItemHeight: > 0 } tree && tree.ItemHeight != 20)
+                 return new Size (0, LogicalToDeviceUnits (tree.ItemHeight) + spacing);
+
+-            var font_size = LogicalToDeviceUnits (Theme.FontSize);
++            var font_size = LogicalToDeviceUnits (owner?.HasOwnFont == true ? owner.Font.Height : Theme.FontSize);
+             var padding = LogicalToDeviceUnits (10);
+
+             return new Size (0, font_size + padding + spacing);

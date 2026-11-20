@@ -43,6 +43,7 @@ namespace MashWin {
                 AppBrushTitle?.Dispose();
                 AppPenBorder?.Dispose();
                 AppPenSeparator?.Dispose();
+                AppPenTitleDivider?.Dispose();
                 AppPenSizeGrip?.Dispose();
                 StatusTextAlignment?.Dispose();
                 TitleTextAlignment?.Dispose();

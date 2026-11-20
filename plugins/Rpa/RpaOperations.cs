@@ -35,13 +35,7 @@ internal static class RpaOperations {
             RpaPaths.ValidateEntryPath(entryPath);
 
             using FileStream archive = OpenArchive(archivePath);
-            RpaIndex index = RpaIndex.Read(archive, cancellation);
-            if (!index.Entries.TryGetValue(entryPath, out RpaEntry? entry)) {
-                throw new FileNotFoundException("The RPA entry no longer exists.", entryPath);
-                }
-            if (entry.Size != request.EntrySize) {
-                throw new IOException("The RPA entry size changed. Reopen the archive to refresh its contents.");
-                }
+            RpaEntry entry = FindEntry(archive, entryPath, request.EntrySize, cancellation);
             if (length > entry.Size) {
                 throw new EndOfStreamException("The requested read is longer than the RPA entry.");
                 }
@@ -53,6 +47,41 @@ internal static class RpaOperations {
         finally {
             Monitor.Exit(OperationGate);
             }
+        }
+
+    internal static RpaEntryStream OpenEntryStream(PluginRequest request, RpaCancellation cancellation) {
+        EnterOperation(cancellation);
+        try {
+            cancellation.Check();
+            string archivePath = RpaPaths.FullFilePath(request.ArchivePath, "archive path");
+            string entryPath = request.EntryPath ?? throw new InvalidDataException("An entry path is required.");
+            RpaPaths.ValidateEntryPath(entryPath);
+
+            FileStream archive = OpenArchive(archivePath);
+            try {
+                RpaEntry entry = FindEntry(archive, entryPath, request.EntrySize, cancellation);
+                return new RpaEntryStream(archive, entry, cancellation);
+                }
+            catch {
+                archive.Dispose();
+                throw;
+                }
+            }
+        finally {
+            Monitor.Exit(OperationGate);
+            }
+        }
+
+    private static RpaEntry FindEntry(FileStream archive, string entryPath, long? expectedSize,
+        RpaCancellation cancellation) {
+        RpaIndex index = RpaIndex.Read(archive, cancellation);
+        if (!index.Entries.TryGetValue(entryPath, out RpaEntry? entry)) {
+            throw new FileNotFoundException("The RPA entry no longer exists.", entryPath);
+            }
+        if (entry.Size != expectedSize) {
+            throw new IOException("The RPA entry size changed. Reopen the archive to refresh its contents.");
+            }
+        return entry;
         }
 
     private static PluginResponse Open(string archivePath, RpaCancellation cancellation) {

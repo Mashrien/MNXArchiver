@@ -168,3 +168,29 @@ inherited `statusBarControls` panel in `InitializeComponent`, and call
 ownership to MWin and connects live status settings without designer aliases.
 RoundButton's TextAlign default metadata now matches its constructor, preserving
 explicit centered alignment when the Visual Studio designer saves the form.
+## Apply a runtime theme
+
+Pass a `MashWin.Settings.UserColors.Theme` to `UserColors.Apply` on the form's
+UI thread. The caller can populate it from a configuration file, a desktop
+palette, or a settings dialog. The library owns the rendering and layout.
+
+```csharp
+using MashWin.Settings;
+
+UserColors.Theme theme = new UserColors.Theme {
+    Window = new UserColors.WindowTheme {
+        Border = Color.SteelBlue,
+        TitleHeight = 32,
+        DividerMargin = 6,
+        },
+    };
+UserColors.Apply(theme, window, new UserColors.Targets {
+    Toolbar = toolbar,
+    Navigation = navigation,
+    StatusDivider = true,
+    });
+```
+
+Set `Window.Divider` to give the separators their own color. Use
+`CaptionTheme.HighlightOuter` or `PressedOuter` with the Exit colors to select
+a radial gradient. `Targets` identifies the controls for each group.

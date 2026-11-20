@@ -29,19 +29,27 @@ public sealed partial class MainForm {
         _previews = new PreviewManager(this, _settings);
         }
 
-    private bool CanPreview(Guid id) {
+    private NativeVideoProvider? VideoProviderFor(string name) {
+        if (_archive is null && _pluginArchive?.Supports(PluginActions.StreamEntry) != true) {
+            return null;
+            }
+        return PluginCatalog.Installed.VideoProviderFor(name);
+        }
+
+    private bool CanPreview(Guid id, bool hover = false) {
         if (_busy || !_settings.Previews || _browser is null) {
             return false;
             }
-        if (_archive is null && _pluginArchive?.Supports(PluginActions.ReadEntry) != true) {
-            return false;
-            }
-
         ArchiveBrowser.Entry entry = _browser.Get(id);
-        if (entry.IsDirectory || entry.Bytes > (ulong)_settings.PreviewBufferBytes) {
+        if (entry.IsDirectory) {
             return false;
             }
-        return _previews.CanPreview(entry.Name);
+        if (!hover && VideoProviderFor(entry.Name) is not null) {
+            return true;
+            }
+        return entry.Bytes <= (ulong)_settings.PreviewBufferBytes
+            && (_archive is not null || _pluginArchive?.Supports(PluginActions.ReadEntry) == true)
+            && _previews.CanPreview(entry.Name);
         }
 
     private void OnListHover(object? sender, MouseEventArgs args) {
@@ -49,7 +57,7 @@ public sealed partial class MainForm {
             return;
             }
         ListViewItem? item = fileList.GetItemAt(args.X, args.Y);
-        Guid id = item?.Tag is Guid found && CanPreview(found) ? found : Guid.Empty;
+        Guid id = item?.Tag is Guid found && CanPreview(found, hover: true) ? found : Guid.Empty;
         if (id == _hovered) {
             return;
             }
@@ -70,7 +78,7 @@ public sealed partial class MainForm {
         }
 
     private async Task PreviewEntry(Guid id, bool hover) {
-        if (!CanPreview(id)) {
+        if (!CanPreview(id, hover)) {
             if (!hover) {
                 statusMessage.Text = "Preview unavailable. Enable a supported type in Options; files must fit the preview buffer.";
                 }
@@ -89,12 +97,33 @@ public sealed partial class MainForm {
         UpdateActions();
         PreviewData? data = null;
         try {
+            NativeVideoProvider? videoProvider = hover ? null : VideoProviderFor(entry.Name);
+            if (videoProvider is not null) {
+                statusMessage.Text = "Opening preview: " + entry.Name;
+                try {
+                    await _previews.ShowVideoAsync(videoProvider, token => moduleArchive is not null
+                        ? moduleArchive.OpenEntryStream(id, token)
+                        : archive!.OpenRead(id), entry.Name, position);
+                    statusMessage.Text = "Preview: " + entry.Name;
+                    return;
+                    }
+                catch (InvalidVideoException) when (kind != PreviewKind.Unsupported &&
+                    entry.Bytes <= (ulong)bufferLimit &&
+                    (archive is not null || moduleArchive?.Supports(PluginActions.ReadEntry) == true)) {
+                    // A text or image preview can share a video extension.
+                    }
+                }
+
             data = await Task.Run(() => {
                 if (moduleArchive is not null) {
                     return PreviewData.Read(moduleArchive, id, kind, CancellationToken.None, bufferLimit);
                     }
                 return PreviewData.Read(archive!, id, kind, CancellationToken.None, bufferLimit);
                 });
+            if (data.IsMpegTransportDisguisedAsText(entry.Name)) {
+                statusMessage.Text = "Open MPEG transport stream previews explicitly.";
+                return;
+                }
             Point currentPoint = fileList.PointToClient(Cursor.Position);
             Guid underCursor = fileList.GetItemAt(currentPoint.X, currentPoint.Y)?.Tag is Guid cursorId ? cursorId : Guid.Empty;
             if (hover && (generation != _hoverGeneration || underCursor != id)) {

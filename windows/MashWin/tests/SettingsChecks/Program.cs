@@ -15,8 +15,8 @@ internal static class Program {
         Check("Property grid label", CheckLabel);
         Check("Every setting notifies its owner", CheckNotifications);
         Check("Nested edits repaint without resizing", CheckRepaint);
-        Check("Caption visibility changes immediately", CheckCaption);
-        Check("Owned status panel protects borders and the resize corner", CheckStatusHost);
+        Check("Caption sizing, visibility and palette update immediately", CheckCaption);
+        Check("Owned status panel protects separators and the resize corner", CheckStatusHost);
         Check("Caption glyphs remain centered", CheckCaptionAlignment);
         Check("Replacement settings detach the previous owner", CheckReplacement);
         Check("Disposed forms detach settings", CheckDisposal);
@@ -202,6 +202,21 @@ internal static class Program {
                     Require(bitmap.GetPixel(100, 31).ToArgb() == window.Settings.Frame.BorderColor.ToArgb(),
                         "Docked content covers the thick title divider");
                     }
+                window.Settings.MenuSeparator.Color = Color.LimeGreen;
+                window.Settings.MenuSeparator.Thickness = 2;
+                window.Settings.StatusBar.ShowSeparator = true;
+                Application.DoEvents();
+                Require(fill.Bottom == host.Top - 2, "Docked content reaches the status divider");
+                using (Bitmap bitmap = Capture(window)) {
+                    Require(bitmap.GetPixel(100, 31).ToArgb() == Color.LimeGreen.ToArgb(),
+                        "The title divider ignored the shared color");
+                    for (int y = host.Top - 2; y < host.Top; y++) {
+                        Require(bitmap.GetPixel(host.Left + 1, y).ToArgb() == Color.LimeGreen.ToArgb() &&
+                            bitmap.GetPixel(window.ClientSize.Width / 2, y).ToArgb() == Color.LimeGreen.ToArgb() &&
+                            bitmap.GetPixel(host.Right - 1, y).ToArgb() == Color.LimeGreen.ToArgb(),
+                            "The status divider did not paint its full thickness across the status controls");
+                        }
+                    }
                 }
             using (ProgressBar progress = new ProgressBar()) {
                 progress.Dock = DockStyle.Right;
@@ -215,7 +230,27 @@ internal static class Program {
 
     private static void CheckCaption() {
         using (MWindow window = CreateWindow()) {
-            Control maximize = window.Controls["rbMaximize"];
+            RoundButton exit = (RoundButton)window.Controls["rbExit"];
+            RoundButton maximize = (RoundButton)window.Controls["rbMaximize"];
+            RoundButton minimize = (RoundButton)window.Controls["rbMinimize"];
+            Require(exit.Size == new Size(30, 20) && maximize.Size == exit.Size && minimize.Size == exit.Size,
+                "The default title height changed the legacy button dimensions");
+            window.Settings.Title.Height = 52;
+            Require(exit.Size == new Size(60, 40) && maximize.Size == exit.Size && minimize.Size == exit.Size,
+                "Caption buttons did not scale with the title height");
+            Require(minimize.Right - 1 == maximize.Left && maximize.Right - 1 == exit.Left,
+                "Caption buttons did not move with their new dimensions");
+
+            window.Settings.CaptionButtons.MinMax.Foreground = Color.Ivory;
+            window.Settings.CaptionButtons.MinMax.Highlight = Color.Navy;
+            window.Settings.CaptionButtons.Exit.Foreground = Color.Black;
+            window.Settings.CaptionButtons.Exit.Pressed = Color.Maroon;
+            Require(maximize.ForeColor == Color.Ivory && minimize.ForeColor == Color.Ivory && exit.ForeColor == Color.Black,
+                "Exit and minimize/maximize foregrounds were not independently applied");
+            Require(maximize.ExtendedSettings.MouseOverBackColor == Color.Navy &&
+                minimize.ExtendedSettings.MouseOverBackColor == Color.Navy && exit.ExtendedSettings.MouseDownBackColor == Color.Maroon,
+                "Live caption interaction colors did not reach their controls");
+
             window.Settings.CaptionButtons.MaximizeBox = false;
             Require(!maximize.Visible, "Maximize caption stayed visible");
             window.Settings.CaptionButtons.MaximizeBox = true;

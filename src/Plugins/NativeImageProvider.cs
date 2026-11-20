@@ -11,7 +11,7 @@ internal sealed unsafe class NativeImageProvider {
     internal string LibraryName { get; }
     internal ImageProviderDescription Description { get; }
 
-    internal NativeImageProvider(string path, nint library, nint versionExport) {
+    internal NativeImageProvider(string path, PluginLibrary library, nint versionExport) {
         LibraryName = Path.GetFileName(path);
         delegate* unmanaged[Cdecl]<uint> getVersion = (delegate* unmanaged[Cdecl]<uint>)versionExport;
         uint version = getVersion();
@@ -25,14 +25,14 @@ internal sealed unsafe class NativeImageProvider {
         PluginDescriptorValidation.ValidateExtensions(Description.Extensions);
 
         _inspect = (delegate* unmanaged[Cdecl]<byte*, int, ImageProviderImageInfo*, ImageProviderStatus>)
-            NativeLibrary.GetExport(library, "mnx_image_provider_inspect");
+            library.GetExport("mnx_image_provider_inspect");
         _decode = (delegate* unmanaged[Cdecl]<byte*, int, nint*, long, int, int, int, int, int*, ImageProviderStatus>)
-            NativeLibrary.GetExport(library, "mnx_image_provider_decode");
+            library.GetExport("mnx_image_provider_decode");
         }
 
-    private static ImageProviderDescription ReadDescription(nint library) {
+    private static ImageProviderDescription ReadDescription(PluginLibrary library) {
         delegate* unmanaged[Cdecl]<byte*, int, int> describe =
-            (delegate* unmanaged[Cdecl]<byte*, int, int>)NativeLibrary.GetExport(library, "mnx_image_provider_describe");
+            (delegate* unmanaged[Cdecl]<byte*, int, int>)library.GetExport("mnx_image_provider_describe");
         int length = describe(null, 0);
         if (length <= 0 || length > ImageProviderProtocol.MaxDescriptionBytes) {
             throw new InvalidDataException("The image provider descriptor has an invalid length.");

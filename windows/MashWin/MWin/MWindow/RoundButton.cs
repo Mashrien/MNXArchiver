@@ -162,6 +162,8 @@ namespace MashWin {
         private Brush TextColor;
         private Color cachedTextColor;
         private Color cachedInvertedColor;
+        private CaptionButtonColors captionColors;
+        private Font captionFont;
 
         //private Color BackColor = Color.Black;
 
@@ -205,11 +207,30 @@ namespace MashWin {
             // OnPaint already handles rendering; avoid a recursive Paint -> OnPaint subscription.
             }
 
+        internal void SetCaptionColors(CaptionButtonColors colors) {
+            captionColors = colors;
+            ForeColor = colors.Foreground;
+            Settings.MouseOverBackColor = colors.Highlight;
+            Settings.MouseDownBackColor = colors.Pressed;
+            }
+
+        internal void SetCaptionFont(Font template, float sizeInPoints) {
+            if (captionFont != null && captionFont.Name == template.Name &&
+                captionFont.Style == template.Style && captionFont.SizeInPoints == sizeInPoints) {
+                return;
+                }
+            Font resized = new Font(template.FontFamily, sizeInPoints, template.Style);
+            Font = resized;
+            captionFont?.Dispose();
+            captionFont = resized;
+            }
+
         protected override void Dispose(bool disposing) {
             if (disposing) {
                 // Cached text brushes and our original pen are owned drawing resources.
                 TextInvertedColor?.Dispose();
                 TextColor?.Dispose();
+                captionFont?.Dispose();
                 ownedBorderPen.Dispose();
                 }
             base.Dispose(disposing);
@@ -239,8 +260,7 @@ namespace MashWin {
             BorderPen.Color = this.Settings.BorderColor;
 
             MWindow ownerWindow = (MWindow)Parent;
-            bool captionButton = Name == "rbExit" || Name == "rbMinimize" || Name == "rbMaximize";
-            Color parentColor = captionButton && !ownerWindow.Settings.Title.BackgroundColor.IsEmpty
+            Color parentColor = captionColors != null && !ownerWindow.Settings.Title.BackgroundColor.IsEmpty
                 ? ownerWindow.Settings.Title.BackgroundColor : ownerWindow.BackColor;
             if (BackColor != parentColor) {
                 BackColor = parentColor;
@@ -292,42 +312,19 @@ namespace MashWin {
             e.Graphics.InterpolationMode = InterpolationMode.HighQualityBilinear;
             //e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-            if (isMouseOver) {
-                if (Settings.VistaStyleGradientBackground) {
-                    using (GraphicsPath gp = new GraphicsPath()) {
-                        gp.AddEllipse(this.ClientRectangle.X - this.Settings.CornerRadius, this.ClientRectangle.Y - this.Settings.CornerRadius, this.ClientRectangle.Width + (this.Settings.CornerRadius * 2), this.ClientRectangle.Height + (this.Settings.CornerRadius * 2));
-                        using (PathGradientBrush pgb = new PathGradientBrush(gp)) {
-                            pgb.CenterPoint = new Point(this.Width / 2, this.Height);//PointToClient(Cursor.Position);
-                            pgb.CenterColor = Settings.MouseOverBackColor;
-                            pgb.SurroundColors = new Color[] { Color.FromArgb(0, 0, 0, 0), Color.FromArgb(0, 0, 0, 0), Color.FromArgb(0, 0, 0, 0), Color.FromArgb(0, 0, 0, 0) };
-                            e.Graphics.DrawRoundedRectangle(Color.Black, r, Settings.CornerRadius, this.Settings.RoundCorners, BorderPen, pgb);
-                            pgb.Dispose();
-                            }
-                        gp.Dispose();
-                        }
-                    }
-                else {
-                    e.Graphics.DrawRoundedRectangle(Settings.MouseOverBackColor, r, Settings.CornerRadius, this.Settings.RoundCorners, BorderPen);
-                    }
+            if (captionColors != null && !captionColors.Background.IsEmpty) {
+                e.Graphics.DrawRoundedRectangle(captionColors.Background, r, Settings.CornerRadius,
+                    Settings.RoundCorners, BorderPen);
+                }
+
+            if (isMouseOver && (!isMouseDown || captionColors == null)) {
+                Color outer = captionColors?.HighlightOuterColor ?? Color.Transparent;
+                DrawInteractionBackground(e.Graphics, r, Settings.MouseOverBackColor, outer, Settings.CornerRadius);
                 }
 
             if (isMouseDown) {
-                if (Settings.VistaStyleGradientBackground) {
-                    using (GraphicsPath gp = new GraphicsPath()) {
-                        gp.AddEllipse(this.ClientRectangle.X - 10, this.ClientRectangle.Y - 10, this.ClientRectangle.Width + 20, this.ClientRectangle.Height + 20);
-                        using (PathGradientBrush pgb = new PathGradientBrush(gp)) {
-                            pgb.CenterPoint = new Point(this.Width / 2, this.Height);
-                            pgb.CenterColor = Settings.MouseDownBackColor;
-                            pgb.SurroundColors = new Color[] { Settings.MouseDownBackColorAlt };
-                            e.Graphics.DrawRoundedRectangle(Color.Black, r, Settings.CornerRadius, this.Settings.RoundCorners, BorderPen, pgb);
-                            pgb.Dispose();
-                            }
-                        gp.Dispose();
-                        }
-                    }
-                else {
-                    e.Graphics.DrawRoundedRectangle(Settings.MouseDownBackColor, r, Settings.CornerRadius, this.Settings.RoundCorners, BorderPen);
-                    }
+                Color outer = captionColors?.PressedOuterColor ?? Settings.MouseDownBackColorAlt;
+                DrawInteractionBackground(e.Graphics, r, Settings.MouseDownBackColor, outer, 10);
                 }
 
             e.Graphics.DrawRoundedRectangle(Settings.BorderColor, r, Settings.CornerRadius, this.Settings.RoundCorners, BorderPen, null, true);
@@ -337,6 +334,23 @@ namespace MashWin {
 
             e.Graphics.Flush();
             return;
+            }
+        private void DrawInteractionBackground(Graphics graphics, Rectangle bounds, Color primary, Color outer, int expansion) {
+            if (!Settings.VistaStyleGradientBackground || outer.IsEmpty) {
+                graphics.DrawRoundedRectangle(primary, bounds, Settings.CornerRadius, Settings.RoundCorners, BorderPen);
+                return;
+                }
+
+            Rectangle gradientBounds = Rectangle.Inflate(bounds, expansion, expansion);
+            using (GraphicsPath path = new GraphicsPath()) {
+                path.AddEllipse(gradientBounds.X, gradientBounds.Y, gradientBounds.Width, gradientBounds.Height);
+                using (PathGradientBrush brush = new PathGradientBrush(path)) {
+                    brush.CenterPoint = new Point(Width / 2, Height);
+                    brush.CenterColor = primary;
+                    brush.SurroundColors = new Color[] { outer };
+                    graphics.DrawRoundedRectangle(Color.Black, bounds, Settings.CornerRadius, Settings.RoundCorners, BorderPen, brush);
+                    }
+                }
             }
         }
 

@@ -11,14 +11,17 @@ internal sealed class PluginCatalog {
     internal static PluginCatalog Installed => _installed.Value;
     internal IReadOnlyList<NativeArchiveModule> Modules { get; }
     internal IReadOnlyList<NativeImageProvider> ImageProviders { get; }
+    internal IReadOnlyList<NativeVideoProvider> VideoProviders { get; }
     internal IReadOnlyList<string> Issues { get; }
     internal string DirectoryPath { get; }
     private readonly int _headerLength;
 
-    private PluginCatalog(string directory, List<NativeArchiveModule> modules, List<NativeImageProvider> imageProviders, List<string> issues) {
+    private PluginCatalog(string directory, List<NativeArchiveModule> modules, List<NativeImageProvider> imageProviders,
+        List<NativeVideoProvider> videoProviders, List<string> issues) {
         DirectoryPath = directory;
         Modules = modules.AsReadOnly();
         ImageProviders = imageProviders.AsReadOnly();
+        VideoProviders = videoProviders.AsReadOnly();
         Issues = issues.AsReadOnly();
         _headerLength = Math.Max(4, modules.Select(module => module.SignatureLength).DefaultIfEmpty().Max());
         }
@@ -32,7 +35,7 @@ internal sealed class PluginCatalog {
         if (string.IsNullOrEmpty(root) || !Path.IsPathFullyQualified(root)) {
             string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             if (!Path.IsPathFullyQualified(profile)) {
-                return new PluginCatalog("(unavailable)", [], [], ["No absolute per-user module directory is available."]);
+                return new PluginCatalog("(unavailable)", [], [], [], ["No absolute per-user module directory is available."]);
                 }
             root = Path.Combine(profile, ".config");
             }
@@ -43,12 +46,13 @@ internal sealed class PluginCatalog {
         directory = Path.GetFullPath(directory);
         List<NativeArchiveModule> modules = new List<NativeArchiveModule>();
         List<NativeImageProvider> imageProviders = new List<NativeImageProvider>();
+        List<NativeVideoProvider> videoProviders = new List<NativeVideoProvider>();
         List<string> issues = new List<string>();
         try {
             if (Directory.Exists(directory)) {
                 foreach (string path in ExtensionFiles(directory)) {
                     try {
-                        LoadExtension(path, modules, imageProviders);
+                        LoadExtension(path, modules, imageProviders, videoProviders);
                         }
                     catch (Exception error) {
                         issues.Add(Path.GetFileName(path) + ": " + error.Message);
@@ -59,7 +63,7 @@ internal sealed class PluginCatalog {
         catch (Exception error) {
             issues.Add(error.Message);
             }
-        return new PluginCatalog(directory, modules, imageProviders, issues);
+        return new PluginCatalog(directory, modules, imageProviders, videoProviders, issues);
         }
 
     private static IEnumerable<string> ExtensionFiles(string directory) {
@@ -74,12 +78,16 @@ internal sealed class PluginCatalog {
         return Path.GetExtension(path).Equals(".mnxp", StringComparison.OrdinalIgnoreCase);
         }
 
-    private static void LoadExtension(string path, List<NativeArchiveModule> modules, List<NativeImageProvider> imageProviders) {
-        CheckNativeLibrary(path);
-        nint library = NativeLibrary.Load(path, typeof(PluginCatalog).Assembly,
-            DllImportSearchPath.SafeDirectories | DllImportSearchPath.UseDllDirectoryForDependencies);
-        if (NativeLibrary.TryGetExport(library, "mnx_image_provider_abi_version", out nint versionExport)) {
+    private static void LoadExtension(string path, List<NativeArchiveModule> modules, List<NativeImageProvider> imageProviders,
+        List<NativeVideoProvider> videoProviders) {
+        PluginLibrary library = new PluginLibrary(path, IsWindowsExecutablePlugin(path));
+        if (library.TryGetExport("mnx_image_provider_abi_version", out nint versionExport)) {
             AddImageProvider(path, library, versionExport, imageProviders);
+            return;
+            }
+
+        if (library.TryGetExport("mnx_video_provider_abi_version", out nint videoVersion)) {
+            AddVideoProvider(path, library, videoVersion, videoProviders);
             return;
             }
 
@@ -90,7 +98,7 @@ internal sealed class PluginCatalog {
         modules.Add(module);
         }
 
-    private static void AddImageProvider(string path, nint library, nint versionExport, List<NativeImageProvider> providers) {
+    private static void AddImageProvider(string path, PluginLibrary library, nint versionExport, List<NativeImageProvider> providers) {
         NativeImageProvider provider = new NativeImageProvider(path, library, versionExport);
         foreach (NativeImageProvider existing in providers) {
             if (existing.Description.Id == provider.Description.Id) {
@@ -109,6 +117,25 @@ internal sealed class PluginCatalog {
             provider.Description.Extensions.Contains(extension, StringComparer.OrdinalIgnoreCase));
         }
 
+    private static void AddVideoProvider(string path, PluginLibrary library, nint versionExport, List<NativeVideoProvider> providers) {
+        NativeVideoProvider provider = new NativeVideoProvider(path, library, versionExport);
+        foreach (NativeVideoProvider existing in providers) {
+            if (existing.Description.Id == provider.Description.Id) {
+                throw new InvalidDataException("A video provider with the same ID is already installed.");
+                }
+            if (existing.Description.Extensions.Intersect(provider.Description.Extensions, StringComparer.OrdinalIgnoreCase).Any()) {
+                throw new InvalidDataException("An installed video provider already handles one of these extensions.");
+                }
+            }
+        providers.Add(provider);
+        }
+
+    internal NativeVideoProvider? VideoProviderFor(string fileName) {
+        string extension = Path.GetExtension(fileName);
+        return VideoProviders.FirstOrDefault(provider =>
+            provider.Description.Extensions.Contains(extension, StringComparer.OrdinalIgnoreCase));
+        }
+
     internal string AboutSummary() {
         List<string> lines = new() { $"Archive modules loaded: {Modules.Count}" };
         foreach (NativeArchiveModule module in Modules) {
@@ -121,6 +148,13 @@ internal sealed class PluginCatalog {
         lines.Add($"Image providers loaded: {ImageProviders.Count}");
         foreach (NativeImageProvider provider in ImageProviders) {
             ImageProviderDescription description = provider.Description;
+            string extensions = string.Join(", ", description.Extensions);
+            lines.Add($"  {description.Name} {description.Version} ({provider.LibraryName}) — {extensions}");
+            }
+        lines.Add("");
+        lines.Add($"Video providers loaded: {VideoProviders.Count}");
+        foreach (NativeVideoProvider provider in VideoProviders) {
+            VideoProviderDescription description = provider.Description;
             string extensions = string.Join(", ", description.Extensions);
             lines.Add($"  {description.Name} {description.Version} ({provider.LibraryName}) — {extensions}");
             }
@@ -145,7 +179,7 @@ internal sealed class PluginCatalog {
         using Process? opener = Process.Start(new ProcessStartInfo(DirectoryPath) { UseShellExecute = true });
         }
 
-    private static void CheckNativeLibrary(string path) {
+    private static bool IsWindowsExecutablePlugin(string path) {
         FileAttributes attributes = File.GetAttributes(path);
         if ((attributes & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != 0) {
             throw new InvalidDataException("Plugin libraries must be regular files.");
@@ -166,11 +200,16 @@ internal sealed class PluginCatalog {
                 _ => Machine.Unknown,
                 };
             if (reader.PEHeaders.PEHeader is null || reader.HasMetadata
-                || (reader.PEHeaders.CoffHeader.Characteristics & Characteristics.Dll) == 0
                 || machine == Machine.Unknown || reader.PEHeaders.CoffHeader.Machine != machine) {
-                throw new InvalidDataException("Expected a native DLL for this process architecture.");
+                throw new InvalidDataException("Expected a native plugin for this process architecture.");
                 }
-            return;
+            if ((reader.PEHeaders.CoffHeader.Characteristics & Characteristics.Dll) != 0) {
+                return false;
+                }
+            if (!IsMnxPlugin(path) || machine != Machine.Amd64) {
+                throw new InvalidDataException("Executable plugins require a native Windows x64 .mnxp file.");
+                }
+            return true;
             }
 
         Span<byte> header = stackalloc byte[20];
@@ -187,11 +226,13 @@ internal sealed class PluginCatalog {
             || elfMachine == 0 || BinaryPrimitives.ReadUInt16LittleEndian(header[18..]) != elfMachine) {
             throw new InvalidDataException("Expected a native ELF shared library for this process architecture.");
             }
+        return false;
         }
 
     private bool ClaimsExtension(string path) {
         string extension = Path.GetExtension(path);
         return extension.Equals(".rpa", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".rar", StringComparison.OrdinalIgnoreCase)
             || Modules.Any(module => module.Format.Extensions.Contains(extension, StringComparer.OrdinalIgnoreCase));
         }
 

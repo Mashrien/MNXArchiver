@@ -3,8 +3,9 @@
 The GUI uses UTF-8 INI files, read and written entirely in managed C#.
 No ProfileString, registry, Win32, GTK, or desktop service is required by the reader.
 
-Normal Linux directory: `$XDG_CONFIG_HOME/mnxarchiver`, or `~/.config/mnxarchiver`.
-Main settings: `mnxarchiver.conf`. MWin palette: `mnx.mwin-colors.conf`.
+On Linux, `mnxarchiver.conf` and `gui.mwin.drawing.conf` are stored under
+`$XDG_CONFIG_HOME/mnxarchiver` or `~/.config/mnxarchiver`. On Windows, they are
+stored under `%APPDATA%\mnxarchiver`.
 
 Main settings use sections by context:
 
@@ -16,53 +17,37 @@ Main settings use sections by context:
 - `[MNX.Previews]`, `[MNX.Previews.Text]`, `[MNX.Previews.Images]`,
   `[MNX.Previews.Display]`: preview activation, limits, types and presentation.
 
-The palette file has its own `[MNX.Display.MWin]` section, for example:
+## MWin drawing settings
+
+`gui.mwin.drawing.conf` groups settings by what they draw.
+
+- `[mnx.display.mwin.window]` covers the frame, title and status areas, dividers and caption buttons.
+- `[mnx.display.mwin.buttons]` covers the main toolbar buttons' colors, fonts and rounded borders. Home and Up use the navigation text settings.
+- `[mnx.display.mwin.text]` sets the navigation and menu text font, size and color. If `Color` is omitted, the menu palette supplies the normal menu text color.
+- `[mnx.display.mwin.files]` covers the folder tree, file list and column headers.
+- `[mnx.display.mwin.menus]` overrides menu, context menu and toolbar item colors. `ImageMargin` colors the icon and checkmark gutter, and `Separator` colors the rules between items.
+
+Use `#RRGGBB` for solid colors. The caption highlight and pressed states also
+accept two hex colors separated by a comma, with the center color first and
+the edge color second. A blank `Color.wmDivs` inherits `Color.wmBorder`. For example:
 
 ```ini
-[MNX.Display.MWin]
-WindowBackground=#202326
-WindowText=#FCFCFC
-ViewBackground=#141618
-ViewText=#FCFCFC
-ButtonBackground=#292C30
-ButtonText=#FCFCFC
-SelectionBackground=#3DAEE9
-SelectionText=#FCFCFC
-Accent=#3DAEE9
-Border=#808080
-DisabledText=#A1A9B1
-TitleBackground=#272C31
-TitleText=#FCFCFC
-
-[MNX.Display.MWin.Menus]
-BarBackground=#202326
-Background=#202326
-Text=#FCFCFC
-DisabledText=#A1A9B1
-HoverBackground=#3DAEE9
-HoverText=#FCFCFC
-PressedBackground=#3DAEE9
-PressedText=#FCFCFC
-CheckedBackground=#3DAEE9
-CheckedText=#FCFCFC
-ImageMargin=#202326
-Border=#808080
-Separator=#808080
+[mnx.display.mwin.window]
+Color.wmBack=#202326
+controlBox.Exit.Colors.Highlight=#DB7093
+controlBox.Exit.Colors.Pressed=#8B0000,#000000
 ```
 
-`#RRGGBB` or `red,green,blue` is accepted. MWin creates the palette from the desktop
-only when the file is missing. KDE's kdeglobals takes precedence on KDE; GTK4 named
-colors are the fallback, then readable built-in colors. Manual edits are preserved.
-The `Menus` section controls the menu bar, its popup and nested menus, context
-menus and the shared toolbar item states. Missing or invalid menu values inherit
-the corresponding window, selection or border color from the main palette, so an
-older dark palette stays dark without being rewritten. New palette files include
-all menu keys. `ImageMargin` is the icon/checkmark gutter; `Separator` controls the
-rules between menu groups.
+MNX Archiver creates the drawing file on first use. It carries over colors from an
+existing `mnx.mwin-colors.conf` and leaves that file available as a backup.
+On a fresh installation, Windows uses its system colors. Linux tries KDE
+`kdeglobals`, GTK4 named colors and the built-in defaults, in that order.
+Legacy `red,green,blue` values are also accepted for solid colors. Individual
+invalid settings use defaults.
 
-Restart after editing the palette or changing the colors switch. Delete the palette
-file to recapture a new desktop theme. Unreadable/malformed individual colors use
-fallback values; reading the file never overwrites its contents.
+Restart MNX after editing the drawing file or changing the colors switch. To
+capture new desktop colors, move both files out of the configuration directory
+before restarting.
 
 ## Portable INI_Config class
 

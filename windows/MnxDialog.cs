@@ -1,3 +1,5 @@
+using MashWin.Settings;
+
 namespace Mash.GUI.MNXArchiver;
 
 /// <summary>Shared MWin chrome defaults for owned MNX dialogs; content stays designer-editable.</summary>
@@ -15,24 +17,17 @@ public partial class MnxDialog : MashWin.MWindow {
         FormBorderStyle = FormBorderStyle.None;
         }
 
-    partial void ApplyPlatformAppearance();
     protected virtual bool PreserveOwnFrameStyle => false;
 
     protected override void OnLoad(EventArgs arguments) {
         if (Owner is MashWin.MWindow owner) {
             Opacity = owner.Opacity;
-            // Copy appearance, while preserving this dialog's own close/resize policy.
-            Settings.Frame.BorderColor = owner.Settings.Frame.BorderColor;
-            if (!PreserveOwnFrameStyle) {
-                Settings.Frame.BorderThickness = owner.Settings.Frame.BorderThickness;
-                Settings.Frame.CornerRadius = owner.Settings.Frame.CornerRadius;
-                }
-            Settings.Title.Font = owner.Settings.Title.Font;
-            Settings.Title.Alignment = owner.Settings.Title.Alignment;
-            Settings.ToolStrips.BackgroundColor = owner.Settings.ToolStrips.BackgroundColor;
-            Settings.ToolStrips.TextColor = owner.Settings.ToolStrips.TextColor;
             }
-        ApplyPlatformAppearance();
+        UserColors.Targets targets = new UserColors.Targets {
+            InheritOwnerAppearance = true,
+            PreserveFrameGeometry = PreserveOwnFrameStyle,
+            };
+        UserColors.Apply(MWinDrawing.Current, this, targets);
         base.OnLoad(arguments);
         }
     }

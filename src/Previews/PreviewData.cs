@@ -52,6 +52,27 @@ internal sealed class PreviewData : IDisposable {
         return extension.Length > 0 && (defaults + "," + additional).Split(',').Contains(extension, StringComparer.OrdinalIgnoreCase);
         }
 
+    internal bool IsMpegTransportDisguisedAsText(string name) {
+        if (Kind != PreviewKind.Text || !Path.GetExtension(name).Equals(".ts", StringComparison.OrdinalIgnoreCase)) {
+            return false;
+            }
+        // .ts also names MPEG transport streams. Avoid displaying packets as TypeScript.
+        return HasTransportSync(Bytes, 0, 188) || HasTransportSync(Bytes, 4, 192) || HasTransportSync(Bytes, 0, 204);
+        }
+
+    private static bool HasTransportSync(ReadOnlySpan<byte> bytes, int prefix, int stride) {
+        if (bytes.Length < 3 * stride) {
+            return false;
+            }
+        for (int packet = 0; packet < 3; packet++) {
+            int start = prefix + packet * stride;
+            if (bytes[start] != 0x47 || (bytes[start + 1] & 0x80) != 0 || (bytes[start + 3] & 0x30) == 0) {
+                return false;
+                }
+            }
+        return true;
+        }
+
     internal static PreviewData Read(Archive archive, Guid id, PreviewKind kind, CancellationToken cancellation,
         int bufferLimit = InputLimit) {
         ulong size = archive.GetFile(id)?.SizeOriginal ?? throw new FileNotFoundException("The archived entry no longer exists.");

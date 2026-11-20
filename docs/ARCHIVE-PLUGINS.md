@@ -17,7 +17,28 @@ before loading it. MNXArchiver also discovers older platform-suffixed plugins.
 When upgrading RPA, move the old library out of the plugins directory to avoid
 two files declaring the same module ID.
 
+The RAR module uses the same directory. It adds browsing, extraction, and
+in-memory previews for RAR archives, including solid and multipart sets. Open
+the first `.rar` volume of a set. About lists the module and its archive formats.
+
+### Windows executable plugins
+
+Windows x64 can discover an executable `.mnxp` that exports
+`mnx_plugin_dual_mode_v1` and an MNX ABI. It must use the DLL CRT entry point
+and dispatch standalone commands only when it is the process's main image.
+The GUI maps the plugin in memory and keeps it loaded until exit.
+
+Before calling the plugin, the GUI resolves the Windows static TLS routines
+and checks the loader layout against a validated `ntdll.dll` build. The initial
+validated build is Windows 10 x64 with `ntdll.dll` 10.0.19041.6456.
+On other builds, About shows the compatibility rejection. Native DLL modules
+continue to use the normal Windows loader and work independently of this check.
+
 For preview format extensions, see [Image preview providers](IMAGE-PROVIDERS.md).
+
+The FFmpeg video provider adds muted playback with play, pause, and seeking.
+It reads seekable MNX entries and RPA entries from a module that supplies the
+entry-stream ABI. Complete plugin builds include a fallback FFmpeg decoder.
 
 Install modules you trust: native modules run inside the GUI process with your permissions. The library header and version handshake check compatibility.
 
@@ -26,6 +47,8 @@ Open an RPA archive with **Open**, a command line path, or drag and drop. Use **
 RPA module 1.0.1 adds in-memory text and image previews in MNXArchiver 2.0.0.70
 and later. Enable previews in Options. Ren’Py `.rpy` scripts use the source-code
 preview setting, and images use the same decoder and memory limits as MNX.
+RPA module 1.0.3 adds seekable entry streams for video previews in MNXArchiver
+2.1.1 with a video preview provider installed.
 The module reads a bounded subset of pickle as data and requires no Python installation. RPA 2.0 and unofficial variants are outside this module's supported range.
 
 ### Build the module
@@ -62,20 +85,20 @@ The declarations are in [mnx_plugin.h](../plugins/include/mnx_plugin.h). Export 
 2. `describe` returns a `format` object. It does not perform archive I/O and remains available for version diagnostics.
 3. The host checks the module release against its own range, and checks the host release against the module's range. It then calls `negotiate`; the module independently checks both ranges. All archive operations repeat the module-side checks before I/O.
 
-Every request carries `hostVersion`, `minPluginVersion`, and `maxPluginVersion`. The host release is the first three components of its assembly version, excluding the build counter. Ranges are inclusive. The 2.1 host supports module releases **1.0.0–1.0.999**; RPA module 1.0.2 supports host releases **2.0.0–2.1.999**. The archive format versions are independent:
+Every request carries `hostVersion`, `minPluginVersion`, and `maxPluginVersion`. The host release is the first three components of its assembly version, excluding the build counter. Ranges are inclusive. The 2.1 host supports module releases **1.0.0–1.0.999**. RPA module 1.0.3 supports host releases **2.0.0–2.1.999**. The archive format versions are independent:
 
 ```json
 {
   "format": {
     "id": "renpy.rpa",
     "name": "Ren'Py RPA",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "minHostVersion": "2.0.0",
     "maxHostVersion": "2.1.999",
     "extensions": [".rpa"],
     "currentVersion": "3.0",
     "versions": [
-      { "version": "3.0", "magicHex": "5250412D332E3020", "actions": 63 }
+      { "version": "3.0", "magicHex": "5250412D332E3020", "actions": 127 }
     ]
   }
 }
@@ -96,6 +119,7 @@ Signatures are a prefix of 1–64 bytes at offset zero, encoded as hex. Extensio
 | `delete` | `archivePath`, `entryPaths` | `entries` |
 | `extract` | `archivePath`, `outputs`, `overwrite` | Empty object |
 | `read` | `archivePath`, `entryPath`, `entrySize` | `bytesRead` and entry bytes in the supplied buffer |
+| `openEntryStream` | `archivePath`, `entryPath`, `entrySize` | Empty object and opaque stream handle |
 
 Archive and source disk paths are absolute. `sources` may contain files or directories for Add/Create. `folder` and `entryPath` are slash-separated archive paths, with an empty `folder` denoting the root. Return file entries as `{ "path": "folder/name", "size": 42 }`, with nonnegative 64-bit byte sizes; the host derives directories. Each output maps an archive `entryPath` to an absolute disk `destination`. An error response uses `error` with a readable message; cancellation uses `cancelled: true`.
 
@@ -116,3 +140,12 @@ buffer may be null. Return `bytesRead` only on success. Report errors and
 cancellation through the normal JSON response. The host owns the entry buffer
 for the duration of the call and releases the JSON response through
 `mnx_plugin_release`. A module must never retain either pointer.
+
+### Optional seekable entry streams
+
+Advertise `MNX_PLUGIN_STREAM_ENTRY` and export `mnx_plugin_open_entry_stream`,
+`mnx_plugin_read_entry_at`, and `mnx_plugin_close_entry_stream`. The host uses
+64-bit entry-relative offsets to read directly into caller-owned buffers.
+Validate the entry path and listed size when opening the stream. Keep the opened
+archive and entry mapping for subsequent reads. The host serializes calls per
+handle and closes each stream after playback.

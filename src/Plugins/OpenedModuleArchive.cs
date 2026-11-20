@@ -190,6 +190,22 @@ internal sealed class OpenedModuleArchive {
         _module.ReadEntry(request, destination, cancellation);
         }
 
+    internal Stream OpenEntryStream(Guid id, CancellationToken cancellation) {
+        RequireAction(PluginActions.StreamEntry);
+        ArchiveBrowser.Entry entry = Browser.Get(id);
+        if (entry.IsDirectory) {
+            throw new InvalidOperationException("Select an archived file to stream.");
+            }
+
+        PluginRequest request = new PluginRequest {
+            Operation = "openEntryStream",
+            ArchivePath = Path,
+            EntryPath = Browser.PathOf(id).TrimStart('/'),
+            EntrySize = checked((long)entry.Bytes),
+            };
+        return _module.OpenEntryStream(request, cancellation);
+        }
+
     internal PluginExtraction PlanExtraction(Guid[] ids, string destination, bool singleFile) {
         RequireAction(PluginActions.Extract);
         return new PluginExtraction(_module, this, ids, destination, singleFile);

@@ -15,6 +15,10 @@ namespace MashWin {
         private Color borderColor = Color.Gray;
         private int borderThickness = 1;
         private int cornerRadius = 5;
+        private Color hoverTextColor = SystemColors.ControlText;
+        private Color checkedTextColor = SystemColors.ControlText;
+        private Color imageMarginColor = Color.Empty;
+        private Color separatorColor = Color.Empty;
         private bool useGradients = true;
 
         [NotifyParentProperty(true)]
@@ -102,6 +106,50 @@ namespace MashWin {
                 }
             set {
                 SetValue(ref checkedColor, value);
+                }
+            }
+
+        [NotifyParentProperty(true)]
+        [DefaultValue(typeof(Color), "ControlText")]
+        public Color HoverTextColor {
+            get {
+                return hoverTextColor;
+                }
+            set {
+                SetValue(ref hoverTextColor, value);
+                }
+            }
+
+        [NotifyParentProperty(true)]
+        [DefaultValue(typeof(Color), "ControlText")]
+        public Color CheckedTextColor {
+            get {
+                return checkedTextColor;
+                }
+            set {
+                SetValue(ref checkedTextColor, value);
+                }
+            }
+
+        [NotifyParentProperty(true)]
+        [DefaultValue(typeof(Color), "Empty")]
+        public Color ImageMarginColor {
+            get {
+                return imageMarginColor.IsEmpty ? menuBackgroundColor : imageMarginColor;
+                }
+            set {
+                SetValue(ref imageMarginColor, value);
+                }
+            }
+
+        [NotifyParentProperty(true)]
+        [DefaultValue(typeof(Color), "Empty")]
+        public Color SeparatorColor {
+            get {
+                return separatorColor.IsEmpty ? borderColor : separatorColor;
+                }
+            set {
+                SetValue(ref separatorColor, value);
                 }
             }
 

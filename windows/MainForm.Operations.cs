@@ -12,7 +12,7 @@ public sealed partial class MainForm {
     partial void ReadPlatformWindowPosition(ref Point position);
     partial void RestorePlatformWindowPosition(Point position);
 
-    private async Task<T> RunOperation<T>(string title, Func<T> operation, Archive? target = null, TransferTracker? tracker = null, TransferCancellation? cancellation = null, bool extraction = false, string? displayPath = null, bool showProgress = true, bool encrypted = false, CancellationTokenSource? pluginCancellation = null, string? pluginFormat = null) {
+    private async Task<T> RunOperation<T>(string title, Func<T> operation, Archive? target = null, TransferTracker? tracker = null, TransferCancellation? cancellation = null, bool extraction = false, string? displayPath = null, bool showProgress = true, bool encrypted = false, CancellationTokenSource? pluginCancellation = null, string? pluginFormat = null, bool changesArchive = false) {
         if (_busy) {
             throw new InvalidOperationException("An archive operation is already running.");
             }
@@ -51,6 +51,9 @@ public sealed partial class MainForm {
         Point previousPosition = previousLocation;
         FormWindowState previousState = WindowState;
         try {
+            if (changesArchive) {
+                await _previews.CloseVideosAsync();
+                }
             if (showProgress) {
                 if (restoreMainWindow) {
                     ReadPlatformWindowPosition(ref previousPosition);
@@ -178,7 +181,7 @@ public sealed partial class MainForm {
                     RemainingQueue.Save(settings.Path, next.FileQueue, cancellation.ExportKeyFile ? settings.Password : null);
                     }
                 return finished;
-                }, next, tracker, cancellation, displayPath: settings.Path, encrypted: settings.Password is not null);
+                }, next, tracker, cancellation, displayPath: settings.Path, encrypted: settings.Password is not null, changesArchive: true);
             await OpenArchive(settings.Path, settings.Password);
             statusMessage.Text = complete ? "Archive created." : "Stopped after the current file. Completed files kept; matching .mnq saved alongside the archive.";
             }
@@ -201,7 +204,7 @@ public sealed partial class MainForm {
             await RunOperation("Adding files", () => {
                 FileTransfer.Import(archive, paths, parent, tracker, cancellation);
                 return true;
-                }, tracker: tracker, cancellation: cancellation);
+                }, tracker: tracker, cancellation: cancellation, changesArchive: true);
             statusMessage.Text = $"Added {paths.Length:N0} input item(s).";
             }
         catch (OperationCanceledException) {
@@ -311,7 +314,7 @@ public sealed partial class MainForm {
                         }
                     }
                 return true;
-                });
+                }, changesArchive: true);
             }
         finally {
             RefreshArchive(location);
@@ -328,7 +331,7 @@ public sealed partial class MainForm {
     private async Task CompactArchive() {
         Archive archive = _archive!;
         Guid location = _current;
-        await RunOperation("Compacting archive", () => { RequireSuccess(archive.CompactArchive(), "Compaction"); return true; });
+        await RunOperation("Compacting archive", () => { RequireSuccess(archive.CompactArchive(), "Compaction"); return true; }, changesArchive: true);
         RefreshArchive(location);
         statusMessage.Text = "Archive compacted.";
         }
@@ -374,7 +377,7 @@ public sealed partial class MainForm {
                     return false;
                     }
                 return true;
-                }, tracker: tracker, cancellation: cancellation);
+                }, tracker: tracker, cancellation: cancellation, changesArchive: true);
             if (complete) {
                 RemainingQueue.MarkCompleted(queueFile);
                 }

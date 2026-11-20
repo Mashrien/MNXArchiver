@@ -11,6 +11,7 @@ internal enum PluginActions : uint {
     Create = 1 << 3,
     Delete = 1 << 4,
     ReadEntry = 1 << 5,
+    StreamEntry = 1 << 6,
     }
 
 internal sealed record PluginFormatVersion(string Version, string MagicHex, PluginActions Actions);
@@ -51,6 +52,8 @@ internal partial class PluginJson : JsonSerializerContext { }
 
 internal static class PluginProtocol {
     internal const uint AbiVersion = 1;
+    internal const int EntryStreamReadFailed = 1;
+    internal const int EntryStreamReadCancelled = 2;
     internal const int MaxMessageBytes = 64 * 1024 * 1024;
     internal const int MaxPreviewBytes = 512 * 1024 * 1024;
     internal const int MaxEntries = 250_000;
