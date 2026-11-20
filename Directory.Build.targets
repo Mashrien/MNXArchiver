@@ -9,6 +9,15 @@
       </KnownILCompilerPack>
     </ItemGroup>
   </Target>
+  <!-- Self-contained Windows releases carry their runtime, so an older SDK
+       must not silently bundle its original .NET 10 runtime patch. -->
+  <Target Name="RequirePatchedMnxWindowsRuntime" BeforeTargets="ProcessFrameworkReferences"
+          Condition="'$(TargetFramework)' == 'net10.0-windows' and '$(SelfContained)' == 'true'">
+    <PropertyGroup>
+      <RuntimeFrameworkVersion Condition="'$(RuntimeFrameworkVersion)' == ''">10.0.14</RuntimeFrameworkVersion>
+      <RuntimeFrameworkVersion Condition="$([MSBuild]::VersionLessThan('$(RuntimeFrameworkVersion)', '10.0.14'))">10.0.14</RuntimeFrameworkVersion>
+    </PropertyGroup>
+  </Target>
   <!-- Direct IDE/project builds reserve a number here. The full-build scripts
        reserve once and export MNXBuildNumber so all release components agree. -->
   <UsingTask TaskName="MNXAllocateBuildNumber" TaskFactory="RoslynCodeTaskFactory"
