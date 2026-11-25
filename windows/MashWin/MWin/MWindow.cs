@@ -573,6 +573,7 @@ namespace MashWin {
                     }
                 g.Restore(titleState);
                 }
+            PaintStatusDivider(g);
             if (Settings.Frame.BorderThickness > 0) {
                 g.DrawPath(p, WindowGP);
                 }
@@ -594,15 +595,6 @@ namespace MashWin {
             if (Settings.MenuSeparator.Enabled && Settings.MenuSeparator.Thickness > 0) {
                 int menuDividerY = TitleDividerY + TitleSettings.DefaultHeight;
                 g.DrawLine(AppPenSeparator, 1, menuDividerY, ClientSize.Width - 1, menuDividerY);
-                }
-
-            int border = Math.Max(0, Settings.Frame.BorderThickness);
-            int statusTop = StatusBarTop;
-            int separatorTop = Math.Max(TitleContentTop, statusTop - StatusSeparatorHeight);
-            if (separatorTop < statusTop && ClientSize.Width > 2 * border) {
-                using (SolidBrush separator = new SolidBrush(Settings.MenuSeparator.Color)) {
-                    g.FillRectangle(separator, 0, separatorTop, ClientSize.Width, statusTop - separatorTop);
-                    }
                 }
 
             if (Settings.Frame.BorderThickness > 0) {

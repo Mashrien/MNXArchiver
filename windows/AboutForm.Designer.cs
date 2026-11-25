@@ -77,7 +77,8 @@ partial class AboutForm {
         formatList.MultiSelect = false;
         formatList.Columns.Add("Type", 48);
         formatList.Columns.Add("Name", 180);
-        formatList.Columns.Add("Formats", 260);
+        formatList.Columns.Add("Version", 72);
+        formatList.Columns.Add("Formats", 210);
         formatList.Columns.Add("Library", 170);
         functionLabel.Text = "Function Providers";
         functionLabel.Location = new Point(12, 188);
@@ -91,7 +92,8 @@ partial class AboutForm {
         functionList.MultiSelect = false;
         functionList.Columns.Add("Type", 48);
         functionList.Columns.Add("Name", 180);
-        functionList.Columns.Add("Formats", 260);
+        functionList.Columns.Add("Version", 72);
+        functionList.Columns.Add("Formats", 210);
         functionList.Columns.Add("Library", 170);
         functionalityGroup.Controls.Add(formatLabel);
         functionalityGroup.Controls.Add(formatList);

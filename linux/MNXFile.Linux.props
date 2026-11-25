@@ -17,6 +17,7 @@
   <ItemGroup>
     <Compile Include="$(MNXPortableRoot)/gui/**/*.cs" Exclude="$(MNXPortableRoot)/gui/**/obj/**;$(MNXPortableRoot)/gui/**/bin/**" />
     <Compile Include="overrides/**/*.cs" />
+    <EmbeddedResource Include="KWin/MoveDialogOwner.js" LogicalName="MNX.KWin.MoveDialogOwner" />
     <Compile Include="../src/ArchiveBrowser.cs;../src/ArchiveNavigationCache.cs;../src/FileTransfer.cs;../src/ExtractionPlan.cs;../src/TransferCancellation.cs;../src/TransferTracker.cs;../src/Settings/AppSettings.cs;../src/Settings/MWinColors.cs;../src/Settings/DefaultKeyStore.cs;../src/Previews/PreviewData.cs;../src/Previews/CachedImageDecoder.cs" />
     <Compile Include="../src/Previews/VideoPlayback.cs" Link="Shared/Previews/VideoPlayback.cs" />
     <Compile Include="../src/Previews/PreviewPresentation.cs" Link="Shared/Previews/PreviewPresentation.cs" />

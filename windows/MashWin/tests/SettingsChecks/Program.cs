@@ -208,15 +208,15 @@ internal static class Program {
                 window.Settings.MenuSeparator.Thickness = 2;
                 window.Settings.StatusBar.ShowSeparator = true;
                 Application.DoEvents();
-                Require(fill.Bottom == host.Top - window.Frame.BorderThickness, "Docked content reaches the status divider");
+                Require(fill.Bottom == host.Top - window.Settings.MenuSeparator.Thickness, "Docked content reaches the status divider");
                 using (Bitmap bitmap = Capture(window)) {
                     Require(bitmap.GetPixel(100, 31).ToArgb() == Color.LimeGreen.ToArgb(),
                         "The title divider ignored the shared color");
-                    for (int y = host.Top - window.Frame.BorderThickness; y < host.Top; y++) {
-                        Require(bitmap.GetPixel(1, y).ToArgb() == Color.LimeGreen.ToArgb() &&
+                    for (int y = host.Top - window.Settings.MenuSeparator.Thickness; y < host.Top; y++) {
+                        Require(bitmap.GetPixel(window.Frame.BorderThickness + 1, y).ToArgb() == Color.LimeGreen.ToArgb() &&
                             bitmap.GetPixel(window.ClientSize.Width / 2, y).ToArgb() == Color.LimeGreen.ToArgb() &&
-                            bitmap.GetPixel(window.ClientSize.Width - 2, y).ToArgb() == Color.LimeGreen.ToArgb(),
-                            "The status divider did not paint the frame thickness across both ends");
+                            bitmap.GetPixel(window.ClientSize.Width - window.Frame.BorderThickness - 2, y).ToArgb() == Color.LimeGreen.ToArgb(),
+                            "The status divider did not paint its configured thickness across both ends");
                         }
                     }
                 }

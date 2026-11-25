@@ -61,21 +61,27 @@ internal static class Program {
 
     private static void CheckStatusDivider() {
         using MWindow window = CreateWindow();
-        window.Settings.MenuSeparator.Thickness = 1;
+        window.Settings.StatusBar.Height = 36;
+        window.Settings.MenuSeparator.Thickness = 2;
+        window.Settings.MenuSeparator.Color = Color.Aqua;
         window.Settings.StatusBar.ShowSeparator = true;
+        window.StatusText.Text = "Ready";
+        window.StatusBarStrip.Style.Border.Top.Color = SkiaSharp.SKColors.Yellow;
         using Panel content = new Panel { Dock = DockStyle.Fill, BackColor = Color.Magenta };
         window.Controls.Add(content);
         window.PerformLayout();
         Application.DoEvents();
         using Bitmap image = Capture(window, "status-divider");
         int top = window.StatusBarControls.Top;
-        for (int y = top - 5; y < top; y++) {
-            foreach (int x in new int[] { 1, 8, window.Width / 2, window.Width - 9, window.Width - 2 }) {
-                Require(image.GetPixel(x, y).ToArgb() == Color.Lime.ToArgb(),
-                    "Divider is missing frame-width paint at " + x + "," + y + ".");
-                }
+        int left = window.Frame.BorderThickness + 1;
+        int right = window.Width - left - 1;
+        for (int x = left; x <= right; x++) {
+            Require(image.GetPixel(x, top - 2).ToArgb() == Color.Aqua.ToArgb(), "Upper divider gap at x=" + x);
+            Require(image.GetPixel(x, top - 1).ToArgb() == Color.Aqua.ToArgb(), "Lower divider gap at x=" + x);
+            Require(image.GetPixel(x, top).ToArgb() == Color.Yellow.ToArgb(), "Status strip top edge gap at x=" + x);
             }
-        Require(content.Bottom <= top - 5, "Docked content overlaps the status divider.");
+        Require(content.Bottom == top - 2, "Status divider must keep its own configured thickness.");
+        Require(image.GetPixel(window.Width / 2, top - 3).ToArgb() == Color.Magenta.ToArgb(), "Divider enlarged into content.");
         }
 
     private static void CheckDialogCorners() {

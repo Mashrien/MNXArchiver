@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Mash.GUI.MNXArchiver.Diagnostics;
 using Majorsilence.Forms.Gtk4;
 
 namespace Mash.GUI.MNXArchiver;
@@ -9,14 +10,34 @@ public partial class MnxDialog {
     private Point nativeOwnerOrigin;
     private Point lastNativePosition;
     private IntPtr dragDisplay;
+    private KWinDialogMovement? kdeMovement;
+
+    protected override bool CompositorMovesOwner => kdeMovement != null;
 
     protected override void OnTitleBarDragStarted(EventArgs arguments) {
         base.OnTitleBarDragStarted(arguments);
         // GTK4 Location is logical bookkeeping. On X11 read the real surfaces;
         // the compositor owns movement while GDK's native drag is active.
-        if (!MoveOwnerWithTitleBar || Owner is null
-            || !Gtk4HostInterop.TryReadX11Position(this, out nativeDragOrigin)
-            || !Gtk4HostInterop.TryReadX11Position(Owner, out nativeOwnerOrigin)) {
+        if (!MoveOwnerWithTitleBar || Owner is null) {
+            kdeMovement?.Dispose();
+            kdeMovement = null;
+            return;
+            }
+        if (!Gtk4HostInterop.TryReadX11Position(this, out nativeDragOrigin)) {
+            if (kdeMovement is null && KWinDialogMovement.IsAvailable()) {
+                kdeMovement = new KWinDialogMovement();
+                try {
+                    kdeMovement.Attach(Text);
+                    }
+                catch (Exception error) {
+                    kdeMovement.Dispose();
+                    kdeMovement = null;
+                    DebugLog.Write("KWin dialog movement is unavailable: " + error.Message, LogType.GUI | LogType.Warning);
+                    }
+                }
+            return;
+            }
+        if (!Gtk4HostInterop.TryReadX11Position(Owner, out nativeOwnerOrigin)) {
             return;
             }
         Location = ToLogicalPosition(this, nativeDragOrigin);
@@ -38,6 +59,7 @@ public partial class MnxDialog {
 
     protected override void Dispose(bool disposing) {
         if (disposing) {
+            kdeMovement?.Dispose();
             ownerMovementTimer?.Dispose();
             ownerMovementTimer = null;
             }

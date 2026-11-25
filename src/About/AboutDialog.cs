@@ -76,15 +76,15 @@ internal sealed class AboutDialog : Dialog {
         ListStore store = new ListStore(typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(bool));
         TreeView view = new TreeView(store) { HeadersVisible = false, EnableSearch = false };
         view.Selection.Mode = SelectionMode.None;
-        int[] widths = [45, 195, 285, 170];
-        for (int index = 0; index < 4; index++) {
+        int[] widths = [45, 185, 72, 224, 170];
+        for (int index = 0; index < widths.Length; index++) {
             CellRendererText cell = new CellRendererText();
             TreeViewColumn column = new TreeViewColumn("", cell, "text", index) { MinWidth = widths[index], Resizable = false };
             column.SetCellDataFunc(cell, SetProviderColor);
             view.AppendColumn(column);
             }
         foreach (AboutProviderRow provider in rows) {
-            TreeIter row = store.AppendValues(provider.Type, provider.Name, provider.Formats, provider.Library, "#32aa32", false);
+            TreeIter row = store.AppendValues(provider.Type, provider.Name, provider.Version, provider.Formats, provider.Library, false);
             if (provider.LibraryFile.Length > 0) {
                 _pluginRows.Add((store, row, provider.LibraryFile));
                 }

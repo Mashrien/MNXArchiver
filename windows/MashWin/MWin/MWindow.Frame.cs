@@ -4,6 +4,7 @@ using System.Drawing;
 #if MWIN_PORTABLE
 using Majorsilence.Forms;
 using Majorsilence.Forms.Drawing.Drawing2D;
+using Majorsilence.Forms.Drawing;
 #else
 using System.Windows.Forms;
 using System.Drawing.Drawing2D;
@@ -24,10 +25,14 @@ namespace MashWin {
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int OwnedDialogMoveVersion { get; private set; }
 
+        // On native Wayland the compositor tracks the complete gesture, including
+        // release. Managed Location changes must never replay the same movement.
+        protected virtual bool CompositorMovesOwner => false;
+
         private void BeginTitleBarDrag() {
             OnTitleBarDragStarted(EventArgs.Empty);
             titleBarDragLocation = Location;
-            titleBarDragActive = true;
+            titleBarDragActive = !CompositorMovesOwner;
             }
 
         protected void EndTitleBarDrag() {
@@ -75,7 +80,57 @@ namespace MashWin {
             base.OnMove(arguments);
             }
 
+        private void PaintStatusDivider(Graphics graphics) {
+            int top = StatusBarTop;
+            int start = Math.Max(TitleContentTop, top - StatusSeparatorHeight);
+            if (start >= top) {
+                return;
+                }
+            GraphicsState state = graphics.Save();
+            graphics.SetClip(WindowGP, CombineMode.Intersect);
+            using (SolidBrush divider = new SolidBrush(Settings.MenuSeparator.Color)) {
+                graphics.FillRectangle(divider, 0, start, ClientSize.Width, top - start);
+                }
+#if MWIN_PORTABLE
+            // The inset StatusStrip paints its own top edge. Continue that same
+            // row through the two gutters, leaving the hosted strip and grip alone.
+            if (statusBarStrip != null && statusBarStrip.Visible) {
+                BorderSideStyle topEdge = statusBarStrip.Style.Border.Top;
+                int rows = Math.Min(topEdge.GetWidth(), statusBarControls.Height);
+                if (rows > 0) {
+                    SkiaSharp.SKColor ink = topEdge.GetColor();
+                    using (SolidBrush edge = new SolidBrush(Color.FromArgb(ink.Alpha, ink.Red, ink.Green, ink.Blue))) {
+                        graphics.FillRectangle(edge, 0, top, statusBarControls.Left, rows);
+                        graphics.FillRectangle(edge, statusBarControls.Right, top, ClientSize.Width - statusBarControls.Right, rows);
+                        }
+                    }
+                }
+#endif
+            graphics.Restore(state);
+            }
+
+        // Preserve the established main-window silhouette. Fixed dialogs use the
+        // inset outline below so docked controls cannot cover their bottom corners.
+        private GraphicsPath CreateStatusWindowOutline(int radius) {
+            int stroke = Math.Max(0, Settings.Frame.BorderThickness);
+            int inset = stroke / 2;
+            int diameter = radius * 2;
+            int right = ClientSize.Width - diameter - stroke - 2 * inset - 1;
+            int bottom = ClientSize.Height - diameter - stroke - 2 * inset - 1;
+            int outerArc = diameter + stroke + 2;
+            GraphicsPath path = new GraphicsPath();
+            path.AddArc(inset, inset, diameter + inset, diameter + inset, 180, 90);
+            path.AddArc(right, inset, outerArc, outerArc, 270, 90);
+            path.AddArc(right, bottom, outerArc, outerArc, 0, 90);
+            path.AddArc(inset, bottom, outerArc, outerArc, 90, 90);
+            path.CloseFigure();
+            return path;
+            }
+
         private GraphicsPath CreateFramePath(int cornerRadius) {
+            if (Settings.StatusBar.Visible && cornerRadius > 0 && cornerRadius * 2 < Math.Min(ClientSize.Width, ClientSize.Height)) {
+                return CreateStatusWindowOutline(cornerRadius);
+                }
             // A centered stroke needs half its width on each side. The old
             // asymmetric bounds placed the right/bottom stroke inside content.
             float border = Math.Max(0, Settings.Frame.BorderThickness);

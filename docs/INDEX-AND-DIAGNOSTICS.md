@@ -40,11 +40,12 @@ with common credential assignments redacted. No automatic log files are written.
 
 ## Dialog geometry
 
-About and progress title-bar dragging moves their owner by the same amount on
-Windows and X11. Restoring a hidden owner preserves this intentional movement.
-Native Wayland compositors control absolute window placement, so moving an owner
-alongside a child cannot be guaranteed there. Layout changes and resizing do not
-move the owner.
+Dragging an owned MWin dialog by its title bar preserves its offset from the main
+window on Windows and X11. On KDE Plasma Wayland, the dialog registers its own
+window pair with KWin on the first title press. KWin moves the owner throughout
+the gesture and releases the registration when the dialog closes. Other Wayland
+compositors control top-level placement independently.
 
-Frame/status separator thickness now follows the frame border, and dialog content
-reserves the bottom rounded-corner band instead of drawing over it.
+The status divider follows `MenuSeparator.Thickness`. Portable MWin extends the
+status strip's top edge through both corner gaps. Fixed dialogs reserve room for
+the rounded outline below docked content.

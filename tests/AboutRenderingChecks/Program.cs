@@ -40,8 +40,14 @@ internal static class Program {
         Require(controls.Any(control => control.Text == "MNX Archive Manager"), "Missing About heading.");
         Require(controls.Any(control => control.Text.StartsWith("GUI v" + typeof(AboutForm).Assembly.GetName().Version + "     MNX v0.", StringComparison.Ordinal)), "About must display the actual GUI assembly and semantic MNX format versions.");
         ListView[] lists = controls.OfType<ListView>().ToArray();
-        Require(lists.Length == 2 && lists.All(list => list.Columns.Count == 4 && list.HeaderStyle == ColumnHeaderStyle.None && list.BorderStyle == BorderStyle.None), "Provider lists must have four borderless columns without headers.");
+        Require(lists.Length == 2 && lists.All(list => list.Columns.Count == 5 && list.HeaderStyle == ColumnHeaderStyle.None && list.BorderStyle == BorderStyle.None), "Provider lists must have five borderless columns without headers.");
         Require(lists[0].Items.Cast<ListViewItem>().Any(item => item.Text == "FMT" && item.SubItems[1].Text == "MNX"), "Built-in MNX must be listed as a format provider.");
+        foreach (ListView list in lists) {
+            Require(list.Columns[2].Text == "Version" && list.Columns[3].Text == "Formats", "Version must sit between Name and Formats.");
+            foreach (ListViewItem item in list.Items) {
+                CheckProviderCells(item.SubItems[1].Text, item.SubItems[2].Text, item.SubItems[3].Text, item.SubItems[4].Text);
+                }
+            }
         foreach (string kind in new string[] { "IMG", "ANI", "TXT", "SRC" }) {
             Require(lists[1].Items.Cast<ListViewItem>().Any(item => item.Text == kind), "Missing implemented preview capability: " + kind);
             }
@@ -95,7 +101,14 @@ internal static class Program {
         Gtk.Widget[] widgets = GtkDescendants(dialog).ToArray();
         Require(widgets.OfType<Gtk.Label>().Any(label => label.Text == "MNX Archive Manager"), "Missing GTK About heading.");
         Gtk.TreeView[] lists = widgets.OfType<Gtk.TreeView>().ToArray();
-        Require(lists.Length == 2 && lists.All(list => !list.HeadersVisible && list.Columns.Length == 4), "GTK providers must use four columns without headers.");
+        Require(lists.Length == 2 && lists.All(list => !list.HeadersVisible && list.Columns.Length == 5), "GTK providers must use five columns without headers.");
+        foreach (Gtk.TreeView list in lists) {
+            Require(list.Model.GetIterFirst(out Gtk.TreeIter row), "Provider list is empty.");
+            do {
+                CheckProviderCells((string)list.Model.GetValue(row, 1), (string)list.Model.GetValue(row, 2),
+                    (string)list.Model.GetValue(row, 3), (string)list.Model.GetValue(row, 4));
+                } while (list.Model.IterNext(ref row));
+            }
         if (Environment.GetEnvironmentVariable("MNX_ABOUT_PLUGIN_FIXTURES") is not null) {
             Stopwatch timeout = Stopwatch.StartNew();
             while (!HasUpdatedGtkRow(lists)) {
@@ -233,6 +246,16 @@ internal static class Program {
         }
 
 #endif
+
+    private static void CheckProviderCells(string name, string version, string formats, string library) {
+        Require(formats.Length > 0 && !formats.Contains(" v"), "Extensions include a version for " + name);
+        if (library != "Built-in" || name == "MNX") {
+            Require(version.StartsWith('v') && Version.TryParse(version.Substring(1), out _), "Missing provider version for " + name);
+            }
+        else {
+            Require(version.Length == 0, "Built-in previews have no separate plugin version.");
+            }
+        }
 
     private static void Require(bool condition, string message) {
         if (!condition) {

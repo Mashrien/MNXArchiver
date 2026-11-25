@@ -2,7 +2,7 @@ using Mash.GUI.MNXArchiver.Plugins;
 
 namespace Mash.GUI.MNXArchiver.About;
 
-internal sealed record AboutProviderRow(string Type, string Name, string Formats, string Library, string LibraryFile = "");
+internal sealed record AboutProviderRow(string Type, string Name, string Version, string Formats, string Library, string LibraryFile = "");
 
 /// <summary>Toolkit-independent descriptions of the providers actually loaded by this process.</summary>
 internal sealed class AboutModel {
@@ -18,13 +18,13 @@ internal sealed class AboutModel {
         DirectoryPath = catalog.DirectoryPath;
         Issues = catalog.Issues;
         List<AboutProviderRow> formats = new List<AboutProviderRow> {
-            new AboutProviderRow("FMT", "MNX", ".mnx v" + FormatVersion, "Built-in"),
+            new AboutProviderRow("FMT", "MNX", "v" + FormatVersion, ".mnx", "Built-in"),
             };
         List<AboutProviderRow> functions = new List<AboutProviderRow> {
-            new AboutProviderRow("IMG", "Image PREVIEW", "PNG, JPEG, BMP, GIF, TIFF, ICO", "Built-in"),
-            new AboutProviderRow("ANI", "Animation PREVIEW", "GIF", "Built-in"),
-            new AboutProviderRow("TXT", "Text PREVIEW", "Plain text and configuration", "Built-in"),
-            new AboutProviderRow("SRC", "Source PREVIEW", "Source code", "Built-in"),
+            new AboutProviderRow("IMG", "Image PREVIEW", "", "PNG, JPEG, BMP, GIF, TIFF, ICO", "Built-in"),
+            new AboutProviderRow("ANI", "Animation PREVIEW", "", "GIF", "Built-in"),
+            new AboutProviderRow("TXT", "Text PREVIEW", "", "Plain text and configuration", "Built-in"),
+            new AboutProviderRow("SRC", "Source PREVIEW", "", "Source code", "Built-in"),
             };
         foreach (NativeArchiveModule module in catalog.Modules) {
             PluginFormat format = module.Format;
@@ -46,7 +46,7 @@ internal sealed class AboutModel {
         }
 
     private static AboutProviderRow Row(string type, string name, string[] extensions, string version, string library) {
-        return new AboutProviderRow(type, name, string.Join(", ", extensions) + " v" + version,
+        return new AboutProviderRow(type, name, "v" + version, string.Join(", ", extensions),
             Path.GetFileNameWithoutExtension(library), library);
         }
     }

@@ -48,7 +48,7 @@ namespace MashWin {
         private int StatusSeparatorHeight {
             get {
                 return settings.StatusBar.Visible && settings.StatusBar.ShowSeparator
-                    ? Math.Max(0, settings.Frame.BorderThickness) : 0;
+                    ? Math.Max(0, settings.MenuSeparator.Thickness) : 0;
                 }
             }
 

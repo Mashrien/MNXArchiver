@@ -46,7 +46,7 @@ public partial class AboutForm : MnxDialog {
 
     private void AddRows(ListView list, IReadOnlyList<AboutProviderRow> rows) {
         foreach (AboutProviderRow row in rows) {
-            ListViewItem item = new ListViewItem(new string[] { row.Type, row.Name, row.Formats, row.Library });
+            ListViewItem item = new ListViewItem(new string[] { row.Type, row.Name, row.Version, row.Formats, row.Library });
             list.Items.Add(item);
             if (row.LibraryFile.Length > 0) {
                 _pluginItems.Add(item, row.LibraryFile);
