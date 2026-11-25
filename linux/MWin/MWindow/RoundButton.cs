@@ -331,7 +331,7 @@ namespace MashWin {
 
             e.Graphics.DrawRoundedRectangle(Settings.BorderColor, r, Settings.CornerRadius, this.Settings.RoundCorners, BorderPen, null, true);
 
-            e.Graphics.TextRenderingHint = Majorsilence.Forms.Drawing.Text.TextRenderingHint.SingleBitPerPixelGridFit;
+            e.Graphics.TextRenderingHint = Majorsilence.Forms.Drawing.Text.TextRenderingHint.SystemDefault;
             DrawContent(e.Graphics);
 
             e.Graphics.Flush();

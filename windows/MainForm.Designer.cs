@@ -566,7 +566,6 @@ partial class MainForm {
         StatusBar.Font = new Font("Segoe UI", 9F);
         Text = "MNX Archive Manager";
         Title.Alignment = MashWin.Alignment.Center;
-        Title.Font = new Font("Segoe UI", 9F);
         ToolStrips.BorderThickness = 2;
         Controls.SetChildIndex(statusBarControls, 0);
         Controls.SetChildIndex(mainMenu, 0);

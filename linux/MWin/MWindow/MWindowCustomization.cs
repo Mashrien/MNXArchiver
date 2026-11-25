@@ -254,7 +254,7 @@ namespace MashWin {
         }
 
     public sealed class TitleSettings : CustomizationGroup {
-        internal const int DefaultHeight = 26;
+        internal const int DefaultHeight = 35;
 
         private int height = DefaultHeight;
         private Color textColor = Color.FromArgb(190, Color.DarkCyan);
@@ -283,7 +283,11 @@ namespace MashWin {
             }
 
         private Image icon;
-        private Font font = new Font("Segoe UI", 9f);
+        internal static Font CreateCaptionFont(string family, float points) {
+            return new Font(family, points) { Weight = SkiaSharp.SKFontStyleWeight.SemiBold };
+            }
+
+        private Font font = CreateCaptionFont("Segoe UI", 12f);
         private bool showTitle = true;
         private Alignment alignment = Alignment.Left;
 

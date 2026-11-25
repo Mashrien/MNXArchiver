@@ -199,9 +199,10 @@ internal static class Program {
                 fill.Dock = DockStyle.Fill;
                 window.Controls.Add(fill);
                 window.PerformLayout();
-                Require(fill.Top > 30 && fill.Bottom <= host.Top, "Docked content covers the title divider or status region");
+                int titleDividerY = window.Title.Height + window.Frame.BorderThickness;
+                Require(fill.Top > titleDividerY && fill.Bottom <= host.Top, "Docked content covers the title divider or status region");
                 using (Bitmap bitmap = Capture(window)) {
-                    Require(bitmap.GetPixel(100, 31).ToArgb() == window.Settings.Frame.BorderColor.ToArgb(),
+                    Require(bitmap.GetPixel(100, titleDividerY).ToArgb() == window.Settings.Frame.BorderColor.ToArgb(),
                         "Docked content covers the thick title divider");
                     }
                 window.Settings.MenuSeparator.Color = Color.LimeGreen;
@@ -210,7 +211,7 @@ internal static class Program {
                 Application.DoEvents();
                 Require(fill.Bottom == host.Top - window.Settings.MenuSeparator.Thickness, "Docked content reaches the status divider");
                 using (Bitmap bitmap = Capture(window)) {
-                    Require(bitmap.GetPixel(100, 31).ToArgb() == Color.LimeGreen.ToArgb(),
+                    Require(bitmap.GetPixel(100, titleDividerY).ToArgb() == Color.LimeGreen.ToArgb(),
                         "The title divider ignored the shared color");
                     for (int y = host.Top - window.Settings.MenuSeparator.Thickness; y < host.Top; y++) {
                         Require(bitmap.GetPixel(window.Frame.BorderThickness + 1, y).ToArgb() == Color.LimeGreen.ToArgb() &&
@@ -320,8 +321,8 @@ internal static class Program {
             RoundButton exit = (RoundButton)window.Controls["rbExit"];
             RoundButton maximize = (RoundButton)window.Controls["rbMaximize"];
             RoundButton minimize = (RoundButton)window.Controls["rbMinimize"];
-            Require(exit.Size == new Size(30, 20) && maximize.Size == exit.Size && minimize.Size == exit.Size,
-                "The default title height changed the legacy button dimensions");
+            Require(exit.Size == new Size(40, 27) && maximize.Size == exit.Size && minimize.Size == exit.Size,
+                "Default caption buttons do not fit the taller title");
             window.Settings.Title.Height = 52;
             Require(exit.Size == new Size(60, 40) && maximize.Size == exit.Size && minimize.Size == exit.Size,
                 "Caption buttons did not scale with the title height");

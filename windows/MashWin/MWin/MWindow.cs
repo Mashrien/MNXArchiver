@@ -20,7 +20,7 @@ namespace MashWin {
         private GraphicsPath WindowGP;
         private bool HasBeenResized;
         private Size LastSize;
-        private Rectangle SrcRect, DestRect, _WindowRect, _TitleTextRect;
+        private Rectangle SrcRect, DestRect, _WindowRect;
 
         private MWindowSettings settings = new MWindowSettings();
 
@@ -36,7 +36,11 @@ namespace MashWin {
         private Brush AppBrushTitle = new SolidBrush(Color.FromArgb(190, Color.DarkCyan));
         private Brush AppBrushBackground;
         private StringFormat StatusTextAlignment = new StringFormat() { LineAlignment = StringAlignment.Center };
-        private StringFormat TitleTextAlignment = new StringFormat() { LineAlignment = StringAlignment.Center };
+        private StringFormat TitleTextAlignment = new StringFormat() {
+            LineAlignment = StringAlignment.Center,
+            FormatFlags = StringFormatFlags.NoWrap,
+            Trimming = StringTrimming.EllipsisCharacter
+            };
 
         public bool UserDrawn = false;
 
@@ -158,7 +162,9 @@ namespace MashWin {
                 return;
                 }
 
-            double scale = settings.Title.Height / (double)TitleSettings.DefaultHeight;
+            // The original caption buttons were drawn for a 26-pixel title.
+            const double buttonDesignHeight = 26;
+            double scale = settings.Title.Height / buttonDesignHeight;
             int height = (int)Math.Round(20 * scale);
             int border = Math.Max(0, settings.Frame.BorderThickness);
             int top = border - 1;
@@ -557,7 +563,6 @@ namespace MashWin {
 
                 pUpdateAlignment();
                 _WindowRect = new Rectangle(0, 0, Width, Height);
-                _TitleTextRect = new Rectangle(0, 0, Width, Settings.Title.Height + 4);
 
                 }
 
@@ -593,7 +598,8 @@ namespace MashWin {
                 }
 
             if (Settings.MenuSeparator.Enabled && Settings.MenuSeparator.Thickness > 0) {
-                int menuDividerY = TitleDividerY + TitleSettings.DefaultHeight;
+                const int menuRowHeight = 26;
+                int menuDividerY = TitleDividerY + menuRowHeight;
                 g.DrawLine(AppPenSeparator, 1, menuDividerY, ClientSize.Width - 1, menuDividerY);
                 }
 
@@ -621,13 +627,12 @@ namespace MashWin {
             if (AppPenBorder.Width != this.Settings.Frame.BorderThickness) AppPenBorder.Width = this.Settings.Frame.BorderThickness;
 
             Graphics g = e.Graphics; // I HAD a using(graphics g = e.graphics){} block here BUT C# doesn't like it.. no idea why. Maybe not disposable?
-            int vOffset = (24 - (int)g.MeasureString(this.Text, Settings.Title.Font).Height) / 2;
 
-            DrawWindow(g, this.ClientRectangle, this.Settings.Frame.CornerRadius, AppPenBorder, (int)g.MeasureString(" " + this.Text + " ", Settings.Title.Font).Width);
+            DrawWindow(g, this.ClientRectangle, this.Settings.Frame.CornerRadius, AppPenBorder);
 
             // Respect the public title visibility setting when painting custom chrome.
             if (Settings.Title.ShowTitle) {
-                g.DrawString(this.Text, Settings.Title.Font, AppBrushTitle, _TitleTextRect, TitleTextAlignment);
+                g.DrawString(this.Text, Settings.Title.Font, AppBrushTitle, CaptionTextBounds(), TitleTextAlignment);
                 }
             // StatusText lives in the owned status strip; painting it here too
             // would duplicate text beneath hosted progress/items.
@@ -649,7 +654,7 @@ namespace MashWin {
             g.InterpolationMode = InterpolationMode.HighQualityBilinear;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
             g.FillRectangle(Brushes.Fuchsia, _WindowRect);
-            g.TextRenderingHint = TextRenderingHint.SingleBitPerPixelGridFit;
+            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
             }
 
         #endregion drawing

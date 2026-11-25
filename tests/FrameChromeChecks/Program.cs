@@ -14,6 +14,7 @@ internal static class Program {
         Application.SetDefaultFont(new Font("Noto Sans", 9));
         evidence = arguments.Length > 0 ? arguments[0] : Path.Combine(Path.GetTempPath(), "mnx-frame-checks");
         Directory.CreateDirectory(evidence);
+        Check("Captions use enlarged, smooth semibold text and scaled hit targets", CheckCaption);
         Check("Status divider spans the frame at its configured width", CheckStatusDivider);
         Check("Docked dialog content preserves rounded bottom corners", CheckDialogCorners);
         Check("Only title drags move an owned dialog's parent", CheckOwnedMovement);
@@ -57,6 +58,35 @@ internal static class Program {
         window.DrawToBitmap(image, window.ClientRectangle);
         image.Save(Path.Combine(evidence, name + ".png"));
         return image;
+        }
+
+    private static void CheckCaption() {
+        using MWindow window = CreateWindow();
+        window.Text = "MNX Caption";
+        window.Title.Alignment = Alignment.Center;
+        window.Title.TextColor = Color.White;
+        window.Title.BackgroundColor = Color.Black;
+        Require(window.Title.Height == 35 && window.Title.Font.SizeInPoints == 12, "Incorrect default caption metrics.");
+        Require(window.Title.Font.Weight == SkiaSharp.SKFontStyleWeight.SemiBold, "Incorrect caption weight.");
+        Control close = window.Controls["rbExit"]!;
+        Require(close.Size == new Size(40, 27) && close.Bottom < window.DisplayRectangle.Top, "Incorrect close-button bounds.");
+
+        using Bitmap image = Capture(window, "caption");
+        // A binary (one-bit) glyph has only black and white pixels on this background.
+        bool hasInk = false;
+        bool hasSoftEdge = false;
+        for (int y = window.Frame.BorderThickness + 1; y < window.Title.Height - 1; y++) {
+            for (int x = window.Width / 4; x < window.Width * 3 / 4; x++) {
+                int red = image.GetPixel(x, y).R;
+                if (red == 255) {
+                    hasInk = true;
+                    }
+                else if (red > 0) {
+                    hasSoftEdge = true;
+                    }
+                }
+            }
+        Require(hasInk && hasSoftEdge, "Title glyphs lack solid strokes or antialiased edges.");
         }
 
     private static void CheckStatusDivider() {

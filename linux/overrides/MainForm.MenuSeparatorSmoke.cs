@@ -46,7 +46,8 @@ public sealed partial class MainForm {
             SaveScreenshot(Path.Combine(directory, "00-six-pixels-without-menu-border.png"));
             using (Bitmap originalLine = new Bitmap(Width, Height)) {
                 this.DrawToBitmap(originalLine, ClientRectangle);
-                Color coveredLine = originalLine.GetPixel(Width / 2, 52 + Settings.Frame.BorderThickness);
+                int legacyMenuEdge = Settings.Title.Height + Settings.Frame.BorderThickness + 26;
+                Color coveredLine = originalLine.GetPixel(Width / 2, legacyMenuEdge);
                 Require(coveredLine.ToArgb() != Settings.MenuSeparator.Color.ToArgb(),
                     "The spacing experiment unexpectedly exposed the legacy parent-drawn separator.");
                 }

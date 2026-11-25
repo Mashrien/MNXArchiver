@@ -29,6 +29,33 @@ namespace MashWin {
         // release. Managed Location changes must never replay the same movement.
         protected virtual bool CompositorMovesOwner => false;
 
+        private Rectangle CaptionTextBounds() {
+            int border = Math.Max(0, Frame.BorderThickness);
+            int left = border + 4;
+            int right = ClientSize.Width - left;
+            if (ShowIcon && IconImage != null) {
+                left = DestRect.Right + border + 4;
+                }
+            if (rbExit.Visible) {
+                right = Math.Min(right, rbExit.Left - 4);
+                }
+            if (rbMaximize.Visible) {
+                right = Math.Min(right, rbMaximize.Left - 4);
+                }
+            if (rbMinimize.Visible) {
+                right = Math.Min(right, rbMinimize.Left - 4);
+                }
+            // Keep centered captions on the window centerline when space permits.
+            if (Title.Alignment == Alignment.Center) {
+                int inset = Math.Max(left, ClientSize.Width - right);
+                if (2 * inset < ClientSize.Width) {
+                    left = inset;
+                    right = ClientSize.Width - inset;
+                    }
+                }
+            return new Rectangle(left, border, Math.Max(0, right - left), Title.Height);
+            }
+
         private void BeginTitleBarDrag() {
             OnTitleBarDragStarted(EventArgs.Empty);
             titleBarDragLocation = Location;
