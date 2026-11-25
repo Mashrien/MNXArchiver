@@ -31,6 +31,7 @@ internal static class Program {
         string? extraction = null;
         string[] inputs = [];
         try {
+            args = About.AboutRestart.RestoreArguments(args);
             if (smokeTest) {
                 if (args.Length > 2) {
                     throw new ArgumentException("--smoke-test accepts one screenshot directory.");
@@ -89,7 +90,7 @@ internal static class Program {
                 }
             else if (inputs.Length > 0) {
                 if (IsArchiveOpenRequest(inputs)) {
-                    if (!window.OpenArchive(inputs[0])) {
+                    if (!window.OpenArchive(inputs[0]) && About.AboutRestart.Restored is null) {
                         return 1;
                         }
                     }
@@ -98,6 +99,9 @@ internal static class Program {
                     }
                 }
 
+            if (About.AboutRestart.Restored is not null) {
+                window.ShowAbout();
+                }
             Application.Run();
             return 0;
             }
@@ -107,6 +111,7 @@ internal static class Program {
             }
         finally {
             Icons.OwnedIcons.Dispose();
+            About.AboutRestart.LaunchPending();
             }
         }
     }

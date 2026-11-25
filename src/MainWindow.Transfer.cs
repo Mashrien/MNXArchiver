@@ -1,3 +1,4 @@
+using Mash.GUI.MNXArchiver.Diagnostics;
 using System.Diagnostics;
 using Gtk;
 using MNX;
@@ -20,6 +21,7 @@ public sealed partial class MainWindow {
             }
 
         _operationActive = true;
+        DebugLog.Write(description + " started.", LogType.Info | LogType.IO);
         StopPreviewRead();
         _transferProgress = null;
         UpdateActions();
@@ -82,7 +84,16 @@ public sealed partial class MainWindow {
                     }
                 });
             dialog.Update(Volatile.Read(ref _transferProgress));
+            DebugLog.Write(description + " completed.", LogType.Info | LogType.IO);
             return result;
+            }
+        catch (OperationCanceledException) {
+            DebugLog.Write(description + " cancelled.", LogType.Warning | LogType.IO);
+            throw;
+            }
+        catch (Exception error) {
+            DebugLog.Exception(description + " failed", error);
+            throw;
             }
         finally {
             _activeProgressDialog = null;

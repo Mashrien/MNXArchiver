@@ -28,6 +28,7 @@ namespace MashWin {
                     BeginResizeDrag(edge.Value);
                     }
                 else if (arguments.Y <= TitleDividerY) {
+                    BeginTitleBarDrag();
                     BeginMoveDrag();
                     }
                 };

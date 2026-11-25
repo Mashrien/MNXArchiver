@@ -1,3 +1,4 @@
+using Mash.GUI.MNXArchiver.Diagnostics;
 using Gtk;
 using MNX;
 
@@ -37,6 +38,7 @@ public sealed partial class MainWindow {
             return;
             }
 
+        DebugLog.Write("Reading remaining queue for resume.", LogType.Info | LogType.Parse);
         FileInfo queueFile = new FileInfo(path);
         Archive? archive = null;
         string? archivePath = null;

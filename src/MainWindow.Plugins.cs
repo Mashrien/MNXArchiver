@@ -1,3 +1,4 @@
+using Mash.GUI.MNXArchiver.Diagnostics;
 using Gtk;
 using Mash.GUI.MNXArchiver.Plugins;
 using DiskFile = System.IO.File;
@@ -254,6 +255,7 @@ public sealed partial class MainWindow {
         string previousStatus = _status.Text;
         bool previousSensitivity = _window.Sensitive;
         _operationActive = true;
+        DebugLog.Write(description + " started (plugin).", LogType.Info | LogType.IO);
         try {
             StopPreviewRead();
             UpdateActions();
@@ -261,7 +263,17 @@ public sealed partial class MainWindow {
             _window.Sensitive = false;
             dialog.ShowAll();
             Task<T> task = Task.Run(() => action(cancellation.Token));
-            return WaitForTransfer(task, progress.Pulse);
+            T result = WaitForTransfer(task, progress.Pulse);
+            DebugLog.Write(description + " completed (plugin).", LogType.Info | LogType.IO);
+            return result;
+            }
+        catch (OperationCanceledException) {
+            DebugLog.Write(description + " cancelled (plugin).", LogType.Warning | LogType.IO);
+            throw;
+            }
+        catch (Exception error) {
+            DebugLog.Exception(description + " failed", error);
+            throw;
             }
         finally {
             dialog.Hide();

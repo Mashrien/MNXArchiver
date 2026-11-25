@@ -76,10 +76,22 @@ internal static class FileTransfer {
                 }
 
             FileQueueItem[]? pending = archive.FileQueue.Where(item => !before.Contains(item.ID)).ToArray();
-            HashSet<(Guid OwnerID, string Name)>? names = archive.Files.Select(item => (item.OwnerID, item.Name)).ToHashSet();
+            HashSet<Guid> queuedDirectories = pending.Where(item => item.IsDirectory).Select(item => item.ID).ToHashSet();
+            Dictionary<Guid, HashSet<string>> destinationNames = new Dictionary<Guid, HashSet<string>>();
             foreach (FileQueueItem item in pending) {
                 archive.Options.CancellationToken.ThrowIfCancellationRequested();
-                if (!names.Add((item.Parent, item.Name))) {
+                if (!destinationNames.TryGetValue(item.Parent, out HashSet<string>? names)) {
+                    // New queued directories have no existing entries. Read only
+                    // the destination folders being changed, never the whole index.
+                    names = new HashSet<string>(StringComparer.Ordinal);
+                    if (archive.IsOpen && !queuedDirectories.Contains(item.Parent)) {
+                        foreach (VFile existing in archive.DirectoryList(item.Parent)) {
+                            names.Add(existing.Name);
+                            }
+                        }
+                    destinationNames.Add(item.Parent, names);
+                    }
+                if (!names.Add(item.Name)) {
                     throw new IOException($"More than one input has the archive name {item.Name} in the same folder, or that name already exists. No files were added.");
                     }
 

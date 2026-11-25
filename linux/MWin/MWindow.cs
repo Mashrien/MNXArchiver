@@ -545,34 +545,8 @@ namespace MashWin {
             int t = this.Settings.Frame.BorderThickness;
 
             if (WindowGP == null || HasBeenResized) {
-                using (GraphicsPath gp = new GraphicsPath()) {
-                    r = ClientRectangle;
-                    int width = r.Width - (Settings.Frame.BorderThickness/2);
-                    int height = r.Height - (Settings.Frame.BorderThickness/2);
-                    int radius = d;
-                    int gradientOffset = r.Y;
-                    int rHalfBorder = (int)Math.Ceiling((float)(Settings.Frame.BorderThickness / 2));
-                    int wxr = (int)Math.Ceiling((float)(width - radius * 2));
-
-                    // A square frame is valid too; AddArc rejects zero-sized arcs.
-                    if (radius <= 0) {
-                        gp.AddRectangle(new Rectangle(rHalfBorder, rHalfBorder,
-                            Math.Max(1, width - Settings.Frame.BorderThickness),
-                            Math.Max(1, height - Settings.Frame.BorderThickness)));
-                        }
-                    else {
-                        gp.AddArc(rHalfBorder, rHalfBorder, (radius * 2) + rHalfBorder, (radius * 2) + rHalfBorder, 180, 90); // TL
-                        gp.AddArc(wxr - (Settings.Frame.BorderThickness+rHalfBorder)-1, rHalfBorder, (radius * 2) + (t + 2), (radius * 2) + (t + 2), 270, 90); // TR
-                        gp.AddArc(wxr - (Settings.Frame.BorderThickness+rHalfBorder)-1, (height - (radius * 2)) - (Settings.Frame.BorderThickness + rHalfBorder+1), (radius * 2) + (t + 2), (radius * 2) + (t + 2), 0, 90); // BR
-                        gp.AddArc(rHalfBorder, (height - (radius * 2)) - (Settings.Frame.BorderThickness+rHalfBorder+1), (radius * 2) + t + 2, (radius * 2) + t + 2, 90, 90); // BL
-                        }
-                    gp.CloseFigure();
-
-                    // Release the previous shape before caching a resized outline.
-                    WindowGP?.Dispose();
-                    WindowGP = (GraphicsPath)gp.Clone();
-                    gp.Dispose();
-                    }
+                WindowGP?.Dispose();
+                WindowGP = CreateFramePath(d);
 
                 pUpdateAlignment();
                 _WindowRect = new Rectangle(0, 0, Width, Height);
@@ -620,7 +594,7 @@ namespace MashWin {
             int separatorTop = Math.Max(TitleContentTop, statusTop - StatusSeparatorHeight);
             if (separatorTop < statusTop && ClientSize.Width > 2 * border) {
                 using (SolidBrush separator = new SolidBrush(Settings.MenuSeparator.Color)) {
-                    g.FillRectangle(separator, border, separatorTop, ClientSize.Width - 2 * border, statusTop - separatorTop);
+                    g.FillRectangle(separator, 0, separatorTop, ClientSize.Width, statusTop - separatorTop);
                     }
                 }
 

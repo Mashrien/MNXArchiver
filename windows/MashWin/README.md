@@ -168,6 +168,23 @@ inherited `statusBarControls` panel in `InitializeComponent`, and call
 ownership to MWin and connects live status settings without designer aliases.
 RoundButton's TextAlign default metadata now matches its constructor, preserving
 explicit centered alignment when the Visual Studio designer saves the form.
+
+## Frame and owned-dialog repair — 0.0.7.4
+
+The status divider reserves and paints `Frame.BorderThickness` across the whole
+frame, including both ends. Rounded outlines use symmetric half-stroke bounds;
+docked content keeps clear of the bottom corner band even on fixed dialogs with
+no status bar. These rules also apply to the portable MWin 0.0.8.3 port.
+
+Set `MoveOwnerWithTitleBar = true` on an owned dialog to move its owner by the
+same delta during a title-bar drag. The option defaults to false. Native caption
+gestures and portable managed title presses begin tracking; ending the gesture
+stops it. Centering, programmatic movement and resizing do not move the owner.
+The owner's read-only `OwnedDialogMoveVersion` changes only for such movements,
+so transfer hosts can preserve a deliberate drag when restoring a hidden window.
+The MNX GTK4 frontend bridges native X11 positions during caption gestures;
+Wayland compositors do not expose application-controlled top-level positions.
+
 ## Apply a runtime theme
 
 Pass a `MashWin.Settings.UserColors.Theme` to `UserColors.Apply` on the form's

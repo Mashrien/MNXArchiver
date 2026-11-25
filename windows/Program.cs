@@ -9,6 +9,7 @@ internal static class Program {
             if (smoke && args.Length != 2) {
                 throw new ArgumentException("Use --smoke-test DIRECTORY.");
                 }
+            args = About.AboutRestart.RestoreArguments(args);
             using MainForm form = smoke
                 ? new MainForm(new Settings.AppSettings(Path.Combine(Path.GetFullPath(args[1]), "isolated-settings")))
                 : new MainForm();
@@ -42,7 +43,7 @@ internal static class Program {
                                 }
                             }
                         else if (inputs.Length == 1 && MainForm.ShouldOpenArchive(inputs[0])) {
-                            if (!await form.OpenArchive(inputs[0])) {
+                            if (!await form.OpenArchive(inputs[0]) && About.AboutRestart.Restored is null) {
                                 result = 1;
                                 form.Close();
                                 }
@@ -50,6 +51,9 @@ internal static class Program {
                         else {
                             await form.OpenInputs(inputs);
                             }
+                        }
+                    if (About.AboutRestart.Restored is not null) {
+                        form.ShowAbout();
                         }
                     }
                 catch (Exception error) {
@@ -76,6 +80,9 @@ internal static class Program {
                 }
             MessageBox.Show(error.Message, "MNX Archive Manager", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 1;
+            }
+        finally {
+            About.AboutRestart.LaunchPending();
             }
         }
     }

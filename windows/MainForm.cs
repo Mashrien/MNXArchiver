@@ -1,3 +1,4 @@
+using Mash.GUI.MNXArchiver.Diagnostics;
 using static MNX.Archive;
 using Mash.GUI.MNXArchiver.Plugins;
 using System.Globalization;
@@ -83,6 +84,7 @@ public sealed partial class MainForm : MashWin.MWindow {
         entryImages.Images.Add("folder", ReadIcon("folder", 16));
         entryImages.Images.Add("file", ReadIcon("file", 16));
         ConfigureActions();
+        ConfigureDebugWindow();
         ConfigureDragAndDrop();
         ConfigureFileListLayout();
         folderTree.AfterSelect += (_, args) => {
@@ -148,6 +150,29 @@ public sealed partial class MainForm : MashWin.MWindow {
         UpdateActions();
         }
 
+    internal void ShowAbout() {
+        using AboutForm dialog = new AboutForm(previous => {
+            if (_busy) {
+                MessageBox.Show(this, "Wait for the current operation or cancel it in its progress window before reloading plugins.", "Reload plugins");
+                return false;
+                }
+            try {
+                About.AboutRestart.Prepare(_archive?.ArchivePath ?? _pluginArchive?.Path, previous);
+                CloseForPluginRestart();
+                return true;
+                }
+            catch (Exception error) {
+                MessageBox.Show(this, error.Message, "Could not reload plugins");
+                return false;
+                }
+            });
+        dialog.ShowDialog(this);
+        }
+
+    private void CloseForPluginRestart() {
+        BeginInvoke(new Action(Close));
+        }
+
     private void ApplyWindowAppearance() {
         double opacity = _settings.OpacityPercent / 100.0;
         MnxDialog.ConfiguredOpacity = opacity;
@@ -208,9 +233,7 @@ public sealed partial class MainForm : MashWin.MWindow {
         closeArchiveMenuItem.Click += (_, _) => CloseArchive();
         TrackAction("Close", closeArchiveMenuItem);
         exitMenuItem.Click += (_, _) => Close();
-        aboutMenuItem.Click += (_, _) => MessageBox.Show(this,
-            "MNX Archive Manager " + Assembly.GetExecutingAssembly().GetName().Version
-            + "\nWindows Forms / C#\n\n" + BuiltInArchiveFormat() + "\n\n" + PluginCatalog.Installed.AboutSummary(), "About MNX");
+        aboutMenuItem.Click += (_, _) => ShowAbout();
         openPluginsDirectoryMenuItem.Click += async (_, _) => await Guard(() => {
             PluginCatalog.Installed.OpenDirectory();
             return Task.CompletedTask;
@@ -298,9 +321,11 @@ public sealed partial class MainForm : MashWin.MWindow {
             await action();
             }
         catch (OperationCanceledException) {
+            DebugLog.Write("Operation cancelled.", LogType.Warning | LogType.IO);
             statusMessage.Text = "Operation cancelled.";
             }
         catch (Exception error) {
+            DebugLog.Exception("Operation failed", error);
             MessageBox.Show(this, error.Message, "MNX Archive Manager", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -339,6 +364,7 @@ public sealed partial class MainForm : MashWin.MWindow {
         if (_busy) {
             return false;
             }
+        DebugLog.Write("Opening archive.", LogType.Info | LogType.IO);
         path = FileTransfer.LocalPath(path);
         try {
             PluginMatch? match = PluginCatalog.Installed.Match(path);
@@ -347,6 +373,7 @@ public sealed partial class MainForm : MashWin.MWindow {
                     token => OpenedModuleArchive.Open(match, path, token));
                 CloseArchive();
                 SetPluginArchive(result);
+                DebugLog.Write("Plugin archive opened.", LogType.Info | LogType.Parse);
                 return true;
                 }
             }
@@ -366,14 +393,17 @@ public sealed partial class MainForm : MashWin.MWindow {
             CloseArchive();
             _archive = next;
             LoadBrowser(browser);
+            DebugLog.Write("MNX archive opened.", LogType.Info | LogType.FTable);
             return true;
             }
         catch (CryptographicException) when (showErrors) {
             next.Dispose();
+            DebugLog.Write("Archive password requested.", LogType.Info);
             string? entered = TextPrompt.Ask(this, "Archive password", "Enter the archive password:", true);
             return entered is not null && await OpenArchive(path, entered, showErrors);
             }
         catch (Exception error) {
+            DebugLog.Exception("Archive open failed", error);
             ReturnCode code = next.ErrorStatus;
             next.Dispose();
             if (!showErrors) {
@@ -391,6 +421,9 @@ public sealed partial class MainForm : MashWin.MWindow {
     private void CloseArchive() {
         if (_busy) {
             return;
+            }
+        if (_archive is not null || _pluginArchive is not null) {
+            DebugLog.Write("Closing archive.", LogType.Info | LogType.IO);
             }
         ResetPreviews();
         _archive?.Dispose();
@@ -450,6 +483,7 @@ public sealed partial class MainForm : MashWin.MWindow {
             }
         CancelHover();
         _current = folder;
+        _browser.WarmNavigation(folder);
         currentPath.Text = _browser.PathOf(folder);
         searchText.Text = "";
         PopulateList();

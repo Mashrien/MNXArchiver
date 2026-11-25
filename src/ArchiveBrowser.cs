@@ -4,8 +4,10 @@ namespace Mash.GUI.MNXArchiver;
 /// <summary>Metadata only. Browsing never opens file payload streams.</summary>
 internal sealed class ArchiveBrowser {
     public sealed record Entry(Guid Id, Guid Parent, string Name, bool IsDirectory, ulong Bytes, DateTime CreatedUtc, uint Chunks = 0);
-    private readonly Dictionary<Guid, Entry> _entries;
-    private readonly Dictionary<Guid, Entry[]> _children;
+    private readonly Dictionary<Guid, Entry>? _entries;
+    private readonly Dictionary<Guid, Entry[]>? _children;
+    private readonly ArchiveNavigationCache? _navigation;
+    private readonly Func<Guid, bool>? _hasFolders;
     public Guid Root { get; }
     public string Title { get; }
     public bool Compressed { get; }
@@ -23,23 +25,79 @@ internal sealed class ArchiveBrowser {
             );
         }
 
-    public static ArchiveBrowser FromArchive(Archive archive) => new(
-        archive.RootDirectoryId,
-        Path.GetFileName(archive.ArchivePath!),
-        archive.Files.Select(f => new Entry(f.FileID, f.OwnerID, f.Name, f.IsDirectory, f.SizeOriginal, f.CreationDateUtc, f.ChunkCount)),
-        archive.Compression != ArchiveCompression.None,
-        archive.IsEncrypted
-        );
+    private ArchiveBrowser(Archive archive) {
+        Root = archive.RootDirectoryId;
+        Title = Path.GetFileName(archive.ArchivePath!);
+        Compressed = archive.Compression != ArchiveCompression.None;
+        Encrypted = archive.IsEncrypted;
+        _navigation = new ArchiveNavigationCache(Root,
+            id => ReadEntry(archive, id),
+            id => ReadChildren(archive, id)
+            );
+        _hasFolders = archive.HasSubdirectories;
+        }
+
+    public static ArchiveBrowser FromArchive(Archive archive) {
+        // Do not access archive.Files: that compatibility property intentionally
+        // creates a complete snapshot and would defeat the paged native index.
+        return new ArchiveBrowser(archive);
+        }
+
+    private static Entry FromFile(VFile file) {
+        return new Entry(file.FileID, file.OwnerID, file.Name, file.IsDirectory,
+            file.SizeOriginal, file.CreationDateUtc, file.ChunkCount);
+        }
+
+    private static Entry ReadEntry(Archive archive, Guid id) {
+        VFile? file = archive.GetEntry(id);
+        if (file is null) {
+            throw new KeyNotFoundException("Archive entry not found: " + id);
+            }
+        return FromFile(file);
+        }
+
+    private static IReadOnlyList<Entry> ReadChildren(Archive archive, Guid parent) {
+        return archive.DirectoryList(parent)
+            .OrderByDescending(file => file.IsDirectory)
+            .ThenBy(file => file.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(file => file.Name, StringComparer.Ordinal)
+            .Select(FromFile)
+            .ToArray();
+        }
     internal static ArchiveBrowser FromEntries(Guid root, string title, IEnumerable<Entry> entries) =>
         new ArchiveBrowser(root, title, entries, compressed: false, encrypted: false);
 
-    public IReadOnlyList<Entry> Children(Guid id) => _children.GetValueOrDefault(id) ?? [];
-    public Entry Get(Guid id) => _entries[id];
+    public IReadOnlyList<Entry> Children(Guid id) {
+        if (_navigation is not null) {
+            return _navigation.Children(id);
+            }
+        return _children!.GetValueOrDefault(id) ?? Array.Empty<Entry>();
+        }
+
+    public Entry Get(Guid id) {
+        if (_navigation is not null) {
+            return _navigation.Get(id);
+            }
+        return _entries![id];
+        }
+
+    public void WarmNavigation(Guid current) {
+        _navigation?.WarmNavigation(current);
+        }
     public Guid Parent(Guid id) => id == Root ? Root : Get(id).Parent;
-    public bool HasFolders(Guid id) => Children(id).Any(e => e.IsDirectory);
+    public bool HasFolders(Guid id) {
+        if (_hasFolders is not null) {
+            return _hasFolders(id);
+            }
+        return Children(id).Any(entry => entry.IsDirectory);
+        }
     public IEnumerable<Guid> Ancestors(Guid id) {
         Stack<Guid> chain = new Stack<Guid>();
+        HashSet<Guid> visited = new HashSet<Guid>();
         while (id != Root) {
+            if (!visited.Add(id)) {
+                throw new InvalidDataException("The archive contains a directory parent cycle.");
+                }
             chain.Push(id);
             id = Parent(id);
             }

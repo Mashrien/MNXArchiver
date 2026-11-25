@@ -1,3 +1,4 @@
+using Mash.GUI.MNXArchiver.Diagnostics;
 using Mash.GUI.MNXArchiver.Plugins;
 using Gtk;
 using Mash.GUI.MNXArchiver.Previews;
@@ -186,8 +187,14 @@ public sealed partial class MainWindow {
     internal void PreviewEntry(Guid id, Gdk.Rectangle anchor = default, int cursorX = 0, int cursorY = 0, bool hoverRequest = false,
         bool tryVideo = true) {
         if (!CanPreview(id, allowVideo: tryVideo && !hoverRequest) || _previewRead is not null || _openingVideo is not null || _stoppingPreviews || _loadingPreview) {
+            if (!hoverRequest) {
+                DebugLog.Write("Preview request rejected by type, size, settings or active preview.", LogType.GUI | LogType.Warning);
+                }
             _status.Text = "Preview unavailable: enable a supported type in Options; files must fit the configured preview buffer.";
             return;
+            }
+        if (!hoverRequest) {
+            DebugLog.Write("Preview request accepted.", LogType.GUI);
             }
         ArchiveBrowser.Entry entry = _browser!.Get(id);
         if (anchor.Width == 0 && anchor.Height == 0) {

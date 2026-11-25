@@ -1,3 +1,4 @@
+using Mash.GUI.MNXArchiver.Diagnostics;
 using static MNX.Archive;
 using MNX;
 using Mash.GUI.MNXArchiver.Settings;
@@ -17,6 +18,7 @@ public sealed partial class MainForm {
             throw new InvalidOperationException("An archive operation is already running.");
             }
         _busy = true;
+        DebugLog.Write(title + " started.", LogType.Info | LogType.IO);
         CancelHover();
         UpdateActions();
         Archive? archive = pluginCancellation is null ? target ?? _archive : null;
@@ -50,6 +52,7 @@ public sealed partial class MainForm {
         Point previousLocation = Location;
         Point previousPosition = previousLocation;
         FormWindowState previousState = WindowState;
+        int previousDialogMoveVersion = OwnedDialogMoveVersion;
         try {
             if (changesArchive) {
                 await _previews.CloseVideosAsync();
@@ -67,7 +70,16 @@ public sealed partial class MainForm {
             timer.Start();
             T result = await Task.Run(operation);
             dialog.UpdateProgress(Volatile.Read(ref progress));
+            DebugLog.Write(title + " completed.", LogType.Info | LogType.IO);
             return result;
+            }
+        catch (OperationCanceledException) {
+            DebugLog.Write(title + " cancelled.", LogType.Warning | LogType.IO);
+            throw;
+            }
+        catch (Exception error) {
+            DebugLog.Exception(title + " failed", error);
+            throw;
             }
         finally {
             timer.Stop();
@@ -84,16 +96,25 @@ public sealed partial class MainForm {
                 _transferConcealed = false;
                 }
             else if (restoreMainWindow && !_closing) {
+                // A progress-title drag deliberately moves this hidden owner.
+                // Preserve that gesture while retaining the original no-drag restore.
+                bool movedWithDialog = OwnedDialogMoveVersion != previousDialogMoveVersion;
+                Point restoreLocation = movedWithDialog ? Location : previousLocation;
+                Point restorePosition = previousPosition;
+                if (movedWithDialog) {
+                    restorePosition = Location;
+                    ReadPlatformWindowPosition(ref restorePosition);
+                    }
                 StartPosition = FormStartPosition.Manual;
                 if (previousState == FormWindowState.Normal) {
-                    Location = previousLocation;
+                    Location = restoreLocation;
                     }
                 Show();
                 if (WindowState != previousState) {
                     WindowState = previousState;
                     }
                 if (previousState == FormWindowState.Normal) {
-                    RestorePlatformWindowPosition(previousPosition);
+                    RestorePlatformWindowPosition(restorePosition);
                     }
                 }
             if (restoreMainWindow && !_closing) {
@@ -350,6 +371,7 @@ public sealed partial class MainForm {
         }
 
     internal async Task ResumeFromQueue(string path) {
+        DebugLog.Write("Reading remaining queue for resume.", LogType.Info | LogType.Parse);
         FileInfo queueFile = new FileInfo(path);
         QueuePayload queue = await Task.Run(() => RemainingQueue.Read(queueFile));
         string archivePath = RemainingQueue.LocateArchive(queueFile, queue);

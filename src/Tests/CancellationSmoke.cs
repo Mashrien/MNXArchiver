@@ -205,9 +205,21 @@ internal static class CancellationSmoke {
             );
         byte[] bytes = DiskFile.ReadAllBytes(archivePath);
         int chunkSize = archive.ChunkSize;
-        int indexBytes = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(60)));
+        ulong indexBytes = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(60));
+        int hashedBytes;
+        if (archive.FormatVersion == 8) {
+            indexBytes |= (ulong)BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(176)) << 32;
+            // Wire8 fingerprints the complete physical page reservation, including
+            // authentication envelopes; the header length describes logical bytes.
+            hashedBytes = checked((int)((ulong)archive.IndexChunkCount * (uint)chunkSize));
+            }
+        else {
+            hashedBytes = checked((int)indexBytes);
+            }
         Check(
-            identity.GetProperty("HeaderSha256").GetString() == Convert.ToHexString(SHA256.HashData(bytes.AsSpan(0, chunkSize))) && identity.GetProperty("IndexSha256").GetString() == Convert.ToHexString(SHA256.HashData(bytes.AsSpan(chunkSize, indexBytes))),
+            identity.GetProperty("IndexBytes").GetUInt64() == indexBytes
+                && identity.GetProperty("HeaderSha256").GetString() == Convert.ToHexString(SHA256.HashData(bytes.AsSpan(0, chunkSize)))
+                && identity.GetProperty("IndexSha256").GetString() == Convert.ToHexString(SHA256.HashData(bytes.AsSpan(chunkSize, hashedBytes))),
             "Queue fingerprints the kept archive header and front index"
             );
         if (!OperatingSystem.IsWindows()) {

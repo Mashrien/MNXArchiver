@@ -14,7 +14,13 @@ see **[mnx-cli](https://github.com/Mashrien/mnx-cli)**.
 
 ## Downloads and installation
 
-Version 2.1.1 adds optional streamed video previews, seekable archive-module
+Version 2.1.2 adds the paged MNX 0.1.8 browser, an expanded About dialog with
+provider versions and plugin reload, and a bounded Debug Window under Help.
+The current folder and its parent stay warm; the last-visited folder is retained
+when the optional history budget permits. This requires MNXFile 1.3.1-alpha.10
+or newer. See [index and diagnostics notes](docs/INDEX-AND-DIAGNOSTICS.md).
+
+Version 2.1.1 added optional streamed video previews, seekable archive-module
 entries, and the shared MWin drawing settings. It also includes Linux menu color,
 Options layout and portable library lookup fixes.
 

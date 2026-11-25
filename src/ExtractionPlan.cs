@@ -17,24 +17,26 @@ internal sealed class ExtractionPlan {
 
     internal static ExtractionPlan Create(Archive archive, IEnumerable<Guid> selection, string directory, string? singleFileDestination = null) {
         directory = Path.GetFullPath(directory);
-        Dictionary<Guid, VFile>? entries = archive.Files.ToDictionary(entry => entry.FileID);
-        Dictionary<Guid, VFile[]>? children = entries.Values.GroupBy(entry => entry.OwnerID).ToDictionary(group => group.Key, group => group.ToArray());
-        HashSet<Guid>? selected = selection.ToHashSet();
+        HashSet<Guid> selected = selection.ToHashSet();
         List<ExtractionItem> items = new List<ExtractionItem>();
         List<string> rootPaths = new List<string>();
         StringComparer? comparison = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         HashSet<string> outputPaths = new HashSet<string>(comparison);
         foreach (Guid id in selected) {
-            VFile entry = entries[id];
+            VFile entry = ReadEntry(archive, id);
             Guid ancestor = entry.OwnerID;
             bool coveredByParent = false;
-            while (entries.TryGetValue(ancestor, out VFile? parent)) {
+            HashSet<Guid> ancestors = new HashSet<Guid>();
+            while (ancestor != archive.RootDirectoryId && ancestor != Guid.Empty) {
+                if (!ancestors.Add(ancestor)) {
+                    throw new InvalidDataException("The archive contains a directory parent cycle.");
+                    }
                 if (selected.Contains(ancestor)) {
                     coveredByParent = true;
                     break;
                     }
 
-                ancestor = parent.OwnerID;
+                ancestor = ReadEntry(archive, ancestor).OwnerID;
                 }
 
             if (coveredByParent) {
@@ -44,9 +46,13 @@ internal sealed class ExtractionPlan {
             string rootPath = singleFileDestination ?? Path.Combine(directory, entry.Name);
             rootPaths.Add(Path.GetFullPath(rootPath));
             Stack<(VFile Entry, string Path, string Relative)> pending = new Stack<(VFile Entry, string Path, string Relative)>();
+            HashSet<Guid> visited = new HashSet<Guid>();
             pending.Push((entry, rootPath, entry.Name));
             while (pending.Count > 0) {
                 (VFile Entry, string Path, string Relative) current = pending.Pop();
+                if (!visited.Add(current.Entry.FileID)) {
+                    throw new InvalidDataException("The archive contains a repeated or cyclic directory entry.");
+                    }
                 string path = Path.GetFullPath(current.Path);
                 Archive.ValidateDestinationName(Path.GetFileName(path));
                 if (!outputPaths.Add(path)) {
@@ -64,9 +70,11 @@ internal sealed class ExtractionPlan {
                     current.Entry.IsDirectory,
                     checked((long)current.Entry.SizeOriginal)
                     ));
-                if (current.Entry.IsDirectory && children.TryGetValue(current.Entry.FileID, out VFile[]? descendants)) {
-                    for (int index = descendants.Length - 1; index >= 0; index--) {
-                        VFile? child = descendants[index];
+                if (current.Entry.IsDirectory) {
+                    // Only the selected subtrees are needed to plan this transfer.
+                    IReadOnlyList<VFile> descendants = archive.DirectoryList(current.Entry.FileID);
+                    for (int index = descendants.Count - 1; index >= 0; index--) {
+                        VFile child = descendants[index];
                         pending.Push((child, Path.Combine(path, child.Name), Path.Combine(current.Relative, child.Name)));
                         }
                     }
@@ -74,6 +82,14 @@ internal sealed class ExtractionPlan {
             }
 
         return new ExtractionPlan(items, rootPaths);
+        }
+
+    private static VFile ReadEntry(Archive archive, Guid id) {
+        VFile? entry = archive.GetEntry(id);
+        if (entry is null) {
+            throw new FileNotFoundException("Archive entry not found: " + id);
+            }
+        return entry;
         }
 
     internal string[] ExistingFiles() {
