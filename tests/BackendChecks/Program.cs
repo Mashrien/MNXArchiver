@@ -154,6 +154,16 @@ try {
     Require(imported["WindowBackground"] == 0xFF202326 && imported["ViewBackground"] == 0xFF141618,
         "KDE desktop colors were not imported exactly.");
     MWinColors created = MWinColors.LoadOrCreate(paletteWork, () => imported);
+    Require(created.CaptionHeight == 35 && created.CaptionFontPoints == 12f, "Default caption must scale to 35 pixels and 12 points.");
+    string captionFile = Path.Combine(paletteWork, "caption-test.conf");
+    File.WriteAllText(captionFile, "[mnx.display.mwin.window]\nwmTitleHeight=33\nColor.tfSize=10.5\n");
+    MWinColors previousCaption = MWinColors.Read(captionFile);
+    Require(previousCaption.CaptionHeight == 44 && previousCaption.CaptionFontPoints == 14f,
+        "Existing caption settings must scale together.");
+    File.AppendAllText(captionFile, "wmTitleScale=1\n");
+    MWinColors unscaledCaption = MWinColors.Read(captionFile);
+    Require(unscaledCaption.CaptionHeight == 33 && unscaledCaption.CaptionFontPoints == 10.5f,
+        "An explicit scale of one must use the configured measurements verbatim.");
     string paletteFile = Path.Combine(paletteWork, MWinColors.FileName);
     string generated = System.IO.File.ReadAllText(paletteFile);
     Require(Path.GetFileName(paletteFile) == "gui.mwin.drawing.conf", "The drawing palette filename is incorrect.");

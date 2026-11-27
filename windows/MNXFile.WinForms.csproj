@@ -27,7 +27,7 @@
   <PropertyGroup Condition="Exists('$(MSBuildThisFileDirectory)../../MNX_Builds/mnxfile/packages')">
   </PropertyGroup>
   <ItemGroup>
-    <Compile Update="ArchiveDropForm.cs;MainForm.cs;InputSelectionForm.cs;CreationForm.cs;ProgressForm.cs;Dialogs/OptionsForm.cs;Previews/PreviewForm.cs;TextPromptForm.cs;TextViewerForm.cs;CancellationForm.cs"><SubType>Form</SubType></Compile>
+    <Compile Update="DebugForm.cs;AboutForm.cs;ArchiveDropForm.cs;MainForm.cs;InputSelectionForm.cs;CreationForm.cs;ProgressForm.cs;Dialogs/OptionsForm.cs;Previews/PreviewForm.cs;TextPromptForm.cs;TextViewerForm.cs;CancellationForm.cs"><SubType>Form</SubType></Compile>
     <Compile Update="MainForm.Operations.cs;MainForm.Previews.cs;MainForm.DragAndDrop.cs;MainForm.Layout.cs;MainForm.Smoke.cs;MainForm.DropSmoke.cs;MainForm.DesignerSmoke.cs"><DependentUpon>MainForm.cs</DependentUpon></Compile>
     <Compile Update="**/*.Designer.cs"><DependentUpon>$([System.String]::Copy('%(Filename)').Replace('.Designer', '')).cs</DependentUpon></Compile>
     <EmbeddedResource Update="**/*.resx"><DependentUpon>%(Filename).cs</DependentUpon></EmbeddedResource>
@@ -38,9 +38,12 @@
     <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="3.119.4" GeneratePathProperty="true" />
     <Content Include="$(PkgSkiaSharp_NativeAssets_Win32)/LICENSE.txt" Link="THIRD-PARTY/SkiaSharp-3.119.4-LICENSE.txt" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="$(PkgSkiaSharp_NativeAssets_Win32)/THIRD-PARTY-NOTICES.txt" Link="THIRD-PARTY/SkiaSharp-3.119.4-THIRD-PARTY-NOTICES.txt" CopyToPublishDirectory="PreserveNewest" />
+    <Compile Include="../src/Diagnostics/DebugLog.cs" Link="Shared/Diagnostics/DebugLog.cs" />
+    <Compile Include="../src/About/*.cs" Exclude="../src/About/AboutDialog.cs" Link="Shared/About/%(Filename)%(Extension)" />
     <Compile Include="../src/Plugins/*.cs" Link="Shared/Plugins/%(Filename)%(Extension)" />
-    <PackageReference Include="Mash.MNXFile.Client" Version="1.3.0-alpha.6" />
+    <PackageReference Include="Mash.MNXFile.Client" Version="1.3.1-alpha.10" />
     <Compile Include="../src/ArchiveBrowser.cs" Link="Shared/ArchiveBrowser.cs" />
+    <Compile Include="../src/ArchiveNavigationCache.cs" Link="Shared/ArchiveNavigationCache.cs" />
     <Compile Include="../src/FileTransfer.cs" Link="Shared/FileTransfer.cs" />
     <Compile Include="../src/ExtractionPlan.cs" Link="Shared/ExtractionPlan.cs" />
     <Compile Include="../src/TransferCancellation.cs" Link="Shared/TransferCancellation.cs" />

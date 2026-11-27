@@ -166,7 +166,7 @@ namespace MashWin.Settings {
 
         private sealed class WindowThemeBinding {
             private readonly MWindow _owner;
-            private readonly Dictionary<(string Family, float Size, FontStyle Style), Font> _fonts = new();
+            private readonly Dictionary<(string Family, float Size, FontStyle Style, bool Caption), Font> _fonts = new();
             private readonly Dictionary<TableLayoutPanel, NavigationLayout> _navigation = new();
 
             internal WindowThemeBinding(MWindow owner) {
@@ -185,15 +185,15 @@ namespace MashWin.Settings {
                 _navigation.Clear();
                 }
 
-            private Font StyledFont(FontSpec specification, Font fallback) {
+            private Font StyledFont(FontSpec specification, Font fallback, bool caption = false) {
                 if (string.IsNullOrWhiteSpace(specification.Family) && specification.Size <= 0) {
                     return fallback;
                     }
                 string family = string.IsNullOrWhiteSpace(specification.Family) ? fallback.Name : specification.Family;
                 float size = float.IsFinite(specification.Size) && specification.Size > 0 ? specification.Size : fallback.SizeInPoints;
-                (string Family, float Size, FontStyle Style) key = (family, size, fallback.Style);
+                (string Family, float Size, FontStyle Style, bool Caption) key = (family, size, fallback.Style, caption);
                 if (!_fonts.TryGetValue(key, out Font font)) {
-                    font = new Font(family, size, fallback.Style);
+                    font = caption ? TitleSettings.CreateCaptionFont(family, size) : new Font(family, size, fallback.Style);
                     _fonts.Add(key, font);
                     }
                 return font;
@@ -208,6 +208,7 @@ namespace MashWin.Settings {
                     _owner.Settings.Frame.BorderThickness = parent.Settings.Frame.BorderThickness;
                     _owner.Settings.Frame.CornerRadius = parent.Settings.Frame.CornerRadius;
                     }
+                _owner.Settings.Title.Height = parent.Settings.Title.Height;
                 _owner.Settings.Title.Font = parent.Settings.Title.Font;
                 _owner.Settings.Title.Alignment = parent.Settings.Title.Alignment;
                 _owner.Settings.ToolStrips.BackgroundColor = parent.Settings.ToolStrips.BackgroundColor;
@@ -237,7 +238,7 @@ namespace MashWin.Settings {
                     }
                 settings.Title.BackgroundColor = Use(theme.TitleBackground, settings.Title.BackgroundColor);
                 settings.Title.TextColor = Use(theme.TitleForeground, settings.Title.TextColor);
-                settings.Title.Font = StyledFont(theme.TitleFont, settings.Title.Font);
+                settings.Title.Font = StyledFont(theme.TitleFont, settings.Title.Font, caption: true);
                 settings.StatusBar.Font = StyledFont(theme.Font, settings.StatusBar.Font);
                 ApplyCaption(settings.CaptionButtons.MinMax, theme.MinMax);
                 ApplyCaption(settings.CaptionButtons.Exit, theme.Exit);

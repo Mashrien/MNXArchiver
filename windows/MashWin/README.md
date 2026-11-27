@@ -157,7 +157,7 @@ native resize corner stay clear of hosted controls; a resizable form reserves it
 corner even when the diagonal size-grip hint is disabled.
 
 Docked form controls use the area inside the frame, below the title divider and
-above the status region. The divider's thickness follows `Frame.BorderThickness`.
+above the status region. The status divider uses `MenuSeparator.Thickness`.
 `Settings.Frame.ShowChrome = false` disables this custom chrome and reserved layout
 for borderless tooltip windows. Standard `ControlBox`, `MinimizeBox` and
 `MaximizeBox` settings also govern the custom caption buttons.
@@ -168,6 +168,22 @@ inherited `statusBarControls` panel in `InitializeComponent`, and call
 ownership to MWin and connects live status settings without designer aliases.
 RoundButton's TextAlign default metadata now matches its constructor, preserving
 explicit centered alignment when the Visual Studio designer saves the form.
+
+## Frame and owned-dialog movement
+
+The status divider keeps its configured thickness. Portable MWin continues the
+hosted strip's top edge through the two corner gaps in the same color.
+Fixed dialogs reserve room around their rounded bottom corners.
+
+Set `MoveOwnerWithTitleBar = true` on an owned dialog to move its owner by the
+same delta during a title-bar drag. The option defaults to false. Native caption
+gestures and portable managed title presses begin tracking; ending the gesture
+stops it. Centering, programmatic movement and resizing do not move the owner.
+The owner's read-only `OwnedDialogMoveVersion` changes only for such movements,
+so transfer hosts can preserve a deliberate drag when restoring a hidden window.
+The MNX GTK4 frontend tracks physical X11 moves. On Plasma Wayland, it uses
+KWin's interactive move events for the dragged dialog and its owner.
+
 ## Apply a runtime theme
 
 Pass a `MashWin.Settings.UserColors.Theme` to `UserColors.Apply` on the form's

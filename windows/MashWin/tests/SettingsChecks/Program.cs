@@ -17,6 +17,8 @@ internal static class Program {
         Check("Nested edits repaint without resizing", CheckRepaint);
         Check("Caption sizing, visibility and palette update immediately", CheckCaption);
         Check("Owned status panel protects separators and the resize corner", CheckStatusHost);
+        Check("Docked dialog content preserves rounded bottom borders", CheckDialogCorners);
+        Check("Caption movement preserves owned dialog offsets", CheckOwnerCaptionMovement);
         Check("Caption glyphs remain centered", CheckCaptionAlignment);
         Check("Replacement settings detach the previous owner", CheckReplacement);
         Check("Disposed forms detach settings", CheckDisposal);
@@ -197,24 +199,25 @@ internal static class Program {
                 fill.Dock = DockStyle.Fill;
                 window.Controls.Add(fill);
                 window.PerformLayout();
-                Require(fill.Top > 30 && fill.Bottom <= host.Top, "Docked content covers the title divider or status region");
+                int titleDividerY = window.Title.Height + window.Frame.BorderThickness;
+                Require(fill.Top > titleDividerY && fill.Bottom <= host.Top, "Docked content covers the title divider or status region");
                 using (Bitmap bitmap = Capture(window)) {
-                    Require(bitmap.GetPixel(100, 31).ToArgb() == window.Settings.Frame.BorderColor.ToArgb(),
+                    Require(bitmap.GetPixel(100, titleDividerY).ToArgb() == window.Settings.Frame.BorderColor.ToArgb(),
                         "Docked content covers the thick title divider");
                     }
                 window.Settings.MenuSeparator.Color = Color.LimeGreen;
                 window.Settings.MenuSeparator.Thickness = 2;
                 window.Settings.StatusBar.ShowSeparator = true;
                 Application.DoEvents();
-                Require(fill.Bottom == host.Top - 2, "Docked content reaches the status divider");
+                Require(fill.Bottom == host.Top - window.Settings.MenuSeparator.Thickness, "Docked content reaches the status divider");
                 using (Bitmap bitmap = Capture(window)) {
-                    Require(bitmap.GetPixel(100, 31).ToArgb() == Color.LimeGreen.ToArgb(),
+                    Require(bitmap.GetPixel(100, titleDividerY).ToArgb() == Color.LimeGreen.ToArgb(),
                         "The title divider ignored the shared color");
-                    for (int y = host.Top - 2; y < host.Top; y++) {
-                        Require(bitmap.GetPixel(host.Left + 1, y).ToArgb() == Color.LimeGreen.ToArgb() &&
+                    for (int y = host.Top - window.Settings.MenuSeparator.Thickness; y < host.Top; y++) {
+                        Require(bitmap.GetPixel(window.Frame.BorderThickness + 1, y).ToArgb() == Color.LimeGreen.ToArgb() &&
                             bitmap.GetPixel(window.ClientSize.Width / 2, y).ToArgb() == Color.LimeGreen.ToArgb() &&
-                            bitmap.GetPixel(host.Right - 1, y).ToArgb() == Color.LimeGreen.ToArgb(),
-                            "The status divider did not paint its full thickness across the status controls");
+                            bitmap.GetPixel(window.ClientSize.Width - window.Frame.BorderThickness - 2, y).ToArgb() == Color.LimeGreen.ToArgb(),
+                            "The status divider did not paint its configured thickness across both ends");
                         }
                     }
                 }
@@ -228,13 +231,98 @@ internal static class Program {
             }
         }
 
+    private static void CheckDialogCorners() {
+        foreach (int radius in new int[] { 0, 12, 28, 48 }) {
+            using (MWindow window = CreateWindow()) {
+                window.Frame.BorderThickness = 5;
+                window.Frame.BorderColor = Color.Lime;
+                window.Frame.Resizable = false;
+                window.Frame.ShowSizeGrip = false;
+                window.Frame.CornerRadius = radius;
+                window.StatusBar.Visible = false;
+                Application.DoEvents();
+                using (Bitmap before = Capture(window)) {
+                    using (Panel content = new Panel()) {
+                        content.Dock = DockStyle.Fill;
+                        content.BackColor = Color.Magenta;
+                        window.Controls.Add(content);
+                        window.PerformLayout();
+                        Application.DoEvents();
+                        using (Bitmap after = Capture(window)) {
+                            int corner = Math.Max(12, radius + 15);
+                            for (int y = window.Height - corner; y < window.Height; y++) {
+                                for (int x = 0; x < window.Width; x++) {
+                                    if (x >= corner && x < window.Width - corner) {
+                                        continue;
+                                        }
+                                    if (before.GetPixel(x, y).ToArgb() == Color.Lime.ToArgb()) {
+                                        Require(after.GetPixel(x, y).ToArgb() == Color.Lime.ToArgb(),
+                                            "Docked content covered a bottom border pixel at radius " + radius);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+    private static void CheckOwnerCaptionMovement() {
+        using (MWindow owner = CreateWindow()) {
+            using (CaptionDragProbe child = new CaptionDragProbe()) {
+                child.Owner = owner;
+                child.Size = new Size(320, 180);
+                child.MoveOwnerWithTitleBar = true;
+                child.StartPosition = FormStartPosition.Manual;
+                child.Show();
+                Application.DoEvents();
+                owner.Location = new Point(80, 100);
+                child.Location = new Point(140, 160);
+                Require(owner.Location == new Point(80, 100), "Initial dialog positioning moved its owner");
+                child.SimulateNonClientDrag(2, new Point(45, -19)); // HTCAPTION
+                Require(child.DragApplied, "The native caption dispatcher was not exercised");
+                Require(owner.Location == new Point(125, 81) && child.Location == new Point(185, 141),
+                    "Native caption movement did not preserve the owner offset: owner " + owner.Location + "; child " + child.Location);
+                child.Location = new Point(210, 170);
+                Require(owner.Location == new Point(125, 81), "Movement after the gesture moved the owner");
+                child.SimulateNonClientDrag(17, new Point(10, 12)); // HTBOTTOMRIGHT
+                Require(owner.Location == new Point(125, 81), "An edge-resize gesture moved the owner");
+                }
+            }
+        }
+
+    private sealed class CaptionDragProbe : MWindow {
+        private Point dragDelta;
+        public bool DragApplied { get; private set; }
+
+        public void SimulateNonClientDrag(int hitTest, Point delta) {
+            dragDelta = delta;
+            DragApplied = false;
+            Message message = Message.Create(Handle, 0x00A1, new IntPtr(hitTest), IntPtr.Zero);
+            WndProc(ref message);
+            }
+
+        protected override void DefWndProc(ref Message message) {
+            if (message.Msg == 0x00A1) {
+                // Model the OS move loop at the native-dispatch boundary,
+                // without synthesizing pointer input on a developer's desktop.
+                Location = new Point(Left + dragDelta.X, Top + dragDelta.Y);
+                DragApplied = true;
+                message.Result = IntPtr.Zero;
+                return;
+                }
+            base.DefWndProc(ref message);
+            }
+        }
+
     private static void CheckCaption() {
         using (MWindow window = CreateWindow()) {
             RoundButton exit = (RoundButton)window.Controls["rbExit"];
             RoundButton maximize = (RoundButton)window.Controls["rbMaximize"];
             RoundButton minimize = (RoundButton)window.Controls["rbMinimize"];
-            Require(exit.Size == new Size(30, 20) && maximize.Size == exit.Size && minimize.Size == exit.Size,
-                "The default title height changed the legacy button dimensions");
+            Require(exit.Size == new Size(40, 27) && maximize.Size == exit.Size && minimize.Size == exit.Size,
+                "Default caption buttons do not fit the taller title");
             window.Settings.Title.Height = 52;
             Require(exit.Size == new Size(60, 40) && maximize.Size == exit.Size && minimize.Size == exit.Size,
                 "Caption buttons did not scale with the title height");

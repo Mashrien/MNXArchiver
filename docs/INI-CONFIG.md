@@ -21,7 +21,7 @@ Main settings use sections by context:
 
 `gui.mwin.drawing.conf` groups settings by what they draw.
 
-- `[mnx.display.mwin.window]` covers the frame, title and status areas, dividers and caption buttons.
+- `[mnx.display.mwin.window]` covers the frame, title and status areas, dividers and caption buttons. `wmTitleScale` multiplies both `wmTitleHeight` (pixels) and `Color.tfSize` (points). The default of 4/3 gives a 35-pixel bar and a 12-point semibold title. Set the scale to `1` for literal sizes.
 - `[mnx.display.mwin.buttons]` covers the main toolbar buttons' colors, fonts and rounded borders. Home and Up use the navigation text settings.
 - `[mnx.display.mwin.text]` sets the navigation and menu text font, size and color. If `Color` is omitted, the menu palette supplies the normal menu text color.
 - `[mnx.display.mwin.files]` covers the folder tree, file list and column headers.

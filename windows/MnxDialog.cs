@@ -6,6 +6,7 @@ namespace Mash.GUI.MNXArchiver;
 public partial class MnxDialog : MashWin.MWindow {
     internal static double ConfiguredOpacity { get; set; } = 1.0;
     public MnxDialog() {
+        MoveOwnerWithTitleBar = true;
         Opacity = ConfiguredOpacity;
         Settings.StatusBar.Visible = false;
         Settings.MenuSeparator.Enabled = false;

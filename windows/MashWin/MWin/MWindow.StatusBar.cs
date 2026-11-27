@@ -67,6 +67,10 @@ namespace MashWin {
                 int height = settings.StatusBar.Visible ? settings.StatusBar.Height + StatusSeparatorHeight : 0;
                 // A resize corner needs a clear hit-test surface even when its
                 // diagonal hint is hidden or the status bar is disabled.
+                int corner = Math.Max(0, settings.Frame.CornerRadius);
+                // Fixed dialogs without a status host still need clear space
+                // where the rounded outline bends inward beneath docked content.
+                height = Math.Max(height, corner);
                 return settings.Frame.Resizable ? Math.Max(height, 22) : height;
                 }
             }

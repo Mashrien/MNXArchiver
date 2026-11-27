@@ -20,7 +20,7 @@ namespace MashWin {
         private GraphicsPath WindowGP;
         private bool HasBeenResized;
         private Size LastSize;
-        private Rectangle SrcRect, DestRect, _WindowRect, _TitleTextRect;
+        private Rectangle SrcRect, DestRect, _WindowRect;
 
         private MWindowSettings settings = new MWindowSettings();
 
@@ -36,7 +36,11 @@ namespace MashWin {
         private Brush AppBrushTitle = new SolidBrush(Color.FromArgb(190, Color.DarkCyan));
         private Brush AppBrushBackground;
         private StringFormat StatusTextAlignment = new StringFormat() { LineAlignment = StringAlignment.Center };
-        private StringFormat TitleTextAlignment = new StringFormat() { LineAlignment = StringAlignment.Center };
+        private StringFormat TitleTextAlignment = new StringFormat() {
+            LineAlignment = StringAlignment.Center,
+            FormatFlags = StringFormatFlags.NoWrap,
+            Trimming = StringTrimming.EllipsisCharacter
+            };
 
         public bool UserDrawn = false;
 
@@ -158,7 +162,9 @@ namespace MashWin {
                 return;
                 }
 
-            double scale = settings.Title.Height / (double)TitleSettings.DefaultHeight;
+            // The original caption buttons were drawn for a 26-pixel title.
+            const double buttonDesignHeight = 26;
+            double scale = settings.Title.Height / buttonDesignHeight;
             int height = (int)Math.Round(20 * scale);
             int border = Math.Max(0, settings.Frame.BorderThickness);
             int top = border - 1;
@@ -414,6 +420,16 @@ namespace MashWin {
 
         #region wndproc
         protected override void WndProc(ref Message m) {
+            if (m.Msg == 0x00A1 && m.WParam.ToInt32() == 2) { // WM_NCLBUTTONDOWN, HTCAPTION
+                BeginTitleBarDrag();
+                try {
+                    base.WndProc(ref m);
+                    }
+                finally {
+                    EndTitleBarDrag();
+                    }
+                return;
+                }
             // this is SPECIFICALLY to abort a maximize call by double-clicking the titlebar
             if (m.Msg == WM_LBUTTONDBLCLK && !MaximizeBox) {
                 m.Result = (IntPtr)0;
@@ -542,38 +558,11 @@ namespace MashWin {
             int t = this.Settings.Frame.BorderThickness;
 
             if (WindowGP == null || HasBeenResized) {
-                using (GraphicsPath gp = new GraphicsPath()) {
-                    r = ClientRectangle;
-                    int width = r.Width - (Settings.Frame.BorderThickness/2);
-                    int height = r.Height - (Settings.Frame.BorderThickness/2);
-                    int radius = d;
-                    int gradientOffset = r.Y;
-                    int rHalfBorder = (int)Math.Ceiling((float)(Settings.Frame.BorderThickness / 2));
-                    int wxr = (int)Math.Ceiling((float)(width - radius * 2));
-
-                    // A square frame is valid too; AddArc rejects zero-sized arcs.
-                    if (radius <= 0) {
-                        gp.AddRectangle(new Rectangle(rHalfBorder, rHalfBorder,
-                            Math.Max(1, width - Settings.Frame.BorderThickness),
-                            Math.Max(1, height - Settings.Frame.BorderThickness)));
-                        }
-                    else {
-                        gp.AddArc(rHalfBorder, rHalfBorder, (radius * 2) + rHalfBorder, (radius * 2) + rHalfBorder, 180, 90); // TL
-                        gp.AddArc(wxr - (Settings.Frame.BorderThickness+rHalfBorder)-1, rHalfBorder, (radius * 2) + (t + 2), (radius * 2) + (t + 2), 270, 90); // TR
-                        gp.AddArc(wxr - (Settings.Frame.BorderThickness+rHalfBorder)-1, (height - (radius * 2)) - (Settings.Frame.BorderThickness + rHalfBorder+1), (radius * 2) + (t + 2), (radius * 2) + (t + 2), 0, 90); // BR
-                        gp.AddArc(rHalfBorder, (height - (radius * 2)) - (Settings.Frame.BorderThickness+rHalfBorder+1), (radius * 2) + t + 2, (radius * 2) + t + 2, 90, 90); // BL
-                        }
-                    gp.CloseFigure();
-
-                    // Release the previous shape before caching a resized outline.
-                    WindowGP?.Dispose();
-                    WindowGP = (GraphicsPath)gp.Clone();
-                    gp.Dispose();
-                    }
+                WindowGP?.Dispose();
+                WindowGP = CreateFramePath(d);
 
                 pUpdateAlignment();
                 _WindowRect = new Rectangle(0, 0, Width, Height);
-                _TitleTextRect = new Rectangle(0, 0, Width, Settings.Title.Height + 4);
 
                 }
 
@@ -589,6 +578,7 @@ namespace MashWin {
                     }
                 g.Restore(titleState);
                 }
+            PaintStatusDivider(g);
             if (Settings.Frame.BorderThickness > 0) {
                 g.DrawPath(p, WindowGP);
                 }
@@ -608,17 +598,9 @@ namespace MashWin {
                 }
 
             if (Settings.MenuSeparator.Enabled && Settings.MenuSeparator.Thickness > 0) {
-                int menuDividerY = TitleDividerY + TitleSettings.DefaultHeight;
+                const int menuRowHeight = 26;
+                int menuDividerY = TitleDividerY + menuRowHeight;
                 g.DrawLine(AppPenSeparator, 1, menuDividerY, ClientSize.Width - 1, menuDividerY);
-                }
-
-            int border = Math.Max(0, Settings.Frame.BorderThickness);
-            int statusTop = StatusBarTop;
-            int separatorTop = Math.Max(TitleContentTop, statusTop - StatusSeparatorHeight);
-            if (separatorTop < statusTop && ClientSize.Width > 2 * border) {
-                using (SolidBrush separator = new SolidBrush(Settings.MenuSeparator.Color)) {
-                    g.FillRectangle(separator, border, separatorTop, ClientSize.Width - 2 * border, statusTop - separatorTop);
-                    }
                 }
 
             if (Settings.Frame.BorderThickness > 0) {
@@ -645,13 +627,12 @@ namespace MashWin {
             if (AppPenBorder.Width != this.Settings.Frame.BorderThickness) AppPenBorder.Width = this.Settings.Frame.BorderThickness;
 
             Graphics g = e.Graphics; // I HAD a using(graphics g = e.graphics){} block here BUT C# doesn't like it.. no idea why. Maybe not disposable?
-            int vOffset = (24 - (int)g.MeasureString(this.Text, Settings.Title.Font).Height) / 2;
 
-            DrawWindow(g, this.ClientRectangle, this.Settings.Frame.CornerRadius, AppPenBorder, (int)g.MeasureString(" " + this.Text + " ", Settings.Title.Font).Width);
+            DrawWindow(g, this.ClientRectangle, this.Settings.Frame.CornerRadius, AppPenBorder);
 
             // Respect the public title visibility setting when painting custom chrome.
             if (Settings.Title.ShowTitle) {
-                g.DrawString(this.Text, Settings.Title.Font, AppBrushTitle, _TitleTextRect, TitleTextAlignment);
+                g.DrawString(this.Text, Settings.Title.Font, AppBrushTitle, CaptionTextBounds(), TitleTextAlignment);
                 }
             // StatusText lives in the owned status strip; painting it here too
             // would duplicate text beneath hosted progress/items.
@@ -673,7 +654,7 @@ namespace MashWin {
             g.InterpolationMode = InterpolationMode.HighQualityBilinear;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
             g.FillRectangle(Brushes.Fuchsia, _WindowRect);
-            g.TextRenderingHint = TextRenderingHint.SingleBitPerPixelGridFit;
+            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
             }
 
         #endregion drawing

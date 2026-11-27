@@ -253,7 +253,7 @@ namespace MashWin {
         }
 
     public sealed class TitleSettings : CustomizationGroup {
-        internal const int DefaultHeight = 26;
+        internal const int DefaultHeight = 35;
 
         private int height = DefaultHeight;
         private Color textColor = Color.FromArgb(190, Color.DarkCyan);
@@ -282,7 +282,19 @@ namespace MashWin {
             }
 
         private Image icon;
-        private Font font = new Font("Segoe UI", 9f);
+        internal static Font CreateCaptionFont(string family, float points) {
+            // GDI+ exposes intermediate weights as named faces on Windows.
+            const string suffix = " Semibold";
+            string face = family.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) ? family : family + suffix;
+            Font candidate = new Font(face, points);
+            if (string.Equals(candidate.Name, face, StringComparison.OrdinalIgnoreCase)) {
+                return candidate;
+                }
+            candidate.Dispose();
+            return new Font(family, points, FontStyle.Bold);
+            }
+
+        private Font font = CreateCaptionFont("Segoe UI", 12f);
         private bool showTitle = true;
         private Alignment alignment = Alignment.Left;
 

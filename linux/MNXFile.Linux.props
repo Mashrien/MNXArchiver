@@ -17,15 +17,18 @@
   <ItemGroup>
     <Compile Include="$(MNXPortableRoot)/gui/**/*.cs" Exclude="$(MNXPortableRoot)/gui/**/obj/**;$(MNXPortableRoot)/gui/**/bin/**" />
     <Compile Include="overrides/**/*.cs" />
-    <Compile Include="../src/ArchiveBrowser.cs;../src/FileTransfer.cs;../src/ExtractionPlan.cs;../src/TransferCancellation.cs;../src/TransferTracker.cs;../src/Settings/AppSettings.cs;../src/Settings/MWinColors.cs;../src/Settings/DefaultKeyStore.cs;../src/Previews/PreviewData.cs;../src/Previews/CachedImageDecoder.cs" />
+    <EmbeddedResource Include="KWin/MoveDialogOwner.js" LogicalName="MNX.KWin.MoveDialogOwner" />
+    <Compile Include="../src/ArchiveBrowser.cs;../src/ArchiveNavigationCache.cs;../src/FileTransfer.cs;../src/ExtractionPlan.cs;../src/TransferCancellation.cs;../src/TransferTracker.cs;../src/Settings/AppSettings.cs;../src/Settings/MWinColors.cs;../src/Settings/DefaultKeyStore.cs;../src/Previews/PreviewData.cs;../src/Previews/CachedImageDecoder.cs" />
     <Compile Include="../src/Previews/VideoPlayback.cs" Link="Shared/Previews/VideoPlayback.cs" />
     <Compile Include="../src/Previews/PreviewPresentation.cs" Link="Shared/Previews/PreviewPresentation.cs" />
     <ProjectReference Include="MWin/MWindow.csproj" />
     <ProjectReference Include="Backends/MNXFile.Backends.csproj" />
     <ProjectReference Include="$(MNXPortableRoot)/vendor/Majorsilence.Forms/src/Majorsilence.Forms.Gtk4/Majorsilence.Forms.Gtk4.csproj" />
     <ProjectReference Include="$(MNXPortableRoot)/vendor/Majorsilence.Forms/src/Majorsilence.Forms.Headless/Majorsilence.Forms.Headless.csproj" />
+    <Compile Include="../src/Diagnostics/DebugLog.cs" Link="Shared/Diagnostics/DebugLog.cs" />
+    <Compile Include="../src/About/*.cs" Exclude="../src/About/AboutDialog.cs" Link="Shared/About/%(Filename)%(Extension)" />
     <Compile Include="../src/Plugins/*.cs" Link="Shared/Plugins/%(Filename)%(Extension)" />
-    <PackageReference Include="Mash.MNXFile.Client" Version="1.3.0-alpha.6" />
+    <PackageReference Include="Mash.MNXFile.Client" Version="1.3.1-alpha.10" />
     <!-- Keep raw XML; compiling .resx images creates Windows resource type descriptors. -->
     <EmbeddedResource Include="$(MNXPortableRoot)/gui/**/*.resx.raw" LogicalName="Mash.GUI.MNXArchiver.%(Filename)" />
     <EmbeddedResource Include="../src/Icons/Rendered/32/*.png" LogicalName="Mash.GUI.MNXArchiver.Icons.32.%(Filename)%(Extension)" />

@@ -49,7 +49,8 @@ internal sealed class GtkPreviewPlacement {
         Box bar = new Box(Orientation.Horizontal, 0);
         bar.StyleContext.AddClass("titlebar");
         Label text = new Label(title) { Xalign = 0, Ellipsize = Pango.EllipsizeMode.End, Hexpand = true, MarginStart = 8 };
-        Button button = new Button("×") { TooltipText = "Close preview", WidthRequest = 28, HeightRequest = 28 };
+        text.StyleContext.AddClass("title");
+        Button button = new Button("×") { TooltipText = "Close preview", WidthRequest = 37, HeightRequest = 37 };
         button.Clicked += (_, _) => close();
         bar.PackStart(text, true, true, 0);
         bar.PackEnd(button, false, false, 0);

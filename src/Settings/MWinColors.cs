@@ -163,6 +163,11 @@ internal sealed class MWinColors {
         return fallback;
         }
 
+    // Scale the two existing INI measurements together, including hand-edited profiles.
+    private float CaptionScale => GetFloat(WindowSection, "wmTitleScale", 4f / 3f, 0.5f, 3f);
+    internal int CaptionHeight => Math.Clamp((int)Math.Round(GetInt(WindowSection, "wmTitleHeight", 26, 16, 120) * CaptionScale), 18, 256);
+    internal float CaptionFontPoints => GetFloat(WindowSection, "Color.tfSize", 9, 6, 48) * CaptionScale;
+
     internal uint GetColor(string section, string key, uint fallback) {
         return TryColor(GetString(section, key, ""), out uint color) ? color : fallback;
         }
@@ -251,6 +256,7 @@ internal sealed class MWinColors {
         window.Set("controlBox.Exit.Colors.Pressed", "#8B0000,#000000");
         window.Set("dividerMargin", 6);
         window.Set("wmTitleHeight", 26);
+        window.Set("wmTitleScale", 4f / 3f);
         window.Set("wmStatusHeight", 24);
         window.Set("Color.wtBack", Hex(this["TitleBackground"]));
         window.Set("SelectionBackground", Hex(this["SelectionBackground"]));

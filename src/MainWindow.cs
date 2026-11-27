@@ -1,3 +1,4 @@
+using Mash.GUI.MNXArchiver.Diagnostics;
 using static MNX.Archive;
 using System.Globalization;
 using System.Security.Cryptography;
@@ -86,6 +87,7 @@ public sealed partial class MainWindow : IDisposable {
         ConfigureDragAndDrop();
         ConfigureExtractionMenu();
         ConfigurePluginMenu();
+        ConfigureDebugWindow();
         // Set the initial 30/70 split after GTK measures the actual client width.
         // Both panes grow on resize; moving the divider remains under the user's control.
         _split.SizeAllocated += (_, args) => {
@@ -111,10 +113,7 @@ public sealed partial class MainWindow : IDisposable {
         Widget<MenuItem>("menu_quit").Activated += (_, _) => {
             RequestQuit();
             };
-        Widget<MenuItem>("menu_about").Activated += (_, _) => {
-            string version = typeof(MainWindow).Assembly.GetName().Version?.ToString() ?? "Unknown";
-            Message("About MNX", "MNX Archive Manager — " + version + "\nGTK3 / C#\n\n" + PluginCatalog.Installed.AboutSummary());
-            };
+        Widget<MenuItem>("menu_about").Activated += (_, _) => ShowAbout();
         Widget<MenuItem>("menu_open_plugins_dir").Activated += (_, _) => {
             try {
                 PluginCatalog.Installed.OpenDirectory();
@@ -132,6 +131,29 @@ public sealed partial class MainWindow : IDisposable {
             }
 
         UpdateActions();
+        }
+
+    internal void ShowAbout() {
+        using About.AboutDialog dialog = new About.AboutDialog(_window, previous => {
+            if (_operationActive || _loadingPreview || _stoppingPreviews || _openingVideo is not null || _previewRead is not null) {
+                Message("Reload plugins", "Wait for the current operation or cancel it in its progress window before reloading plugins.");
+                return false;
+                }
+            try {
+                About.AboutRestart.Prepare(_archive?.ArchivePath ?? _pluginArchive?.Path, previous);
+                GLib.Idle.Add(() => {
+                    RequestQuit();
+                    return false;
+                    });
+                return true;
+                }
+            catch (Exception error) {
+                Message("Could not reload plugins", error.Message, MessageType.Error);
+                return false;
+                }
+            });
+        dialog.Run();
+        dialog.Destroy();
         }
 
     private T Widget<T>(string id)
@@ -207,12 +229,14 @@ public sealed partial class MainWindow : IDisposable {
             return false;
             }
 
+        DebugLog.Write("Opening archive.", LogType.Info | LogType.IO);
         fileName = FileTransfer.LocalPath(fileName);
         try {
             PluginMatch? match = PluginCatalog.Installed.Match(fileName);
             if (match is not null) {
                 OpenedModuleArchive archive = RunPluginOperation("Opening archive", token => OpenedModuleArchive.Open(match, fileName, token));
                 LoadPluginArchive(archive);
+                DebugLog.Write("Plugin archive opened.", LogType.Info | LogType.Parse);
                 return true;
                 }
             }
@@ -238,14 +262,17 @@ public sealed partial class MainWindow : IDisposable {
             _archive = next;
             _pluginArchive = null;
             LoadBrowser(browser);
+            DebugLog.Write("MNX archive opened.", LogType.Info | LogType.FTable);
             return true;
             }
         catch (CryptographicException) when (password is null && showErrors) {
             next.Dispose();
+            DebugLog.Write("Archive password requested.", LogType.Info);
             string? entered = AskPassword();
             return entered is not null && OpenMnxArchive(fileName, entered, showErrors);
             }
         catch (Exception ex) {
+            DebugLog.Exception("Archive open failed", ex);
             ReturnCode errorCode = next.ErrorStatus;
             next.Dispose();
             if (!showErrors) {
@@ -312,6 +339,7 @@ public sealed partial class MainWindow : IDisposable {
 
         CancelHover(closePopups: true);
         _current = folder;
+        _browser.WarmNavigation(folder);
         _files.Clear();
         _path.Text = _browser.PathOf(folder);
         bool plugin = _pluginArchive is not null;
@@ -421,6 +449,12 @@ public sealed partial class MainWindow : IDisposable {
         _path.Sensitive = loaded;
         }
 
+    private static string ArchiveInformation(Archive archive) {
+        ArchiveInfo information = archive.GetArchiveInfo();
+        ulong entries = (ulong)information.FileCount + information.DirectoryCount;
+        return $"{archive.ArchivePath}\n\nCompression: {archive.Compression}\nEncrypted: {archive.IsEncrypted}\nChunk size: {archive.ChunkSize:N0} bytes\nFront index: {archive.IndexChunkCount:N0} chunks\nEntries: {entries:N0}";
+        }
+
     private void Dispatch(ArchiveAction action) {
         if (_operationActive) {
             return;
@@ -449,7 +483,7 @@ public sealed partial class MainWindow : IDisposable {
         if (action == ArchiveAction.Info && _browser is not null) {
             Message(
                 "Archive information",
-                _archive is null ? "Layout preview — sample names and sizes only." : $"{_archive.ArchivePath}\n\nCompression: {_archive.Compression}\nEncrypted: {_archive.IsEncrypted}\nChunk size: {_archive.ChunkSize:N0} bytes\nFront index: {_archive.IndexChunkCount:N0} chunks\nEntries: {_archive.Files.Count:N0}"
+                _archive is null ? "Layout preview — sample names and sizes only." : ArchiveInformation(_archive)
                 );
             return;
             }
@@ -537,6 +571,9 @@ public sealed partial class MainWindow : IDisposable {
             return;
             }
 
+        if (_archive is not null || _pluginArchive is not null) {
+            DebugLog.Write("Closing archive.", LogType.Info | LogType.IO);
+            }
         ClosePreviews();
         _archive?.Dispose();
         _archive = null;
@@ -585,6 +622,7 @@ public sealed partial class MainWindow : IDisposable {
             }
 
         _disposed = true;
+        DisposeDebugWindow();
         _operationActive = true;
         ClosePreviews();
         _archive?.Dispose();

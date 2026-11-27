@@ -14,7 +14,13 @@ see **[mnx-cli](https://github.com/Mashrien/mnx-cli)**.
 
 ## Downloads and installation
 
-Version 2.1.1 adds optional streamed video previews, seekable archive-module
+Version 2.1.2 adds the paged MNX 0.1.8 browser, an expanded About dialog with
+provider versions and plugin reload, and a bounded Debug Window under Help.
+The current folder and its parent stay warm; the last-visited folder is retained
+when the optional history budget permits. This requires MNXFile 1.3.1-alpha.10
+or newer. See [index and diagnostics notes](docs/INDEX-AND-DIAGNOSTICS.md).
+
+Version 2.1.1 added optional streamed video previews, seekable archive-module
 entries, and the shared MWin drawing settings. It also includes Linux menu color,
 Options layout and portable library lookup fixes.
 
@@ -132,7 +138,7 @@ files. Open `MNX-GUI.slnx` when working on both platform frontends.
 | Path | Purpose |
 | --- | --- |
 | `windows/` | Canonical WinForms/MWin forms, actions and designer resources |
-| `windows/MashWin/` | Included MWin source snapshot, version0.0.7.2 |
+| `windows/MashWin/` | Included MWin source snapshot, version 0.0.7.5 |
 | `linux/MWin/` | Portable MWin adaptation for the GTK4/Skia backend |
 | `linux/patches/`, `linux/overrides/` | Pinned toolkit patches and portable GUI adjustments |
 | `linux/Backends/`, `linux/Launcher/` | Dependency probes, backend policy and entry point |
@@ -146,8 +152,7 @@ Do not edit generated sources under `mnx_clutter/build/`.
 
 ## Outputs and versions
 
-Current GUI version is **`2.1.1.N`**; `BuildNumber.txt` supplies an automatic build
-counter. Set `MNXBuildNumber=N` to reproduce a specific counter. Output remains:
+Current GUI builds use **`2.1.2.N`** with the counter in `BuildNumber.txt`. Set `MNXBuildNumber=N` to reproduce a specific counter. Output remains:
 
 - `../MNX_Builds/mnx-gui/linux-x64/` or `win-x64/`: component release.
 - `../MNX_Builds/binaries-final/`: flat Linux executables/companion-library staging.

@@ -61,8 +61,9 @@ The first build downloads the pinned source archives and restores NuGet dependen
 
 Menus and non-activating owned previews use native parent-relative popovers, including
 bottom-right tooltip anchoring. Wayland still restricts arbitrary placement of independent
-top-level windows, so the compositor chooses those windows' screen positions. The unified release uses the existing standard executable location; standalone
-MWin development releases remain separate.
+top-level windows, so the compositor chooses those windows' screen positions. On KDE Plasma, dragging an owned MWin dialog by its title bar also moves its parent.
+MNX registers a temporary KWin script for that window pair and releases it when the
+dialog closes. The integration uses the existing GTK/GIO session bus connection.
 
 The upstream toolkit also contains reflection-based resource/converter paths. NativeAOT
 emits warnings for those dependencies; the GUI and MWin metadata are retained explicitly,

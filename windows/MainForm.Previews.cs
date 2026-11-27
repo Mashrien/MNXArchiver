@@ -1,3 +1,4 @@
+using Mash.GUI.MNXArchiver.Diagnostics;
 using Mash.GUI.MNXArchiver.Previews;
 using Mash.GUI.MNXArchiver.Plugins;
 using Mash.GUI.MNXArchiver.Settings;
@@ -80,9 +81,13 @@ public sealed partial class MainForm {
     private async Task PreviewEntry(Guid id, bool hover) {
         if (!CanPreview(id, hover)) {
             if (!hover) {
+                DebugLog.Write("Preview request rejected by type, size or settings.", LogType.GUI | LogType.Warning);
                 statusMessage.Text = "Preview unavailable. Enable a supported type in Options; files must fit the preview buffer.";
                 }
             return;
+            }
+        if (!hover) {
+            DebugLog.Write("Preview request accepted.", LogType.GUI);
             }
         ArchiveBrowser.Entry entry = _browser!.Get(id);
         PreviewKind kind = PreviewData.Classify(entry.Name, _settings);

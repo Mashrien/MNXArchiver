@@ -1,3 +1,4 @@
+using Mash.GUI.MNXArchiver.Diagnostics;
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Reflection.PortableExecutable;
@@ -53,8 +54,10 @@ internal sealed class PluginCatalog {
                 foreach (string path in ExtensionFiles(directory)) {
                     try {
                         LoadExtension(path, modules, imageProviders, videoProviders);
+                        DebugLog.Write("Plugin loaded: " + Path.GetFileName(path), LogType.Init | LogType.Parse);
                         }
                     catch (Exception error) {
+                        DebugLog.Exception("Plugin rejected: " + Path.GetFileName(path), error, LogType.Warning | LogType.Parse);
                         issues.Add(Path.GetFileName(path) + ": " + error.Message);
                         }
                     }
@@ -63,6 +66,7 @@ internal sealed class PluginCatalog {
         catch (Exception error) {
             issues.Add(error.Message);
             }
+        DebugLog.Write($"Plugin discovery completed: {modules.Count} archive, {imageProviders.Count} image, {videoProviders.Count} video, {issues.Count} rejected.", LogType.Init);
         return new PluginCatalog(directory, modules, imageProviders, videoProviders, issues);
         }
 

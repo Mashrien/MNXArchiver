@@ -4,3 +4,6 @@
 #path_bar { padding: 6px; }
 #footer { padding: 6px 10px; border-top: 1px solid alpha(@theme_fg_color, 0.16); }
 treeview { padding: 3px; }
+/* Native GTK client-side headers, including the compact preview caption. */
+.titlebar { min-height: 35px; }
+.titlebar .title { font-size: 1.333333em; font-weight: 600; }

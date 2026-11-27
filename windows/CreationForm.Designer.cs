@@ -237,7 +237,6 @@ partial class CreationForm {
         StatusBar.Font = new Font("Segoe UI", 9F);
         StatusBar.Visible = false;
         Text = "Create MNX archive";
-        Title.Font = new Font("Segoe UI", 9F);
         Controls.SetChildIndex(creationLayout, 0);
         Controls.SetChildIndex(statusBarControls, 0);
         creationLayout.ResumeLayout(false);
